@@ -79,7 +79,7 @@ export function ChartTooltip({active,payload,label}){
       {payload.map((p,i)=>(
         <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:TX,fontWeight:600,marginTop:i>0?4:0}}>
           <span style={{width:7,height:7,borderRadius:"50%",background:p.color||p.fill,flexShrink:0}}/>
-          <span style={{color:TX2,fontWeight:500}}>{p.name}:</span> {fmt(p.value)}
+          <span style={{color:TX2,fontWeight:500}}>{p.name}:</span> <span style={{fontFamily:NUM_FONT}}>{fmt(p.value)}</span>
         </div>
       ))}
     </div>
@@ -115,7 +115,7 @@ export function LedgerRows({rows}){
       {rows.map((r,i)=>(
         <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"8px 0",borderTop:i>0?`1px solid ${BD}`:"none"}}>
           <span style={{fontSize:12,color:r.highlight?TX:TX2,fontWeight:r.highlight?700:500}}>{r.label}</span>
-          <span style={{fontSize:r.highlight?14.5:12.5,fontWeight:r.highlight?800:700,color:r.color||(r.highlight?TX:TX2),whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"}}>{r.value}</span>
+          <span style={{fontFamily:NUM_FONT,fontSize:r.highlight?14.5:12.5,fontWeight:r.highlight?800:700,color:r.color||(r.highlight?TX:TX2),whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"}}>{r.value}</span>
         </div>
       ))}
     </div>
@@ -138,7 +138,7 @@ export function LineItemsList({items,accentColor=TEAL,limit=5}){
             <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</span>
             {it.tag&&<span style={{fontSize:10,color:TX3,flexShrink:0}}>· {it.tag}</span>}
           </span>
-          <span style={{fontSize:12.5,color:TX,fontWeight:700,flexShrink:0,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>{typeof it.value==="number"?fmt(it.value):it.value}</span>
+          <span style={{fontFamily:NUM_FONT,fontSize:12.5,color:TX,fontWeight:700,flexShrink:0,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>{typeof it.value==="number"?fmt(it.value):it.value}</span>
         </div>
       ))}
       {restCount>0&&<div style={{fontSize:11,color:TX3,paddingLeft:12}}>+{restCount} outro{restCount>1?"s":""} {restCount>1?"itens":"item"}</div>}

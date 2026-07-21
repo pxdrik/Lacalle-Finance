@@ -1286,7 +1286,7 @@ function MainApp({user,setUser}){
         {frequentTx.map((item,i)=>(
           <button key={i} onClick={()=>onPick(item)} className="chip-btn" style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:2,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"9px 13px",cursor:"pointer",minWidth:112}}>
             <span style={{fontSize:12,fontWeight:600,color:TX,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:140,display:"flex",alignItems:"center",gap:5}}><CategoryIcon cat={item.cat} size={12}/>{item.desc}</span>
-            <span style={{fontSize:12,color:TX2,fontVariantNumeric:"tabular-nums"}}>{fmt(item.val)}</span>
+            <span className="num" style={{fontSize:12,color:TX2,fontVariantNumeric:"tabular-nums"}}>{fmt(item.val)}</span>
           </button>
         ))}
       </div>
@@ -1667,7 +1667,7 @@ function MainApp({user,setUser}){
                     <button key={t.id} onClick={()=>goToTx(t)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:10,textAlign:"left"}}>
                       <CategoryIcon cat={t.cat} size={13} color={catColor(t.cat)}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</span>
-                      <span style={{fontSize:12,color:t.type==="Entrada"?"#22C55E":"#EF4444",fontWeight:600}}>{fmt(t.val)}</span>
+                      <span className="num" style={{fontSize:12,color:t.type==="Entrada"?"#22C55E":"#EF4444",fontWeight:600}}>{fmt(t.val)}</span>
                     </button>
                   ))}
                 </div>
@@ -1690,7 +1690,7 @@ function MainApp({user,setUser}){
                     <button key={w.id} onClick={()=>goToWish(w)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:10,textAlign:"left"}}>
                       <Sparkles size={13} color={accent}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{w.name}</span>
-                      <span style={{fontSize:12,color:TX2}}>{fmt(w.price)}</span>
+                      <span className="num" style={{fontSize:12,color:TX2}}>{fmt(w.price)}</span>
                     </button>
                   ))}
                 </div>
@@ -1702,7 +1702,7 @@ function MainApp({user,setUser}){
                     <button key={p.id} onClick={()=>goToPlanned(p)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:10,textAlign:"left"}}>
                       <Calendar size={13} color={accent}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.desc}</span>
-                      <span style={{fontSize:12,color:TX2}}>{fmt(p.val)}</span>
+                      <span className="num" style={{fontSize:12,color:TX2}}>{fmt(p.val)}</span>
                     </button>
                   ))}
                 </div>
@@ -1714,7 +1714,7 @@ function MainApp({user,setUser}){
                     <button key={p.id} onClick={()=>goToPlanned(p)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:10,textAlign:"left"}}>
                       <Repeat size={13} color="#A78BFA"/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.desc}</span>
-                      <span style={{fontSize:12,color:TX2}}>{fmt(p.val)}/mês</span>
+                      <span className="num" style={{fontSize:12,color:TX2}}>{fmt(p.val)}/mês</span>
                     </button>
                   ))}
                 </div>
@@ -1726,7 +1726,7 @@ function MainApp({user,setUser}){
                     <button key={t.id} onClick={()=>goToTx(t)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:10,textAlign:"left"}}>
                       <TrendingUp size={13} color="#3B82F6"/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</span>
-                      <span style={{fontSize:12,color:TX2}}>{fmt(t.val)}</span>
+                      <span className="num" style={{fontSize:12,color:TX2}}>{fmt(t.val)}</span>
                     </button>
                   ))}
                 </div>
@@ -1738,7 +1738,7 @@ function MainApp({user,setUser}){
                     <button key={i.id} onClick={goToInst} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:10,textAlign:"left"}}>
                       <CreditCard size={13} color="#F0A857"/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.desc}</span>
-                      <span style={{fontSize:12,color:TX2}}>{fmt(i.totalVal)}</span>
+                      <span className="num" style={{fontSize:12,color:TX2}}>{fmt(i.totalVal)}</span>
                     </button>
                   ))}
                 </div>
@@ -2036,7 +2036,7 @@ function MainApp({user,setUser}){
                   const nodes=[
                     <div key={`step-${s.label}`} style={{flex:"1 1 120px",minWidth:110,textAlign:"center",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_INPUT,padding:"14px 10px"}}>
                       <div style={{fontSize:11,color:TX2,marginBottom:6,fontWeight:600}}>{s.label}</div>
-                      <div style={{fontSize:15,fontWeight:700,color:s.value>=0?"#22C55E":"#EF4444"}}>{fmt(s.value)}</div>
+                      <div className="num" style={{fontSize:15,fontWeight:700,color:s.value>=0?"#22C55E":"#EF4444"}}>{fmt(s.value)}</div>
                     </div>
                   ];
                   if(i<moneySteps.length-1)nodes.push(<ChevronRight key={`arrow-${i}`} size={16} color={TX3} style={{flexShrink:0}}/>);
@@ -2107,7 +2107,7 @@ function MainApp({user,setUser}){
                         <div key={d.name}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
                             <span style={{fontSize:12.5,color:TX,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>{d.name==="Outras categorias"?<Package size={12} color={cc}/>:<CategoryIcon cat={d.name} size={12} color={cc}/>}{d.name}</span>
-                            <span style={{fontSize:12.5,fontWeight:700,color:TX}}>{fmt(d.value)}</span>
+                            <span className="num" style={{fontSize:12.5,fontWeight:700,color:TX}}>{fmt(d.value)}</span>
                           </div>
                           <div style={{background:"rgba(255,255,255,0.06)",borderRadius:20,height:5,overflow:"hidden"}}><div style={{width:`${pct}%`,height:"100%",background:cc,borderRadius:20}}/></div>
                         </div>
@@ -2141,8 +2141,8 @@ function MainApp({user,setUser}){
                   <Card style={{padding:24}}>
                     <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:14,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={15} color={accent}/>Investimentos</div>
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Total investido</span><span style={{fontSize:13,fontWeight:700,color:TX}}>{fmt(investmentStats.aportes)}</span></div>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Rentabilidade cadastrada</span><span style={{fontSize:13,fontWeight:700,color:"#22C55E"}}>{fmt(investmentStats.rendimentos)}</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Total investido</span><span className="num" style={{fontSize:13,fontWeight:700,color:TX}}>{fmt(investmentStats.aportes)}</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Rentabilidade cadastrada</span><span className="num" style={{fontSize:13,fontWeight:700,color:"#22C55E"}}>{fmt(investmentStats.rendimentos)}</span></div>
                       {investmentParticipacao!==null&&<div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Participação no patrimônio</span><span style={{fontSize:13,fontWeight:700,color:accent}}>{investmentParticipacao}%</span></div>}
                     </div>
                   </Card>
@@ -2151,7 +2151,7 @@ function MainApp({user,setUser}){
                   <Card style={{padding:24}}>
                     <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:14,display:"flex",alignItems:"center",gap:8}}><Repeat size={15} color={accent}/>Assinaturas e recorrências</div>
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Total mensal</span><span style={{fontSize:13,fontWeight:700,color:"#EF4444"}}>{fmt(subscriptions.total)}</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Total mensal</span><span className="num" style={{fontSize:13,fontWeight:700,color:"#EF4444"}}>{fmt(subscriptions.total)}</span></div>
                       <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Maior assinatura</span><span style={{fontSize:13,fontWeight:700,color:TX}}>{subscriptions.biggest?.desc}</span></div>
                       <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Pendentes este mês</span><span style={{fontSize:13,fontWeight:700,color:"#F0A857"}}>{subscriptions.pendingCount}</span></div>
                     </div>
@@ -2193,7 +2193,7 @@ function MainApp({user,setUser}){
                         {item.ev?(
                           <>
                             <div style={{fontSize:13,fontWeight:700,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.ev.desc}</div>
-                            <div style={{fontSize:12,color:item.c,fontWeight:700,marginTop:4}}>{fmt(item.ev.val)}</div>
+                            <div className="num" style={{fontSize:12,color:item.c,fontWeight:700,marginTop:4}}>{fmt(item.ev.val)}</div>
                             <div style={{fontSize:11,color:TX3,marginTop:2}}>{item.ev.date}</div>
                           </>
                         ):<div style={{fontSize:12,color:TX3}}>Nada agendado</div>}
@@ -2208,12 +2208,12 @@ function MainApp({user,setUser}){
                   <div className="bento">
                     <div className="bento-half" style={{...cardStyle,padding:18,textAlign:"center"}}>
                       <div style={{fontSize:11,color:TX2,marginBottom:6}}>Saldo atual</div>
-                      <div style={{fontSize:17,fontWeight:700,color:balance>=0?"#22C55E":"#EF4444"}}>{fmt(balance)}</div>
+                      <div className="num" style={{fontSize:17,fontWeight:700,color:balance>=0?"#22C55E":"#EF4444"}}>{fmt(balance)}</div>
                     </div>
                     {cashFlowProjections.map(cp=>(
                       <div key={cp.days} className="bento-half" style={{...cardStyle,padding:18,textAlign:"center"}}>
                         <div style={{fontSize:11,color:TX2,marginBottom:6}}>Em {cp.days} dias</div>
-                        <div style={{fontSize:17,fontWeight:700,color:cp.value>=0?"#22C55E":"#EF4444"}}>{fmt(cp.value)}</div>
+                        <div className="num" style={{fontSize:17,fontWeight:700,color:cp.value>=0?"#22C55E":"#EF4444"}}>{fmt(cp.value)}</div>
                       </div>
                     ))}
                   </div>
@@ -2222,10 +2222,10 @@ function MainApp({user,setUser}){
                 <Card style={{padding:26}}>
                   <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><Briefcase size={16} color={accent}/>Compromissos Financeiros</div>
                   <div className="bento">
-                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Parcelas restantes</div><div style={{fontSize:16,fontWeight:700,color:"#F0A857"}}>{fmt(instStats.remaining)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{pendingParcelasCount} parcela(s)</div></div>
-                    {subscriptions&&<div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Assinaturas</div><div style={{fontSize:16,fontWeight:700,color:"#A78BFA"}}>{fmt(subscriptions.total)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{subscriptions.count} ativa(s)</div></div>}
-                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Comprometido no próximo mês</div><div style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(committedNextMonth)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{nextMonthKeyReal}</div></div>
-                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Comprometido nos próximos 3 meses</div><div style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(committedNext3Months)}</div></div>
+                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Parcelas restantes</div><div className="num" style={{fontSize:16,fontWeight:700,color:"#F0A857"}}>{fmt(instStats.remaining)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{pendingParcelasCount} parcela(s)</div></div>
+                    {subscriptions&&<div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Assinaturas</div><div className="num" style={{fontSize:16,fontWeight:700,color:"#A78BFA"}}>{fmt(subscriptions.total)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{subscriptions.count} ativa(s)</div></div>}
+                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Comprometido no próximo mês</div><div className="num" style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(committedNextMonth)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{nextMonthKeyReal}</div></div>
+                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Comprometido nos próximos 3 meses</div><div className="num" style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(committedNext3Months)}</div></div>
                   </div>
                 </Card>
 
@@ -2303,7 +2303,7 @@ function MainApp({user,setUser}){
                               <div style={{fontSize:13,color:TX,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.data.desc}</div>
                               <div style={{fontSize:11,color:TX3}}>{it.label}{it.kind==="tx"?` · ${it.data.date}`:` · ${it.month} (sem dia definido)`}</div>
                             </div>
-                            <div style={{fontSize:13,fontWeight:700,color:it.color,flexShrink:0}}>{fmt(it.data.val)}</div>
+                            <div className="num" style={{fontSize:13,fontWeight:700,color:it.color,flexShrink:0}}>{fmt(it.data.val)}</div>
                           </div>
                         ))}
                       </div>
@@ -2471,9 +2471,9 @@ function MainApp({user,setUser}){
                               return(
                                 <tr key={m.month} style={{borderTop:`1px solid ${BD}`}}>
                                   <td style={{padding:"12px 16px",color:TX,fontWeight:600,whiteSpace:"nowrap"}}>{m.month}</td>
-                                  <td style={{padding:"12px 16px",color:"#22C55E",fontWeight:600,whiteSpace:"nowrap"}}>{fmt(m.in)}</td>
-                                  <td style={{padding:"12px 16px",color:"#EF4444",fontWeight:600,whiteSpace:"nowrap"}}>{fmt(m.out)}</td>
-                                  <td style={{padding:"12px 16px",color:m.balance>=0?"#22C55E":"#EF4444",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(m.balance)}</td>
+                                  <td className="num" style={{padding:"12px 16px",color:"#22C55E",fontWeight:600,whiteSpace:"nowrap"}}>{fmt(m.in)}</td>
+                                  <td className="num" style={{padding:"12px 16px",color:"#EF4444",fontWeight:600,whiteSpace:"nowrap"}}>{fmt(m.out)}</td>
+                                  <td className="num" style={{padding:"12px 16px",color:m.balance>=0?"#22C55E":"#EF4444",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(m.balance)}</td>
                                   <td style={{padding:"12px 16px",color:delta===null?TX3:delta>=0?"#22C55E":"#EF4444",fontWeight:600,whiteSpace:"nowrap"}}>{delta===null?"—":`${delta>0?"+":""}${delta}%`}</td>
                                 </tr>
                               );
@@ -2695,7 +2695,7 @@ function MainApp({user,setUser}){
                   {monthlyPreview&&(
                     <div style={{gridColumn:"1/-1",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_INPUT,padding:"10px 15px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
                       <span style={{fontSize:12,color:TX2}}>Valor por parcela</span>
-                      <span style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(monthlyPreview)}/mês</span>
+                      <span className="num" style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(monthlyPreview)}/mês</span>
                     </div>
                   )}
                   <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Primeiro vencimento</div><input type="date" value={instDraft.startDate} min={DATE_MIN} max={DATE_MAX} onChange={e=>setInstDraft(d=>({...d,startDate:e.target.value}))} style={SI}/></div>
