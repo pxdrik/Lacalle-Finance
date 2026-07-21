@@ -116,16 +116,28 @@ export const FinancialEngine=(()=>{
         const alreadyIn=isCur?sumIf(t=>isEntradaReal(t)&&monthKey(t.date)===mk&&t.date<=todayISO):0;
         const alreadyOut=isCur?(sumIf(t=>(isSaidaReal(t)||isAporte(t))&&monthKey(t.date)===mk&&t.date<=todayISO)-sumIf(t=>isResgate(t)&&monthKey(t.date)===mk&&t.date<=todayISO)):0;
         // Lançamentos já cadastrados com data futura, dentro da janela.
-        const futIn=sumIf(t=>isEntradaReal(t)&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
-        const futOut=sumIf(t=>(isSaidaReal(t)||isAporte(t))&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate)-sumIf(t=>isResgate(t)&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
-        const plannedPending=plannedExpenses.filter(p=>p.recurring?!p.paid?.[mk]:(p.month===mk&&!p.paid?.[mk])).reduce((s,p)=>s+p.val,0);
+        const futInTx=transactions.filter(t=>isEntradaReal(t)&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
+        const futOutTx=transactions.filter(t=>(isSaidaReal(t)||isAporte(t))&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
+        const futIn=sumVal(futInTx);
+        const futOut=sumVal(futOutTx)-sumIf(t=>isResgate(t)&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
+        const plannedList=plannedExpenses.filter(p=>p.recurring?!p.paid?.[mk]:(p.month===mk&&!p.paid?.[mk]));
+        const plannedPending=plannedList.reduce((s,p)=>s+p.val,0);
         // Total esperado do mês = o maior entre a média típica e o já conhecido.
         const fullIn=Math.max(avgIn,alreadyIn+futIn);
         const fullOut=Math.max(avgOut,alreadyOut+futOut+plannedPending);
         const contribIn=Math.max(0,fullIn-alreadyIn);   // só o que ainda falta entrar
         const contribOut=Math.max(0,fullOut-alreadyOut); // só o que ainda falta sair
-        if(contribIn>0){incTotal+=contribIn;incomeItems.push({label:`Renda estimada · ${mk}`,value:contribIn,date:mk,recurring:true});}
-        if(contribOut>0){outTotal+=contribOut;outItems.push({label:`Gasto estimado · ${mk}`,value:contribOut,date:mk,kind:"estimado"});}
+        incTotal+=contribIn;outTotal+=contribOut;
+        // ---- Itemização (detalhamento): lista os lançamentos futuros e os
+        // previstos concretos, e mostra o restante como estimativa típica. A soma
+        // dos itens é igual à contribuição do mês — não duplica no total.
+        futInTx.forEach(t=>incomeItems.push({label:cleanDesc(t.desc),value:t.val,date:t.date}));
+        const remIn=contribIn-futIn;
+        if(remIn>0.005)incomeItems.push({label:`Renda típica estimada · ${mk}`,value:remIn,date:mk,recurring:true});
+        plannedList.forEach(p=>plannedItems.push({label:p.desc,value:p.val,recurring:!!p.recurring,month:mk}));
+        futOutTx.forEach(t=>outItems.push({label:cleanDesc(t.desc),value:t.val,date:t.date,kind:t.installmentId?"parcela":(t.plannedId?"conta":"despesa")}));
+        const remOut=contribOut-futOut-plannedPending;
+        if(remOut>0.005)outItems.push({label:`Gasto típico estimado · ${mk}`,value:remOut,date:mk,kind:"estimado"});
       }
       const value=balance+incTotal-outTotal;
       return{value,incomeItems,outItems,plannedItems,totals:{inc:incTotal,outReal:outTotal,plannedOut:0,invAp:0,invRe:0}};
