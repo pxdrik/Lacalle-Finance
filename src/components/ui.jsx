@@ -6,7 +6,7 @@
 // importa daqui em vez de redefinir os mesmos componentes.
 // ============================================================================
 import { useState, useRef, useEffect } from "react";
-import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift } from "lucide-react";
+import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT } from "../lib/theme";
 
@@ -224,7 +224,7 @@ const DECISION_STATUS_COLOR={ok:"#22C55E",atencao:"#F0A857",critico:"#EF4444",ne
 // → por que aconteceu (reason) → "principais responsáveis" (transações reais,
 // visível sem precisar abrir nada) → recomendação → "Como cheguei a essa
 // conclusão" (expansível: cálculo linha a linha + checklist de dados usados).
-export function InsightCard({item,index=0}){
+export function InsightCard({item,index=0,action}){
   const [expanded,setExpanded]=useState(false);
   const bd=item.breakdown||{};
   const lineItems=bd.lineItems||[];
@@ -251,6 +251,11 @@ export function InsightCard({item,index=0}){
           <Lightbulb size={13} color={item.categoryColor} style={{flexShrink:0,marginTop:1}}/>
           <div style={{fontSize:12,color:TX,fontWeight:600,lineHeight:1.5}}>{item.recommendation}</div>
         </div>
+      )}
+      {action&&(
+        <button onClick={action.onClick} style={{marginTop:16,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:`${item.categoryColor}1a`,border:`1px solid ${item.categoryColor}45`,color:item.categoryColor,borderRadius:12,padding:"10px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",transition:"filter .15s ease"}}>
+          {action.label}<ArrowRight size={14}/>
+        </button>
       )}
       <button onClick={()=>setExpanded(p=>!p)} style={{marginTop:14,background:"none",border:"none",color:TX3,fontSize:11,fontWeight:600,cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4}}>
         <Info size={11}/>Como cheguei a essa conclusão{expanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}

@@ -829,6 +829,18 @@ function MainApp({user,setUser}){
   const goToWish=()=>{setTab("wishes");closeSearch();};
   const goToPlanned=p=>{setTab("planned");if(!p.recurring&&p.month)setPlannedMonth(p.month);closeSearch();};
   const goToInst=()=>{setTab("installments");closeSearch();};
+  // Deriva um atalho de ação para cada insight, a partir do que ele já usou como
+  // evidência (categoria envolvida, metas, fluxo de caixa...). Assim todo card
+  // deixa de ser só observação e vira um caminho pra agir/investigar.
+  const insightActionFor=(it)=>{
+    const cats=it.evidence?.categories||[];
+    const used=it.evidence?.dataUsed||[];
+    if(cats.length>0&&cats[0]!=="Investimento")return{label:`Ver lançamentos de ${cats[0]}`,onClick:()=>goToCat(cats[0])};
+    if(used.includes("metas"))return{label:"Ver minhas metas",onClick:goToWish};
+    if(used.includes("investimentos")||cats[0]==="Investimento")return{label:"Ver investimentos",onClick:()=>goToCat("Investimento")};
+    if(used.some(u=>["saldo","receitas","contas","parcelas","assinaturas","previstos"].includes(u)))return{label:"Ver planejamento",onClick:()=>setTab("planning")};
+    return{label:"Ver transações",onClick:()=>setTab("transactions")};
+  };
 
   const [pendingDuplicateTx,setPendingDuplicateTx]=useState(null);
   const commitQuickAdd=()=>{
@@ -2155,7 +2167,7 @@ function MainApp({user,setUser}){
                 </div>
               ):(
                 <div className="insights-grid">
-                  {consultantInsights.map((it,i)=><InsightCard key={it.key} item={it} index={i}/>)}
+                  {consultantInsights.map((it,i)=><InsightCard key={it.key} item={it} index={i} action={insightActionFor(it)}/>)}
                 </div>
               )}
             </div>
