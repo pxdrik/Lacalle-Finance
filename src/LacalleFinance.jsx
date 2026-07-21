@@ -1483,6 +1483,12 @@ function MainApp({user,setUser}){
           .main-content{padding-bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
           .toast-wrap{bottom:calc(86px + env(safe-area-inset-bottom)) !important;}
         }
+
+        /* ---- Margem de segurança no topo (notch/barra de status do celular) ---- */
+        .app-header{padding-top:calc(14px + env(safe-area-inset-top)) !important;}
+        @media(max-width:560px){
+          .app-header{padding-top:calc(12px + env(safe-area-inset-top)) !important;}
+        }
       `}</style>
 
       <div className="toast-wrap" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:300,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none",width:"100%",padding:"0 16px"}}>
