@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent } from "../lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT } from "../lib/theme";
 
 const CAT_ICON_COMPONENTS={
   "Lazer":Gamepad2,"Alimentação":UtensilsCrossed,"Transporte":Car,"Desejos":Sparkles,"Roupas":Shirt,
@@ -68,7 +68,7 @@ export function AnimatedValue({value}){
     raf=requestAnimationFrame(step);
     return()=>cancelAnimationFrame(raf);
   },[value]);
-  return <span style={{fontVariantNumeric:"tabular-nums"}}>{fmt(display)}</span>;
+  return <span style={{fontFamily:NUM_FONT,fontVariantNumeric:"tabular-nums"}}>{fmt(display)}</span>;
 }
 
 export function ChartTooltip({active,payload,label}){
@@ -194,7 +194,7 @@ export function HeroNumberAnimated({heroNumber,color}){
   else if(format==="percent")formatted=`${Math.round(display)}%`;
   else formatted=`${Math.round(display)}${suffix||""}`;
   const prefix=sign==="+"?"+":sign==="-"?"-":"";
-  return <span style={{fontSize:32,fontWeight:800,color,letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{prefix}{formatted}</span>;
+  return <span style={{fontFamily:NUM_FONT,fontSize:32,fontWeight:800,color,letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{prefix}{formatted}</span>;
 }
 
 // ---- Comparação visual: duas barras (média vs. mês atual, etc.) em vez de texto ----

@@ -38,3 +38,8 @@ export const cardStyle = { background: CARD, border: `1px solid ${BD}`, borderRa
 
 export const AccentContext = createContext(TEAL);
 export const useAccent = () => useContext(AccentContext);
+
+// Fonte dos números em destaque (saldos, projeções, valores). Grotesca moderna
+// e encorpada, com algarismos tabulares — alinha colunas de valores. Cai para
+// Inter/sistema se a Hanken não carregar.
+export const NUM_FONT = "'Hanken Grotesk','Inter',system-ui,sans-serif";

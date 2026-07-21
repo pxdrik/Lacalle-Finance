@@ -98,7 +98,7 @@ import { supabase } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
 import AuthScreen from "./components/AuthScreen";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, diffDays, MONTH_ORDER, MONTHS_ARR } from "./lib/financialEngine";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext } from "./lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost } from "./components/ui";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
 import {
@@ -1363,7 +1363,7 @@ function MainApp({user,setUser}){
     <AccentContext.Provider value={accent}>
     <div style={{background:BG,minHeight:"100vh",color:TX,fontFamily:"'Inter',system-ui,sans-serif",overflowX:"hidden"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap');
         *{box-sizing:border-box;}
         html,body{overflow-x:hidden;max-width:100vw;}
         input,select,textarea{transition:border-color .15s ease, box-shadow .15s ease;}
@@ -1414,6 +1414,9 @@ function MainApp({user,setUser}){
         .nav-tab{position:relative;transition:background .18s ease, color .18s ease;}
         .nav-tab:hover{color:${TX} !important;background:${HOVER}44 !important;}
         .surface-card{transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;}
+
+        /* ---- Tipografia dos números: Hanken Grotesk, encorpada e tabular ---- */
+        .num,.stat-val,.hero-balance{font-family:${NUM_FONT};font-variant-numeric:tabular-nums;letter-spacing:-0.02em;}
 
         /* ---- Motion (add): entrada em cascata, indicador de aba, hover lift ---- */
         @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
@@ -1925,18 +1928,18 @@ function MainApp({user,setUser}){
                     <div>
                       <div style={{fontSize:22,marginBottom:6}}>💰</div>
                       <div style={{fontSize:10.5,color:TX2,fontWeight:600,marginBottom:3}}>Economia</div>
-                      <div style={{fontSize:20,fontWeight:800,color:resumoDoMes.stats.economia>=0?"#22C55E":"#EF4444",letterSpacing:"-0.01em"}}>{resumoDoMes.stats.economia>=0?"+":""}{fmt(resumoDoMes.stats.economia)}</div>
+                      <div className="num" style={{fontSize:20,fontWeight:800,color:resumoDoMes.stats.economia>=0?"#22C55E":"#EF4444",letterSpacing:"-0.01em"}}>{resumoDoMes.stats.economia>=0?"+":""}{fmt(resumoDoMes.stats.economia)}</div>
                     </div>
                     <div>
                       <div style={{fontSize:22,marginBottom:6}}>📈</div>
                       <div style={{fontSize:10.5,color:TX2,fontWeight:600,marginBottom:3}}>Patrimônio</div>
-                      <div style={{fontSize:20,fontWeight:800,color:accent,letterSpacing:"-0.01em"}}>{fmt(resumoDoMes.stats.patrimonio)}</div>
+                      <div className="num" style={{fontSize:20,fontWeight:800,color:accent,letterSpacing:"-0.01em"}}>{fmt(resumoDoMes.stats.patrimonio)}</div>
                     </div>
                     {resumoDoMes.stats.meta&&(
                       <div>
                         <div style={{fontSize:22,marginBottom:6}}>🎯</div>
                         <div style={{fontSize:10.5,color:TX2,fontWeight:600,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Meta {resumoDoMes.stats.meta.name}</div>
-                        <div style={{fontSize:20,fontWeight:800,color:"#22C55E",letterSpacing:"-0.01em"}}>{resumoDoMes.stats.meta.pct}%</div>
+                        <div className="num" style={{fontSize:20,fontWeight:800,color:"#22C55E",letterSpacing:"-0.01em"}}>{resumoDoMes.stats.meta.pct}%</div>
                       </div>
                     )}
                     <div>
@@ -2004,7 +2007,7 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:13.5,fontWeight:700,color:TX,flex:1}}>Quanto você pode gastar?</div>
                   <Info size={12} color={TX3}/>
                 </div>
-                <div style={{fontSize:30,fontWeight:800,color:proj30.value>=0?accent:"#EF4444",letterSpacing:"-0.02em"}}>{fmt(Math.max(0,proj30.value))}</div>
+                <div className="num" style={{fontSize:30,fontWeight:800,color:proj30.value>=0?accent:"#EF4444",letterSpacing:"-0.02em"}}>{fmt(Math.max(0,proj30.value))}</div>
                 <div style={{fontSize:12.5,color:TX2,marginTop:6,lineHeight:1.5}}>{proj30.value>=0?"nos próximos 30 dias, sem comprometer contas e parcelas já previstas.":`Sua projeção para os próximos 30 dias está negativa em ${fmt(Math.abs(proj30.value))}. Evite gastos não essenciais.`}</div>
               </div>
             )}
