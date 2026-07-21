@@ -1353,7 +1353,7 @@ function MainApp({user,setUser}){
 
   const appTabs=[
     {id:"dashboard",label:"Início",icon:LayoutDashboard},
-    {id:"planning",label:"Planejamento",icon:CalendarDays},
+    {id:"planning",label:"Planejamento",short:"Planos",icon:CalendarDays},
     {id:"transactions",label:"Transações",icon:Receipt},
     {id:"planned",label:"Previstos",icon:Calendar},
     {id:"installments",label:"Parcelas",icon:CreditCard},
@@ -1470,8 +1470,9 @@ function MainApp({user,setUser}){
 
         /* ---- Navegação inferior (bottom nav) no celular ---- */
         .bottom-nav{display:none;}
-        .bottom-nav-btn{background:none;border:none;cursor:pointer;flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 2px 4px;transition:color .15s ease;}
-        .bottom-nav-ico{display:flex;align-items:center;justify-content:center;width:40px;height:26px;border-radius:13px;transition:background .18s ease;}
+        .bottom-nav-btn{background:none;border:none;cursor:pointer;flex:1 1 0;min-width:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 1px 4px;transition:color .15s ease;}
+        .bottom-nav-ico{display:flex;align-items:center;justify-content:center;width:40px;height:26px;border-radius:13px;transition:background .18s ease;flex-shrink:0;}
+        .bottom-nav-lbl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
         @media(max-width:760px){
           .top-tabs{display:none !important;}
           .bottom-nav{
@@ -1928,7 +1929,7 @@ function MainApp({user,setUser}){
         {appTabs.map(t=>{const Ic=t.icon;const active=tab===t.id;return(
           <button key={t.id} onClick={()=>setTab(t.id)} className="bottom-nav-btn" style={{color:active?accent:TX3}}>
             <span className="bottom-nav-ico" style={{background:active?`${accent}1f`:"transparent"}}><Ic size={20}/></span>
-            <span style={{fontSize:10,fontWeight:600,letterSpacing:"-0.01em"}}>{t.label}</span>
+            <span className="bottom-nav-lbl" style={{fontSize:9.5,fontWeight:600,letterSpacing:"-0.02em"}}>{t.short||t.label}</span>
           </button>
         );})}
       </nav>

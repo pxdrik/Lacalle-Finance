@@ -11,6 +11,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Lacalle" />
     <title>Lacalle Finance</title>
+    <style>
+      /* Impede o zoom automático do iOS ao focar campos (acontece quando a
+         fonte do campo é menor que 16px). Vale para o app e a tela de login. */
+      @media (max-width: 760px) {
+        input, select, textarea { font-size: 16px !important; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
