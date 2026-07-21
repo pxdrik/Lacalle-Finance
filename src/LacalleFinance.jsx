@@ -1834,7 +1834,7 @@ function MainApp({user,setUser}){
                       <div style={{fontSize:13,color:TX,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
                       <div style={{fontSize:11,color:TX3}}>{t.label}</div>
                     </div>
-                    <div style={{fontSize:13,fontWeight:700,color:t.color,flexShrink:0}}>{fmt(t.val)}</div>
+                    <div className="num" style={{fontSize:13,fontWeight:700,color:t.color,flexShrink:0}}>{fmt(t.val)}</div>
                   </div>
                 ))}
               </div>
@@ -2062,7 +2062,7 @@ function MainApp({user,setUser}){
                         <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
                         <div style={{fontSize:11,color:TX3,marginTop:2}}>{t.label} · {t.date}</div>
                       </div>
-                      <div style={{fontSize:13,fontWeight:700,color:t.color,flexShrink:0}}>{fmt(t.val)}</div>
+                      <div className="num" style={{fontSize:13,fontWeight:700,color:t.color,flexShrink:0}}>{fmt(t.val)}</div>
                     </div>
                   ))}
                 </div>
@@ -2329,11 +2329,11 @@ function MainApp({user,setUser}){
                       <div style={{width:`${w.pct}%`,height:"100%",background:accent,borderRadius:20,transition:"width .5s"}}/>
                     </div>
                     <div className="bento">
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor atual</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.saved)}</div></div>
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor restante</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.remaining)}</div></div>
+                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor atual</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.saved)}</div></div>
+                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor restante</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.remaining)}</div></div>
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Tempo estimado</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{w.estMonths?`~${w.estMonths} meses`:"sem dados suficientes"}</div></div>
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Previsão de conclusão</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{w.etaDate||"—"}</div></div>
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Guardar por mês (na sua meta)</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{w.monthlyByTarget?fmt(w.monthlyByTarget):"defina um prazo em meses"}</div></div>
+                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Guardar por mês (na sua meta)</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{w.monthlyByTarget?fmt(w.monthlyByTarget):"defina um prazo em meses"}</div></div>
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4,display:"flex",alignItems:"center",gap:5}}><Hourglass size={11}/>Aportando 50% a mais</div><div style={{fontSize:14,fontWeight:700,color:"#22C55E"}}>{w.timeSaved?`economiza ~${w.timeSaved} meses`:"—"}</div></div>
                     </div>
                   </Card>
@@ -2562,7 +2562,7 @@ function MainApp({user,setUser}){
                             <span>· {t.form}</span>
                           </div>
                         </div>
-                        <div style={{fontSize:14,fontWeight:700,color:isIn?"#22C55E":"#EF4444",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{isIn?"+":"-"}{fmt(t.val)}</div>
+                        <div className="num" style={{fontSize:14,fontWeight:700,color:isIn?"#22C55E":"#EF4444",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{isIn?"+":"-"}{fmt(t.val)}</div>
                         <button onClick={()=>startEditTx(t)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
                         <button onClick={()=>deleteTx(t.id)} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
                       </div>
@@ -2656,7 +2656,7 @@ function MainApp({user,setUser}){
                           <span>· {item.form}</span>
                         </div>
                       </div>
-                      <div style={{fontSize:14,fontWeight:700,color:isPaid?"#22C55E":TX,flexShrink:0}}>{fmt(item.val)}</div>
+                      <div className="num" style={{fontSize:14,fontWeight:700,color:isPaid?"#22C55E":TX,flexShrink:0}}>{fmt(item.val)}</div>
                       {item.notes&&<button onClick={()=>toggleNotes(notesKey)} title="Ver notas" style={{background:"none",border:"none",color:expandedNotes[notesKey]?accent:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Info size={14}/></button>}
                       <button onClick={()=>openTransferToWish(item)} title="Mover para Desejos" aria-label="Mover para Desejos" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><ArrowRightLeft size={14}/></button>
                       <button onClick={()=>startEditPlanned(item)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
@@ -2747,7 +2747,7 @@ function MainApp({user,setUser}){
                     </div>
                     <div style={{display:"flex",gap:8,alignItems:"flex-start",flexShrink:0,marginLeft:10}}>
                       <div style={{textAlign:"right"}}>
-                        {isComplete?<div style={{fontSize:12,color:"#22C55E",fontWeight:700}}>Quitado</div>:<div style={{fontSize:13,fontWeight:700,color:"#EF4444"}}>{fmt(remainingVal)}</div>}
+                        {isComplete?<div style={{fontSize:12,color:"#22C55E",fontWeight:700}}>Quitado</div>:<div className="num" style={{fontSize:13,fontWeight:700,color:"#EF4444"}}>{fmt(remainingVal)}</div>}
                         <div style={{fontSize:11,color:TX2,marginTop:3}}>{paidTxs.length}/{inst.numParcelas}x pagas</div>
                       </div>
                       <button onClick={()=>setDelInstId(inst.id)} title="Remover parcelamento" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:2}}><X size={16}/></button>
