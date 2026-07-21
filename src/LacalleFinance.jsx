@@ -1467,9 +1467,25 @@ function MainApp({user,setUser}){
         @media(max-width:380px){
           .hdr-actions .undo-count{display:none;}
         }
+
+        /* ---- Navegação inferior (bottom nav) no celular ---- */
+        .bottom-nav{display:none;}
+        .bottom-nav-btn{background:none;border:none;cursor:pointer;flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 2px 4px;transition:color .15s ease;}
+        .bottom-nav-ico{display:flex;align-items:center;justify-content:center;width:40px;height:26px;border-radius:13px;transition:background .18s ease;}
+        @media(max-width:760px){
+          .top-tabs{display:none !important;}
+          .bottom-nav{
+            display:flex;position:fixed;left:0;right:0;bottom:0;z-index:250;
+            background:rgba(11,27,43,0.97);backdrop-filter:blur(14px);
+            border-top:1px solid ${BD2};
+            padding:4px 4px calc(4px + env(safe-area-inset-bottom));
+          }
+          .main-content{padding-bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
+          .toast-wrap{bottom:calc(86px + env(safe-area-inset-bottom)) !important;}
+        }
       `}</style>
 
-      <div style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:300,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none",width:"100%",padding:"0 16px"}}>
+      <div className="toast-wrap" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:300,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none",width:"100%",padding:"0 16px"}}>
         {toasts.map(t=>{
           const Ic=t.type==="error"?AlertCircle:t.type==="success"?CheckCircle2:Info;
           const col=t.type==="error"?"#EF4444":t.type==="success"?"#22C55E":TX2;
@@ -1890,7 +1906,7 @@ function MainApp({user,setUser}){
         </Modal>
       )}
 
-      <div style={{display:"flex",gap:4,padding:"8px 20px 0",overflowX:"auto",background:HDR,borderBottom:`1px solid ${BD}`}}>
+      <div className="top-tabs" style={{display:"flex",gap:4,padding:"8px 20px 0",overflowX:"auto",background:HDR,borderBottom:`1px solid ${BD}`}}>
         {appTabs.map(t=>{const Ic=t.icon;return(
           <button key={t.id} className="nav-tab" onClick={()=>setTab(t.id)} style={{
             padding:"9px 15px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,whiteSpace:"nowrap",
@@ -1900,6 +1916,16 @@ function MainApp({user,setUser}){
           }}><Ic size={15}/>{t.label}{tab===t.id&&<span className="nav-tab-underline"/>}</button>
         );})}
       </div>
+
+      {/* ---- Navegação inferior (só no celular) ---- */}
+      <nav className="bottom-nav">
+        {appTabs.map(t=>{const Ic=t.icon;const active=tab===t.id;return(
+          <button key={t.id} onClick={()=>setTab(t.id)} className="bottom-nav-btn" style={{color:active?accent:TX3}}>
+            <span className="bottom-nav-ico" style={{background:active?`${accent}1f`:"transparent"}}><Ic size={20}/></span>
+            <span style={{fontSize:10,fontWeight:600,letterSpacing:"-0.01em"}}>{t.label}</span>
+          </button>
+        );})}
+      </nav>
 
       <div key={tab} className="main-content" style={{padding:"28px 32px",maxWidth:1600,margin:"0 auto",animation:"fadeIn .35s cubic-bezier(.2,.8,.2,1)"}}>
 
