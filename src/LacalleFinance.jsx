@@ -1411,9 +1411,28 @@ function MainApp({user,setUser}){
         .insight-card-anim:hover{transform:translateY(-3px);}
         @keyframes heroCardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         .hero-card-anim{animation:heroCardIn .5s cubic-bezier(.2,.8,.2,1) both;}
-        .nav-tab{position:relative;}
+        .nav-tab{position:relative;transition:background .18s ease, color .18s ease;}
         .nav-tab:hover{color:${TX} !important;background:${HOVER}44 !important;}
         .surface-card{transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;}
+
+        /* ---- Motion (add): entrada em cascata, indicador de aba, hover lift ---- */
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes indicatorIn{from{opacity:0;transform:scaleX(.2)}to{opacity:1;transform:scaleX(1)}}
+        .main-content .bento>*,.main-content .rg-2col>*,.main-content .stagger>*{animation:fadeInUp .5s cubic-bezier(.2,.8,.2,1) backwards;}
+        .main-content .bento>*:nth-child(1),.main-content .rg-2col>*:nth-child(1),.main-content .stagger>*:nth-child(1){animation-delay:.03s}
+        .main-content .bento>*:nth-child(2),.main-content .rg-2col>*:nth-child(2),.main-content .stagger>*:nth-child(2){animation-delay:.08s}
+        .main-content .bento>*:nth-child(3),.main-content .rg-2col>*:nth-child(3),.main-content .stagger>*:nth-child(3){animation-delay:.13s}
+        .main-content .bento>*:nth-child(4),.main-content .rg-2col>*:nth-child(4),.main-content .stagger>*:nth-child(4){animation-delay:.18s}
+        .main-content .bento>*:nth-child(5),.main-content .stagger>*:nth-child(5){animation-delay:.23s}
+        .main-content .bento>*:nth-child(6),.main-content .stagger>*:nth-child(6){animation-delay:.28s}
+        .main-content .bento>*:nth-child(n+7),.main-content .stagger>*:nth-child(n+7){animation-delay:.32s}
+        .fc-card:hover{transform:translateY(-2px);}
+        .nav-tab-underline{position:absolute;left:12px;right:12px;bottom:0;height:2.5px;border-radius:3px 3px 0 0;background:${accent};transform-origin:center bottom;animation:indicatorIn .32s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 12px ${accent}80;}
+        @media (prefers-reduced-motion: reduce){
+          .main-content,.main-content .bento>*,.main-content .rg-2col>*,.main-content .stagger>*,.insight-card-anim,.hero-card-anim,.nav-tab-underline{animation:none !important;}
+          .fc-card:hover{transform:none;}
+          *{transition-duration:.01ms !important;}
+        }
 
         /* ---- Mobile responsiveness ---- */
         .app-header{display:flex;align-items:center;gap:14px;}
@@ -1863,7 +1882,7 @@ function MainApp({user,setUser}){
             background:tab===t.id?`${accent}18`:"transparent",color:tab===t.id?TX:TX3,
             borderRadius:"12px 12px 0 0",marginBottom:tab===t.id?0:0,
             display:"flex",alignItems:"center",gap:7,
-          }}><Ic size={15}/>{t.label}</button>
+          }}><Ic size={15}/>{t.label}{tab===t.id&&<span className="nav-tab-underline"/>}</button>
         );})}
       </div>
 
