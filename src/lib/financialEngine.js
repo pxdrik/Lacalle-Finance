@@ -36,33 +36,29 @@ export const FinancialEngine=(()=>{
   const sumVal=arr=>arr.reduce((s,t)=>s+t.val,0);
   const cleanDesc=d=>(d||"").replace(/\s*\(\d+\/\d+\)$/,"");
 
-  // ---- Detecção de receita recorrente (salário e afins) --------------------
-  // Olha o histórico recente de entradas reais e considera "recorrente" uma
-  // fonte de renda que aparece em 2+ meses recentes OU foi marcada como "Fixa".
-  // Usada pela projeção para estimar a renda futura mês a mês — do mesmo jeito
-  // que as despesas previstas recorrentes já são projetadas. Antes disso, a
-  // projeção só enxergava receita com data futura, então um salário lançado
-  // quando cai (data no passado) zerava as "receitas previstas".
-  const detectRecurringIncome=(transactions,currentMonthKey)=>{
+  // ---- Médias típicas do mês (base da projeção simétrica) -------------------
+  // Calcula a renda e o gasto MÉDIOS por mês, a partir dos meses FECHADOS
+  // recentes (até 6 atrás; ignora o mês atual, que está incompleto). A projeção
+  // usa isso para estimar tanto o quanto ainda deve ENTRAR quanto o quanto ainda
+  // deve SAIR. Antes a projeção só estimava renda, o que inflava o "quanto posso
+  // gastar"; e somava salário por descrição, contando em dobro quando ele mudava
+  // de nome (ex.: "Conexa" vs "Salario Conexa"). Média mensal resolve os dois.
+  const typicalMonthly=(transactions,currentMonthKey)=>{
     const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
-    const groups={};
+    const inByIdx={},outByIdx={};
     transactions.forEach(t=>{
-      if(!isEntradaReal(t))return;
       const idx=MONTH_ORDER.indexOf(monthKey(t.date));
-      if(idx<0||idx>currentIdx||currentIdx-idx>6)return; // só histórico recente (até 6 meses)
-      const key=cleanDesc(t.desc).toLowerCase().trim();
-      if(!key)return;
-      if(!groups[key])groups[key]={desc:cleanDesc(t.desc),months:new Set(),fixa:false,latest:{idx:-1,val:0}};
-      const g=groups[key];
-      g.months.add(monthKey(t.date));
-      if(t.fixed==="Fixa")g.fixa=true;
-      if(idx>=g.latest.idx)g.latest={idx,val:t.val};
+      if(idx<0||idx>=currentIdx||currentIdx-idx>6)return; // só meses fechados recentes
+      if(isEntradaReal(t))inByIdx[idx]=(inByIdx[idx]||0)+t.val;
+      else if(isSaidaReal(t))outByIdx[idx]=(outByIdx[idx]||0)+t.val;
+      else if(isAporte(t))outByIdx[idx]=(outByIdx[idx]||0)+t.val;
+      else if(isResgate(t))outByIdx[idx]=(outByIdx[idx]||0)-t.val;
     });
-    const streams=[];
-    Object.entries(groups).forEach(([key,g])=>{
-      if(g.fixa||g.months.size>=2)streams.push({key,desc:g.desc,monthlyVal:g.latest.val});
-    });
-    return streams;
+    const idxs=new Set([...Object.keys(inByIdx),...Object.keys(outByIdx)]);
+    const n=idxs.size||1;
+    const avgIn=Object.values(inByIdx).reduce((a,b)=>a+b,0)/n;
+    const avgOut=Object.values(outByIdx).reduce((a,b)=>a+b,0)/n;
+    return{avgIn:Math.max(0,avgIn),avgOut:Math.max(0,avgOut),monthsUsed:idxs.size};
   };
 
   const CashFlowAnalyzer={
@@ -95,52 +91,44 @@ export const FinancialEngine=(()=>{
       Object.values(m).forEach(r=>r.balance=r.in-r.out);
       return Object.values(m).sort((a,b)=>MONTH_ORDER.indexOf(a.month)-MONTH_ORDER.indexOf(b.month));
     },
-    // ---- Versão detalhada da projeção: MESMA matemática de projectionAt, mas
-    // expõe os itens (transações e previstos) que compõem o resultado, para uso
-    // em explicações/evidências. projectionAt() abaixo apenas delega para cá —
-    // nenhum número muda, só ganhamos um caminho de auditoria.
+    // ---- Projeção simétrica de saldo -----------------------------------------
+    // Estima o saldo daqui a `daysAhead` dias combinando o saldo atual com o que
+    // ainda deve ENTRAR e SAIR em cada mês do horizonte. Para cada mês usa o
+    // MAIOR entre a média histórica e o que já está lançado (assim uma conta
+    // grande já cadastrada, ou uma renda extra, também contam), descontando o
+    // que já aconteceu no mês atual (que já está no saldo). Antes a projeção só
+    // somava renda futura sem estimar o gasto, deixando o "quanto posso gastar"
+    // irrealista (positivo demais).
     projectionAtDetailed({transactions,plannedExpenses,balance,todayISO,currentMonthKey,daysAhead}){
       const endDate=addDaysStr(todayISO,daysAhead);
-      const future=transactions.filter(t=>t.date>todayISO&&t.date<=endDate);
-      const incomeTx=future.filter(isEntradaReal);
-      const inc=sumVal(incomeTx);
-      const incomeItems=incomeTx.map(t=>({label:cleanDesc(t.desc),value:t.val,date:t.date}));
-      const invApTx=future.filter(isAporte);
-      const invReTx=future.filter(isResgate);
-      const invAp=sumVal(invApTx);
-      const invRe=sumVal(invReTx);
-      const outTx=future.filter(isSaidaReal);
-      const outReal=sumVal(outTx)+invAp-invRe;
-      const outItems=outTx.map(t=>({label:cleanDesc(t.desc),value:t.val,date:t.date,kind:t.installmentId?"parcela":(t.plannedId?"conta":"despesa")}));
       const endMk=monthKey(endDate);
       let idxCur=MONTH_ORDER.indexOf(currentMonthKey);
       let idxEnd=MONTH_ORDER.indexOf(endMk);
       if(idxEnd<idxCur)idxEnd=idxCur;
-      let plannedOut=0;const plannedItems=[];
+      const {avgIn,avgOut}=typicalMonthly(transactions,currentMonthKey);
+      const sumIf=(pred)=>sumVal(transactions.filter(pred));
+      let incTotal=0,outTotal=0;
+      const incomeItems=[],outItems=[],plannedItems=[];
       for(let i=idxCur;i<=idxEnd;i++){
         const mk=MONTH_ORDER[i];
-        plannedExpenses.forEach(p=>{
-          const pending=p.recurring?!p.paid?.[mk]:(p.month===mk&&!p.paid?.[mk]);
-          if(pending){plannedOut+=p.val;plannedItems.push({label:p.desc,value:p.val,recurring:!!p.recurring,month:mk});}
-        });
+        const isCur=i===idxCur;
+        // Já realizado neste mês (data <= hoje): já está embutido no saldo atual.
+        const alreadyIn=isCur?sumIf(t=>isEntradaReal(t)&&monthKey(t.date)===mk&&t.date<=todayISO):0;
+        const alreadyOut=isCur?(sumIf(t=>(isSaidaReal(t)||isAporte(t))&&monthKey(t.date)===mk&&t.date<=todayISO)-sumIf(t=>isResgate(t)&&monthKey(t.date)===mk&&t.date<=todayISO)):0;
+        // Lançamentos já cadastrados com data futura, dentro da janela.
+        const futIn=sumIf(t=>isEntradaReal(t)&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
+        const futOut=sumIf(t=>(isSaidaReal(t)||isAporte(t))&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate)-sumIf(t=>isResgate(t)&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
+        const plannedPending=plannedExpenses.filter(p=>p.recurring?!p.paid?.[mk]:(p.month===mk&&!p.paid?.[mk])).reduce((s,p)=>s+p.val,0);
+        // Total esperado do mês = o maior entre a média típica e o já conhecido.
+        const fullIn=Math.max(avgIn,alreadyIn+futIn);
+        const fullOut=Math.max(avgOut,alreadyOut+futOut+plannedPending);
+        const contribIn=Math.max(0,fullIn-alreadyIn);   // só o que ainda falta entrar
+        const contribOut=Math.max(0,fullOut-alreadyOut); // só o que ainda falta sair
+        if(contribIn>0){incTotal+=contribIn;incomeItems.push({label:`Renda estimada · ${mk}`,value:contribIn,date:mk,recurring:true});}
+        if(contribOut>0){outTotal+=contribOut;outItems.push({label:`Gasto estimado · ${mk}`,value:contribOut,date:mk,kind:"estimado"});}
       }
-      // ---- Receita recorrente (ex.: salário) ----------------------------------
-      // Estima a renda mensal fixa a partir do histórico e soma em cada mês do
-      // horizonte que ainda NÃO tem essa entrada lançada — assim uma receita que
-      // se repete todo mês não zera só porque não foi cadastrada no futuro, e
-      // não é contada em dobro quando já existe o lançamento daquele mês.
-      const recStreams=detectRecurringIncome(transactions,currentMonthKey);
-      let recInc=0;const recIncItems=[];
-      for(let i=idxCur;i<=idxEnd;i++){
-        const mk=MONTH_ORDER[i];
-        recStreams.forEach(s=>{
-          const already=transactions.some(t=>isEntradaReal(t)&&cleanDesc(t.desc).toLowerCase().trim()===s.key&&monthKey(t.date)===mk);
-          if(!already){recInc+=s.monthlyVal;recIncItems.push({label:s.desc,value:s.monthlyVal,date:mk,recurring:true});}
-        });
-      }
-      const incTotal=inc+recInc;
-      const value=balance+incTotal-outReal-plannedOut;
-      return{value,incomeItems:[...incomeItems,...recIncItems],outItems,plannedItems,totals:{inc:incTotal,outReal,plannedOut,invAp,invRe}};
+      const value=balance+incTotal-outTotal;
+      return{value,incomeItems,outItems,plannedItems,totals:{inc:incTotal,outReal:outTotal,plannedOut:0,invAp:0,invRe:0}};
     },
     projectionAt(args){
       return CashFlowAnalyzer.projectionAtDetailed(args).value;
@@ -386,23 +374,18 @@ export const FinancialEngine=(()=>{
     },
     endOfMonthProjection({transactions,plannedExpenses,currentMonthKey}){
       const monthTx=transactions.filter(t=>monthKey(t.date)===currentMonthKey);
-      if(monthTx.length===0&&plannedExpenses.length===0)return null;
-      const inc=sumVal(monthTx.filter(isEntradaReal));
-      const invAp=sumVal(monthTx.filter(isAporte));
-      const invRe=sumVal(monthTx.filter(isResgate));
-      const out=sumVal(monthTx.filter(isSaidaReal))+invAp-invRe;
+      const {avgIn,avgOut}=typicalMonthly(transactions,currentMonthKey);
+      if(monthTx.length===0&&plannedExpenses.length===0&&avgIn===0&&avgOut===0)return null;
+      const inSoFar=sumVal(monthTx.filter(isEntradaReal));
+      const outSoFar=sumVal(monthTx.filter(isSaidaReal))+sumVal(monthTx.filter(isAporte))-sumVal(monthTx.filter(isResgate));
       const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKey).reduce((s,p)=>s+(p.paid?.[currentMonthKey]?0:p.val),0);
-      // Renda recorrente ainda NÃO recebida neste mês (ex.: salário que cai mais
-      // pra frente): mesma lógica da projeção de fluxo — se a fonte recorrente
-      // não tem lançamento no mês atual, soma a estimativa mensal esperada.
-      const recStreams=detectRecurringIncome(transactions,currentMonthKey);
-      let recInc=0;
-      recStreams.forEach(s=>{
-        const already=monthTx.some(t=>isEntradaReal(t)&&cleanDesc(t.desc).toLowerCase().trim()===s.key);
-        if(!already)recInc+=s.monthlyVal;
-      });
-      const incTotal=inc+recInc;
-      return{expected:incTotal-out-plannedPending,inc:incTotal,out,plannedPending};
+      // Simétrico: renda esperada do mês = maior entre a média típica e o que já
+      // entrou; gasto esperado = maior entre a média típica e (o que já saiu +
+      // previstos pendentes). Assim o "previsto no fim do mês" não fica otimista
+      // por só somar a renda esperada sem estimar o gasto que ainda vem.
+      const inc=Math.max(avgIn,inSoFar);
+      const out=Math.max(avgOut,outSoFar+plannedPending);
+      return{expected:inc-out,inc,out,plannedPending};
     },
   };
 
