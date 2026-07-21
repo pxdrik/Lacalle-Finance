@@ -2012,22 +2012,6 @@ function MainApp({user,setUser}){
               </div>
             )}
 
-            {/* ---- Cartões de consultor: poucos, ricos, ordenados por prioridade real ---- */}
-            <div>
-              <div style={{fontSize:15,fontWeight:700,color:TX,marginBottom:4,display:"flex",alignItems:"center",gap:8,letterSpacing:"-0.01em"}}><Lightbulb size={17} color={accent}/>O que merece sua atenção hoje</div>
-              <div style={{fontSize:12,color:TX3,marginBottom:18}}>Poucos destaques, com o raciocínio completo por trás de cada um — não só a conclusão.</div>
-              {consultantInsights.length===0?(
-                <div style={{...cardStyle,padding:20,display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:18}}>🟢</span>
-                  <div style={{fontSize:13,color:TX2,fontWeight:600}}>Tudo certo por aqui! Nenhum destaque no momento.</div>
-                </div>
-              ):(
-                <div className="insights-grid">
-                  {consultantInsights.map((it,i)=><InsightCard key={it.key} item={it} index={i}/>)}
-                </div>
-              )}
-            </div>
-
             {/* ---- Evolução do dinheiro ---- */}
             <Card style={{padding:26}}>
               <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:20,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={16} color={accent}/>Evolução do seu dinheiro</div>
@@ -2159,6 +2143,22 @@ function MainApp({user,setUser}){
                 )}
               </div>
             )}
+
+            {/* ---- Cartões de consultor: agora abaixo dos gráficos ---- */}
+            <div>
+              <div style={{fontSize:15,fontWeight:700,color:TX,marginBottom:4,display:"flex",alignItems:"center",gap:8,letterSpacing:"-0.01em"}}><Lightbulb size={17} color={accent}/>O que merece sua atenção hoje</div>
+              <div style={{fontSize:12,color:TX3,marginBottom:18}}>Poucos destaques, com o raciocínio completo por trás de cada um — não só a conclusão.</div>
+              {consultantInsights.length===0?(
+                <div style={{...cardStyle,padding:20,display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:18}}>🟢</span>
+                  <div style={{fontSize:13,color:TX2,fontWeight:600}}>Tudo certo por aqui! Nenhum destaque no momento.</div>
+                </div>
+              ):(
+                <div className="insights-grid">
+                  {consultantInsights.map((it,i)=><InsightCard key={it.key} item={it} index={i}/>)}
+                </div>
+              )}
+            </div>
           </div>
           );
         })()}
