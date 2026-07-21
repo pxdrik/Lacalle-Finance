@@ -103,6 +103,33 @@ describe("CashFlowAnalyzer.projectionAt", () => {
   });
 });
 
+describe("ForecastEngine.endOfMonthProjection", () => {
+  test("inclui salário recorrente ainda não recebido no mês atual", () => {
+    const transactions = [
+      // salário caiu em jun (marcado Fixa), mas ainda não caiu em jul
+      tx({ id: 1, date: "2026-06-05", type: "Entrada", val: 3000, cat: "Salario / Entradas", fixed: "Fixa", desc: "Salário" }),
+      // uma despesa de jul já lançada
+      tx({ id: 2, date: "2026-07-10", type: "Saída", val: 500, cat: "Outros" }),
+    ];
+    const proj = FinancialEngine.ForecastEngine.endOfMonthProjection({
+      transactions, plannedExpenses: [], currentMonthKey: monthKey(today),
+    });
+    assert.equal(proj.inc, 3000); // salário de jul esperado, mesmo sem lançamento
+    assert.equal(proj.expected, 2500); // 3000 - 500
+  });
+
+  test("não duplica o salário quando já foi recebido no mês atual", () => {
+    const transactions = [
+      tx({ id: 1, date: "2026-06-05", type: "Entrada", val: 3000, cat: "Salario / Entradas", fixed: "Fixa", desc: "Salário" }),
+      tx({ id: 2, date: "2026-07-05", type: "Entrada", val: 3000, cat: "Salario / Entradas", fixed: "Fixa", desc: "Salário" }),
+    ];
+    const proj = FinancialEngine.ForecastEngine.endOfMonthProjection({
+      transactions, plannedExpenses: [], currentMonthKey: monthKey(today),
+    });
+    assert.equal(proj.inc, 3000); // só o salário de jul já recebido, não somado 2x
+  });
+});
+
 describe("BudgetAnalyzer", () => {
   test("itemsForMonth traz recorrentes + itens específicos do mês", () => {
     const plannedExpenses = [

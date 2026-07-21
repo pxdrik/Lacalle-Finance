@@ -392,7 +392,17 @@ export const FinancialEngine=(()=>{
       const invRe=sumVal(monthTx.filter(isResgate));
       const out=sumVal(monthTx.filter(isSaidaReal))+invAp-invRe;
       const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKey).reduce((s,p)=>s+(p.paid?.[currentMonthKey]?0:p.val),0);
-      return{expected:inc-out-plannedPending,inc,out,plannedPending};
+      // Renda recorrente ainda NÃO recebida neste mês (ex.: salário que cai mais
+      // pra frente): mesma lógica da projeção de fluxo — se a fonte recorrente
+      // não tem lançamento no mês atual, soma a estimativa mensal esperada.
+      const recStreams=detectRecurringIncome(transactions,currentMonthKey);
+      let recInc=0;
+      recStreams.forEach(s=>{
+        const already=monthTx.some(t=>isEntradaReal(t)&&cleanDesc(t.desc).toLowerCase().trim()===s.key);
+        if(!already)recInc+=s.monthlyVal;
+      });
+      const incTotal=inc+recInc;
+      return{expected:incTotal-out-plannedPending,inc:incTotal,out,plannedPending};
     },
   };
 
