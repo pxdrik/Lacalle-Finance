@@ -36,6 +36,35 @@ export const FinancialEngine=(()=>{
   const sumVal=arr=>arr.reduce((s,t)=>s+t.val,0);
   const cleanDesc=d=>(d||"").replace(/\s*\(\d+\/\d+\)$/,"");
 
+  // ---- Detecção de receita recorrente (salário e afins) --------------------
+  // Olha o histórico recente de entradas reais e considera "recorrente" uma
+  // fonte de renda que aparece em 2+ meses recentes OU foi marcada como "Fixa".
+  // Usada pela projeção para estimar a renda futura mês a mês — do mesmo jeito
+  // que as despesas previstas recorrentes já são projetadas. Antes disso, a
+  // projeção só enxergava receita com data futura, então um salário lançado
+  // quando cai (data no passado) zerava as "receitas previstas".
+  const detectRecurringIncome=(transactions,currentMonthKey)=>{
+    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const groups={};
+    transactions.forEach(t=>{
+      if(!isEntradaReal(t))return;
+      const idx=MONTH_ORDER.indexOf(monthKey(t.date));
+      if(idx<0||idx>currentIdx||currentIdx-idx>6)return; // só histórico recente (até 6 meses)
+      const key=cleanDesc(t.desc).toLowerCase().trim();
+      if(!key)return;
+      if(!groups[key])groups[key]={desc:cleanDesc(t.desc),months:new Set(),fixa:false,latest:{idx:-1,val:0}};
+      const g=groups[key];
+      g.months.add(monthKey(t.date));
+      if(t.fixed==="Fixa")g.fixa=true;
+      if(idx>=g.latest.idx)g.latest={idx,val:t.val};
+    });
+    const streams=[];
+    Object.entries(groups).forEach(([key,g])=>{
+      if(g.fixa||g.months.size>=2)streams.push({key,desc:g.desc,monthlyVal:g.latest.val});
+    });
+    return streams;
+  };
+
   const CashFlowAnalyzer={
     investmentNet(tx){
       const inv=[...tx.filter(t=>t.cat==="Investimento")].sort((a,b)=>a.date.localeCompare(b.date));
@@ -95,8 +124,23 @@ export const FinancialEngine=(()=>{
           if(pending){plannedOut+=p.val;plannedItems.push({label:p.desc,value:p.val,recurring:!!p.recurring,month:mk});}
         });
       }
-      const value=balance+inc-outReal-plannedOut;
-      return{value,incomeItems,outItems,plannedItems,totals:{inc,outReal,plannedOut,invAp,invRe}};
+      // ---- Receita recorrente (ex.: salário) ----------------------------------
+      // Estima a renda mensal fixa a partir do histórico e soma em cada mês do
+      // horizonte que ainda NÃO tem essa entrada lançada — assim uma receita que
+      // se repete todo mês não zera só porque não foi cadastrada no futuro, e
+      // não é contada em dobro quando já existe o lançamento daquele mês.
+      const recStreams=detectRecurringIncome(transactions,currentMonthKey);
+      let recInc=0;const recIncItems=[];
+      for(let i=idxCur;i<=idxEnd;i++){
+        const mk=MONTH_ORDER[i];
+        recStreams.forEach(s=>{
+          const already=transactions.some(t=>isEntradaReal(t)&&cleanDesc(t.desc).toLowerCase().trim()===s.key&&monthKey(t.date)===mk);
+          if(!already){recInc+=s.monthlyVal;recIncItems.push({label:s.desc,value:s.monthlyVal,date:mk,recurring:true});}
+        });
+      }
+      const incTotal=inc+recInc;
+      const value=balance+incTotal-outReal-plannedOut;
+      return{value,incomeItems:[...incomeItems,...recIncItems],outItems,plannedItems,totals:{inc:incTotal,outReal,plannedOut,invAp,invRe}};
     },
     projectionAt(args){
       return CashFlowAnalyzer.projectionAtDetailed(args).value;

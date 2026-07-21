@@ -84,6 +84,23 @@ describe("CashFlowAnalyzer.projectionAt", () => {
     });
     assert.equal(value, 200); // 1000 - 400 (jul) - 400 (ago)
   });
+
+  test("projeta receita recorrente (salário marcado Fixa) nos meses futuros, sem duplicar o mês atual", () => {
+    const transactions = [
+      // salário recebido em jun e jul (passado/atual), marcado Fixa → recorrente
+      tx({ id: 1, date: "2026-06-18", type: "Entrada", val: 3000, cat: "Salario / Entradas", fixed: "Fixa", desc: "Salário" }),
+      tx({ id: 2, date: "2026-07-05", type: "Entrada", val: 3000, cat: "Salario / Entradas", fixed: "Fixa", desc: "Salário" }),
+    ];
+    // Horizonte de 30 dias a partir de 20/jul cruza para agosto. Julho já tem o
+    // salário lançado (05/jul) → NÃO soma de novo; agosto ainda não tem → soma
+    // R$3000 projetados. Antes da correção, o resultado era só 1000 (receita
+    // recorrente ignorada).
+    const value = CashFlowAnalyzer.projectionAt({
+      transactions, plannedExpenses: [], balance: 1000, todayISO: today,
+      currentMonthKey: monthKey(today), daysAhead: 30,
+    });
+    assert.equal(value, 4000); // 1000 (saldo) + 3000 (salário de agosto projetado)
+  });
 });
 
 describe("BudgetAnalyzer", () => {
