@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# O app não usa rotas (é uma página só), mas isso evita erro 404 caso você
+# adicione roteamento no futuro — qualquer caminho cai de volta no index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
