@@ -1,0 +1,273 @@
+// ============================================================================
+// regressions.test.js
+//
+// Um teste por bug corrigido na revisão de QA. Cada bloco começa com o
+// sintoma que o usuário via, para que uma regressão futura seja reconhecida
+// pelo comportamento, não só pelo nome da função.
+//
+// Como rodar:  node --test src/lib/
+// ============================================================================
+import { test, describe } from "node:test";
+import assert from "node:assert/strict";
+import { FinancialEngine, monthKey, addMonthsStr, daysInMonth, formatMonths } from "./financialEngine.js";
+import {
+  parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt,
+  firstError, MAX_TX_VAL,
+} from "./validation.js";
+
+const { CashFlowAnalyzer, GoalAnalyzer } = FinancialEngine;
+
+const today = "2026-07-20";
+const tx = (over) => ({ id: 1, date: today, type: "Saída", fixed: "Variavel", cat: "Outros", desc: "x", val: 100, form: "pix", invTipo: null, ...over });
+
+// ---------------------------------------------------------------------------
+describe("BUG 1 — parcelamento derrubava o patrimônio pelo valor total", () => {
+  // Sintoma: criar 12x de R$ 100 fazia o Patrimônio cair R$ 1.200 no mesmo dia,
+  // e o Saldo Livre ficava negativo (a saída futura era contada duas vezes).
+  const parcelas = Array.from({ length: 12 }, (_, i) => tx({
+    id: 100 + i, date: addMonthsStr(today, i), val: 100, installmentId: 7,
+  }));
+
+  test("só as parcelas com data até hoje entram no saldo atual", () => {
+    const realized = parcelas.filter(t => t.date <= today);
+    assert.equal(realized.length, 1, "só a 1ª parcela venceu");
+    const { balance } = CashFlowAnalyzer.totals(realized);
+    assert.equal(balance, -100, "impacto imediato = 1 parcela, não o total");
+  });
+
+  test("saldo livre desconta as futuras uma única vez", () => {
+    const realized = parcelas.filter(t => t.date <= today);
+    const { balance } = CashFlowAnalyzer.totals(realized);
+    const livre = CashFlowAnalyzer.freeBalance({
+      transactions: parcelas, plannedExpenses: [], balance,
+      todayISO: today, currentMonthKey: monthKey(today),
+    });
+    // saldo (-100) menos as 11 parcelas futuras (1100) = -1200. Se houvesse
+    // dupla contagem (o bug), daria -2300.
+    assert.equal(livre, -1200);
+  });
+
+  test("somar TODAS as transações (o bug) daria o valor total de uma vez", () => {
+    const { balance } = CashFlowAnalyzer.totals(parcelas);
+    assert.equal(balance, -1200, "comportamento antigo, documentado para contraste");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("BUG datas — rollover de mês com dia 31", () => {
+  // Sintoma: parcelas saíam em jul, ago, out, out, dez, dez, jan.
+  test("31/07 + n meses nunca pula um mês", () => {
+    const esperado = ["2026-07-31", "2026-08-31", "2026-09-30", "2026-10-31", "2026-11-30", "2026-12-31", "2027-01-31"];
+    esperado.forEach((iso, i) => assert.equal(addMonthsStr("2026-07-31", i), iso));
+  });
+
+  test("31/01 + 1 mês respeita fevereiro (28 e 29 em bissexto)", () => {
+    assert.equal(addMonthsStr("2026-01-31", 1), "2026-02-28");
+    assert.equal(addMonthsStr("2028-01-31", 1), "2028-02-29", "2028 é bissexto");
+  });
+
+  test("daysInMonth cobre 28/29/30/31", () => {
+    assert.equal(daysInMonth(2026, 1), 28);
+    assert.equal(daysInMonth(2028, 1), 29);
+    assert.equal(daysInMonth(2026, 3), 30);
+    assert.equal(daysInMonth(2026, 6), 31);
+  });
+
+  test("12 parcelas a partir de 31/01 caem todas no dia certo, virando o ano", () => {
+    const datas = Array.from({ length: 13 }, (_, i) => addMonthsStr("2026-01-31", i));
+    assert.equal(datas[12], "2027-01-31", "13ª parcela = mesmo dia, ano seguinte");
+    assert.equal(new Set(datas.map(monthKey)).size, 13, "um mês distinto por parcela");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("BUG 3 — variação percentual com base negativa", () => {
+  // Sintoma: melhorar de -154,02 para -102,67 exibia "-33%" (parecia piora).
+  const pctChange = (cur, prev) => {
+    if (prev === 0) return cur === 0 ? 0 : null;
+    return Math.round((cur - prev) / Math.abs(prev) * 100);
+  };
+
+  test("prejuízo menor conta como melhora (positivo)", () => {
+    assert.ok(pctChange(-102.67, -154.02) > 0);
+  });
+
+  test("prejuízo maior conta como piora (negativo)", () => {
+    assert.ok(pctChange(-358.18, -102.67) < 0);
+  });
+
+  test("continua correto com base positiva", () => {
+    assert.equal(pctChange(150, 100), 50);
+    assert.equal(pctChange(50, 100), -50);
+  });
+
+  test("base zero não inventa 0% — devolve null para a UI mostrar '—'", () => {
+    assert.equal(pctChange(100, 0), null);
+    assert.equal(pctChange(0, 0), 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("BUG 4 — vírgula como separador decimal", () => {
+  test("aceita vírgula, ponto e valor formatado", () => {
+    assert.equal(parseNum("12,34"), 12.34);
+    assert.equal(parseNum("12.34"), 12.34);
+    assert.equal(parseNum("1.234,56"), 1234.56);
+    assert.equal(parseNum("R$ 89,90"), 89.9);
+  });
+
+  test("valor vazio ou lixo não vira NaN", () => {
+    assert.equal(parseNum(""), 0);
+    assert.equal(parseNum(null), 0);
+    assert.equal(parseNum("abc"), 0);
+  });
+
+  test("valor negativo é normalizado (BUG 11)", () => {
+    assert.equal(parseNum("-50"), 50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("BUG 5 — teto de valor", () => {
+  test("rejeita valor absurdo com mensagem clara", () => {
+    const r = validateAmount("999999999999");
+    assert.equal(r.ok, false);
+    assert.match(r.error, /alto demais/);
+  });
+
+  test("aceita valor no limite e rejeita logo acima", () => {
+    assert.equal(validateAmount(String(MAX_TX_VAL)).ok, true);
+    assert.equal(validateAmount(String(MAX_TX_VAL + 1)).ok, false);
+  });
+
+  test("rejeita zero e valores abaixo de um centavo", () => {
+    assert.equal(validateAmount("0").ok, false);
+    assert.equal(validateAmount("0,004").ok, false);
+  });
+
+  test("aceita exatamente um centavo", () => {
+    const r = validateAmount("0,01");
+    assert.equal(r.ok, true);
+    assert.equal(r.value, 0.01);
+  });
+
+  test("campo opcional aceita vazio", () => {
+    assert.equal(validateAmount("", { required: false }).ok, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("BUG 6 — validação de datas", () => {
+  test("rejeita ano 0001", () => {
+    const r = validateDate("0001-01-01");
+    assert.equal(r.ok, false);
+  });
+
+  test("rejeita data que não existe no calendário", () => {
+    assert.equal(validateDate("2026-02-30").ok, false);
+    assert.equal(validateDate("2027-02-29").ok, false, "2027 não é bissexto");
+  });
+
+  test("aceita 29/02 em ano bissexto", () => {
+    assert.equal(validateDate("2028-02-29").ok, true);
+  });
+
+  test("rejeita formato inválido", () => {
+    assert.equal(validateDate("abc").ok, false);
+    assert.equal(validateDate("").ok, false);
+  });
+
+  test("monthKey não produz mais 'jan/' nem 'undefined/N'", () => {
+    assert.equal(monthKey("0001-01-01"), "???");
+    assert.equal(monthKey("abc"), "???");
+    assert.equal(monthKey("2026-07-31"), "jul/26");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Precisão financeira", () => {
+  test("rateio de parcelas não perde centavos", () => {
+    const total = 1000, num = 3;
+    const monthly = roundMoney(total / num);
+    const last = roundMoney(total - monthly * (num - 1));
+    assert.equal(monthly, 333.33);
+    assert.equal(last, 333.34);
+    assert.equal(roundMoney(monthly * 2 + last), total);
+  });
+
+  test("rateio fecha o total para vários números de parcelas", () => {
+    for (const [total, num] of [[100, 3], [0.05, 3], [1234.56, 7], [999.99, 11]]) {
+      const monthly = roundMoney(total / num);
+      const last = roundMoney(total - monthly * (num - 1));
+      const soma = roundMoney(monthly * (num - 1) + last);
+      assert.equal(soma, roundMoney(total), `${total} em ${num}x`);
+    }
+  });
+
+  test("roundMoney corta a deriva do ponto flutuante", () => {
+    assert.equal(roundMoney(0.1 + 0.2), 0.3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("BUG 12 — '~1 meses' para qualquer valor", () => {
+  test("distingue 'menos de 1 mês' de 'cerca de 1 mês'", () => {
+    assert.equal(formatMonths(1, 0.05), "menos de 1 mês");
+    assert.equal(formatMonths(1, 1), "cerca de 1 mês");
+    assert.equal(formatMonths(3, 2.4), "cerca de 3 meses");
+  });
+
+  test("sem estimativa não mente um número", () => {
+    assert.equal(formatMonths(null), "sem dados suficientes");
+  });
+
+  test("GoalAnalyzer expõe a fração para a UI decidir o texto", () => {
+    const [meta] = GoalAnalyzer.enhance([{ name: "m", price: 300, saved: 273.02, monthsTarget: 0 }], 500);
+    assert.equal(meta.estMonths, 1);
+    assert.ok(meta.estMonthsExact < 1, "R$ 26,98 restantes com R$ 500/mês leva menos de um mês");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Validações de texto e inteiros", () => {
+  test("descrição obrigatória e com limite", () => {
+    assert.equal(validateText("").ok, false);
+    assert.equal(validateText("   ").ok, false, "só espaços não conta");
+    assert.equal(validateText("a".repeat(121)).ok, false);
+    assert.equal(validateText("Mercado").ok, true);
+  });
+
+  test("número de parcelas dentro do intervalo", () => {
+    assert.equal(validateInt("0", { min: 1, max: 360 }).ok, false);
+    assert.equal(validateInt("361", { min: 1, max: 360 }).ok, false);
+    assert.equal(validateInt("12", { min: 1, max: 360 }).value, 12);
+  });
+
+  test("firstError devolve a primeira falha, na ordem informada", () => {
+    const err = firstError([validateText("ok"), validateAmount(""), validateDate("0001-01-01")]);
+    assert.match(err, /Informe o valor/);
+  });
+
+  test("firstError devolve null quando tudo passa", () => {
+    assert.equal(firstError([validateText("ok"), validateAmount("10,50"), validateDate(today)]), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("Escopo do saldo — filtros não podem contaminar o patrimônio", () => {
+  // Sintoma (não estava no relatório): filtrar por categoria na aba Transações
+  // mudava o Saldo Atual e o Patrimônio no Dashboard.
+  const transactions = [
+    tx({ id: 1, type: "Entrada", cat: "Salario / Entradas", val: 5000 }),
+    tx({ id: 2, type: "Saída", cat: "Lazer", val: 200 }),
+    tx({ id: 3, type: "Saída", cat: "Alimentação", val: 800 }),
+  ];
+
+  test("o saldo global independe de qualquer filtro de visão", () => {
+    const global = CashFlowAnalyzer.totals(transactions).balance;
+    const filtradoPorLazer = CashFlowAnalyzer.totals(transactions.filter(t => t.cat === "Lazer")).balance;
+    assert.equal(global, 4000);
+    assert.equal(filtradoPorLazer, -200);
+    assert.notEqual(global, filtradoPorLazer, "por isso o Dashboard nunca pode usar a lista filtrada");
+  });
+});

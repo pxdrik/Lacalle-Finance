@@ -5,7 +5,7 @@
 // conhece nada sobre transações, desejos, Supabase etc. Cada aba do app
 // importa daqui em vez de redefinir os mesmos componentes.
 // ============================================================================
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT } from "../lib/theme";
@@ -29,45 +29,91 @@ export const Card=(props)=><div {...props} className={`fc-card ${props.className
 // Esse componente concentra esse padrão num único lugar: menos código
 // duplicado e qualquer ajuste visual futuro (ex.: mudar a animação do
 // overlay) passa a valer para todos os popups de uma vez.
-export const Modal=({onClose,children,maxWidth=420,align="center",zIndex=170,padding=28,scroll=true,contentStyle})=>(
-  <div
-    style={{position:"fixed",inset:0,background:"rgba(2,7,14,0.78)",zIndex,display:"flex",alignItems:align==="top"?"flex-start":"center",justifyContent:"center",padding:align==="top"?"10vh 20px 20px":20,animation:"overlayIn .15s ease-out"}}
-    onClick={onClose}
-  >
+// Fechar clicando fora precisa considerar ONDE o clique COMEÇOU, não onde
+// terminou. Com `onClick={onClose}` no overlay, dois casos fechavam o popup
+// sem o usuário pedir:
+//   1) durante os 0,25s da animação de entrada o card ainda está deslocado
+//      8px e com scale .97 — um clique mirado no botão final cai no overlay e
+//      fecha o modal. É o "cliquei em Excluir e não aconteceu nada".
+//   2) selecionar texto de dentro do modal e soltar o mouse fora também
+//      disparava o fechamento, perdendo o que estava preenchido.
+// Guardando o alvo do mousedown, só fecha quem realmente começou o gesto fora.
+export const Modal=({onClose,children,maxWidth=420,align="center",zIndex=170,padding=28,scroll=true,contentStyle,label})=>{
+  const pressedOnOverlay=useRef(false);
+  return(
     <div
-      onClick={e=>e.stopPropagation()}
-      style={{background:CARD,border:`1px solid ${BD2}`,borderRadius:R_CARD,padding,width:"100%",maxWidth,...(scroll?{maxHeight:"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:"modalIn .25s cubic-bezier(.2,.8,.2,1)",...contentStyle}}
+      role="presentation"
+      style={{position:"fixed",inset:0,background:"rgba(2,7,14,0.78)",zIndex,display:"flex",alignItems:align==="top"?"flex-start":"center",justifyContent:"center",padding:align==="top"?"10vh 20px 20px":20,animation:"overlayIn .15s ease-out"}}
+      onMouseDown={e=>{pressedOnOverlay.current=e.target===e.currentTarget;}}
+      onMouseUp={e=>{
+        if(pressedOnOverlay.current&&e.target===e.currentTarget)onClose?.();
+        pressedOnOverlay.current=false;
+      }}
     >
-      {children}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        onMouseDown={e=>e.stopPropagation()}
+        style={{background:CARD,border:`1px solid ${BD2}`,borderRadius:R_CARD,padding,width:"100%",maxWidth,...(scroll?{maxHeight:"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:"modalIn .25s cubic-bezier(.2,.8,.2,1)",...contentStyle}}
+      >
+        {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export function CategoryIcon({cat,size=14,color,catIconMap}){
   const Icon=(catIconMap&&catIconMap[cat])||CAT_ICON_COMPONENTS[cat]||Tag;
   return <Icon size={size} color={color} strokeWidth={2.2}/>;
 }
 
-export function AnimatedValue({value}){
-  const [display,setDisplay]=useState(value);
-  const prevRef=useRef(value);
+// ---- Contagem animada de números ------------------------------------------
+// Um único hook para os dois componentes de número animado, porque os dois
+// tinham defeitos distintos com a mesma origem (não guardar o valor exibido):
+//
+//  * AnimatedValue só atualizava `prevRef` quando a animação chegava ao fim.
+//    Se o valor mudasse no meio (salvar dois lançamentos seguidos), a próxima
+//    animação recomeçava do valor ANTIGO — dava um salto pra trás na tela.
+//
+//  * HeroNumberAnimated animava sempre a partir de ZERO. Toda vez que um card
+//    de insight recalculava, o número piscava "R$ 0,00" e subia de novo. É o
+//    efeito que dava a impressão de que o valor tinha zerado logo após salvar.
+//
+// Também respeita `prefers-reduced-motion`: quem pediu menos animação no
+// sistema recebe o valor final direto, sem contagem.
+const prefersReducedMotion=()=>
+  typeof window!=="undefined"&&
+  typeof window.matchMedia==="function"&&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function useCountUp(value,duration=520){
+  const target=Number.isFinite(value)?value:0;
+  const [display,setDisplay]=useState(target);
+  const displayRef=useRef(target);
   useEffect(()=>{
-    const start=prevRef.current;
-    const end=value;
-    if(start===end){setDisplay(end);return;}
+    const start=displayRef.current;
+    if(start===target)return;
+    if(prefersReducedMotion()){displayRef.current=target;setDisplay(target);return;}
     const startTime=performance.now();
-    const duration=600;
     let raf;
     const step=now=>{
       const t=Math.min(1,(now-startTime)/duration);
       const eased=1-Math.pow(1-t,3);
-      setDisplay(start+(end-start)*eased);
+      const next=start+(target-start)*eased;
+      displayRef.current=next;   // sempre atualizado, mesmo se interrompido
+      setDisplay(next);
       if(t<1)raf=requestAnimationFrame(step);
-      else{prevRef.current=end;setDisplay(end);}
+      else{displayRef.current=target;setDisplay(target);}
     };
     raf=requestAnimationFrame(step);
     return()=>cancelAnimationFrame(raf);
-  },[value]);
+  },[target,duration]);
+  return display;
+}
+
+export function AnimatedValue({value}){
+  const display=useCountUp(value);
   return <span style={{fontFamily:NUM_FONT,fontVariantNumeric:"tabular-nums"}}>{fmt(display)}</span>;
 }
 
@@ -173,22 +219,7 @@ export function DataUsedChecklist({tags}){
 // ---- Número-herói animado: conta de 0 até o valor, dominando visualmente o card ----
 export function HeroNumberAnimated({heroNumber,color}){
   const{value=0,format="plain",suffix="",sign="none"}=heroNumber||{};
-  const [display,setDisplay]=useState(0);
-  useEffect(()=>{
-    const end=value;
-    const startTime=performance.now();
-    const duration=750;
-    let raf;
-    const step=now=>{
-      const t=Math.min(1,(now-startTime)/duration);
-      const eased=1-Math.pow(1-t,3);
-      setDisplay(end*eased);
-      if(t<1)raf=requestAnimationFrame(step);
-      else setDisplay(end);
-    };
-    raf=requestAnimationFrame(step);
-    return()=>cancelAnimationFrame(raf);
-  },[value]);
+  const display=useCountUp(value,650);
   let formatted;
   if(format==="currency")formatted=fmt(Math.abs(display));
   else if(format==="percent")formatted=`${Math.round(display)}%`;
@@ -217,7 +248,11 @@ export function ComparisonBar({aLabel,aValue,bLabel,bValue,color}){
 }
 
 const CONFIDENCE_LABEL={alta:"Alta confiança",media:"Média confiança",nova:"Nova tendência"};
-const DECISION_STATUS_COLOR={ok:"#22C55E",atencao:"#F0A857",critico:"#EF4444",neutro:TX3};
+// Exportado porque LacalleFinance também precisa da mesma escala de cor no
+// resultado do "Posso gastar?". Enquanto ficou só aqui, aquele arquivo
+// referenciava um nome inexistente e o clique em "Perguntar" derrubava a tela
+// com ReferenceError.
+export const DECISION_STATUS_COLOR={ok:"#22C55E",atencao:"#F0A857",critico:"#EF4444",neutro:TX3};
 
 // ---- Cartão de consultor financeiro ------------------------------------
 // Título → número-herói → comparação visual → o que aconteceu (explanation)
@@ -309,6 +344,43 @@ export function DecisionRow({d}){
     </div>
   );
 }
+
+// ==================== Campo de valor (decimal com vírgula) ====================
+// <input type="number"> obriga o usuário a digitar ponto como separador
+// decimal (o navegador rejeita a vírgula em value/valueAsNumber). Como o app
+// é pt-BR, aqui usamos um input de texto com inputMode="decimal" — o teclado
+// numérico continua aparecendo no celular, mas quem manda no formato somos
+// nós: a vírgula é o separador decimal e o ponto digitado vira vírgula
+// automaticamente (quem tem o hábito antigo não precisa reaprender).
+// O valor guardado no state continua string ("1.234,56"); quem consome usa
+// parseNum, que já entendia os dois formatos.
+export const sanitizeDecimal=v=>{
+  let s=String(v??"").replace(/[^\d.,]/g,"");
+  // "1.234,56" (colado do banco/planilha): ponto é milhar, descarta.
+  // "1.5" (digitado no hábito antigo): ponto é decimal, vira vírgula.
+  if(s.includes(".")&&s.includes(","))s=s.replace(/\./g,"");
+  else s=s.replace(/\./g,",");
+  const i=s.indexOf(",");
+  if(i>=0)s=s.slice(0,i+1)+s.slice(i+1).replace(/,/g,"");
+  const [int,dec]=s.split(",");
+  return dec===undefined?int:`${int},${dec.slice(0,2)}`;
+};
+// Número -> texto do campo (3.5 => "3,5"), para preencher formulários de edição.
+export const toDecimalStr=n=>(n===null||n===undefined||n==="")?"":String(n).replace(".",",");
+
+export const MoneyInput=forwardRef(({value,onChange,style,...rest},ref)=>(
+  <input
+    {...rest}
+    ref={ref}
+    type="text"
+    inputMode="decimal"
+    autoComplete="off"
+    value={value}
+    onChange={e=>onChange(sanitizeDecimal(e.target.value))}
+    style={{fontVariantNumeric:"tabular-nums",...style}}
+  />
+));
+MoneyInput.displayName="MoneyInput";
 
 export const Btn=(props)=>{
   const accent=useAccent();

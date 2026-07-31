@@ -24,9 +24,46 @@ const MONTH_ORDER=(()=>{
   return arr;
 })();
 const fmt=v=>v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-const monthKey=d=>{try{const dt=new Date(d+"T12:00:00");return`${MONTHS_ARR[dt.getMonth()]}/${String(dt.getFullYear()).slice(2)}`;}catch{return"???";}};
+// Chave de mês ("jul/26"). Precisa ser à prova de dado ruim porque alimenta
+// os filtros, os gráficos e a ordenação por MONTH_ORDER:
+//  - o try/catch original nunca disparava (new Date inválido devolve
+//    "Invalid Date", não lança), então uma data corrompida virava
+//    "undefined/N" e poluía o seletor de meses;
+//  - String(1).slice(2) devolve "" — um lançamento no ano 1 virava "jan/",
+//    exatamente o item fantasma que aparecia no filtro da aba Transações.
+const monthKey=d=>{
+  const dt=new Date(String(d??"")+"T12:00:00");
+  if(isNaN(dt.getTime()))return"???";
+  const y=dt.getFullYear();
+  if(y<1000||y>9999)return"???";
+  return`${MONTHS_ARR[dt.getMonth()]}/${String(y).slice(2)}`;
+};
 const addDaysStr=(dateStr,n)=>{const d=new Date(dateStr+"T12:00:00");d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
 const diffDays=(a,b)=>Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/86400000);
+const toISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+export const daysInMonth=(year,monthIdx)=>new Date(year,monthIdx+1,0).getDate();
+// Soma meses "como um humano espera", sem o rollover do JS.
+// `new Date("2026-07-31").setMonth(+2)` devolve 01/10 porque setembro não tem
+// dia 31 e o Date transborda para o mês seguinte — era o que fazia as parcelas
+// caírem em "jul, ago, out, out, dez, dez, jan". Aqui o dia é limitado ao
+// último dia válido do mês de destino (31/jan + 1 mês = 28/fev, ou 29 em
+// ano bissexto), que é a regra usada por bancos e operadoras de cartão.
+// Texto de prazo em meses, com plural correto e sem prometer precisão que a
+// estimativa não tem. "~1 meses" para qualquer valor restante era o sintoma.
+export const formatMonths=(months,exact=null)=>{
+  if(months===null||months===undefined)return"sem dados suficientes";
+  if(exact!==null&&exact<1)return"menos de 1 mês";
+  if(months===1)return"cerca de 1 mês";
+  return`cerca de ${months} meses`;
+};
+export const addMonthsStr=(dateStr,n)=>{
+  const d=new Date(dateStr+"T12:00:00");
+  if(isNaN(d.getTime()))return dateStr;
+  const day=d.getDate();
+  const target=new Date(d.getFullYear(),d.getMonth()+n,1,12,0,0);
+  target.setDate(Math.min(day,daysInMonth(target.getFullYear(),target.getMonth())));
+  return toISO(target);
+};
 
 export const FinancialEngine=(()=>{
   const isSaidaReal=t=>t.type==="Saída"&&t.cat!=="Investimento";
@@ -270,11 +307,16 @@ export const FinancialEngine=(()=>{
         const monthlyByTarget=w.monthsTarget>0?remaining/w.monthsTarget:null;
         const monthlyByAvg=avgMonthlySavings&&avgMonthlySavings>0?avgMonthlySavings:null;
         const estMonths=monthlyByAvg&&remaining>0?Math.ceil(remaining/monthlyByAvg):null;
+        // Quantos meses "de verdade" (fracionário). estMonths arredonda pra cima,
+        // então metas de R$ 27 e de R$ 260 caíam ambas em "~1 meses" quando o
+        // ritmo de economia cobre as duas dentro do mesmo mês. Guardar a fração
+        // deixa a UI distinguir "menos de 1 mês" de "cerca de 1 mês".
+        const estMonthsExact=monthlyByAvg&&remaining>0?remaining/monthlyByAvg:null;
         let etaDate=null;
-        if(estMonths){const d=new Date();d.setMonth(d.getMonth()+estMonths);etaDate=`${MONTHS_ARR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;}
+        if(estMonths){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+estMonths);etaDate=`${MONTHS_ARR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;}
         const fasterMonths=(monthlyByAvg&&remaining>0)?Math.ceil(remaining/(monthlyByAvg*1.5)):null;
         const timeSaved=(estMonths!==null&&fasterMonths!==null)?Math.max(0,estMonths-fasterMonths):null;
-        return{...w,remaining,pct,monthlyByTarget,estMonths,etaDate,fasterMonths,timeSaved};
+        return{...w,remaining,pct,monthlyByTarget,estMonths,estMonthsExact,etaDate,fasterMonths,timeSaved};
       });
     },
     // ---- Versão detalhada: MESMA matemática de avgMonthlySavings, expondo os
@@ -582,7 +624,7 @@ export const FinancialEngine=(()=>{
       const late=withTarget.filter(w=>w.estMonths!==null&&w.estMonths>w.monthsTarget);
       const items=withTarget.map(w=>({
         label:w.name,
-        value:w.estMonths!==null?`~${w.estMonths} meses`:"sem estimativa",
+        value:w.estMonths!==null?formatMonths(w.estMonths,w.estMonthsExact):"sem estimativa",
         tag:w.monthsTarget?`prazo: ${w.monthsTarget}m`:undefined,
       }));
       return{

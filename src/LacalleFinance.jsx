@@ -97,9 +97,10 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
 import AuthScreen from "./components/AuthScreen";
-import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, diffDays, MONTH_ORDER, MONTHS_ARR } from "./lib/financialEngine";
+import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR } from "./lib/financialEngine";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost } from "./components/ui";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR } from "./components/ui";
+import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
 import {
   Wallet, TrendingUp, TrendingDown, CreditCard, Calendar, Sparkles, Gamepad2, UtensilsCrossed,
@@ -137,7 +138,8 @@ const PALETTES={
   green:{name:"Verde",base:"#22C55E",dark:"#16A34A"},
 };
 const AVATAR_ICONS={wallet:Wallet,piggy:PiggyBank,trending:TrendingUp,credit:CreditCard,landmark:Landmark,rocket:Rocket,gem:Gem,star:Star};
-const parseNum=s=>{if(!s)return 0;let c=String(s).replace(/[R$\s]/g,"");if(c.includes(",")&&c.includes("."))c=c.replace(/\./g,"").replace(",",".");else if(c.includes(","))c=c.replace(",",".");const n=parseFloat(c);return isNaN(n)?0:Math.abs(n);};
+// parseNum/DATE_MIN/DATE_MAX agora vêm de lib/validation.js (fonte única,
+// compartilhada com as validações de formulário e coberta por testes).
 // Gerador de ID: Date.now() sozinho pode colidir se dois itens forem criados
 // no mesmo milissegundo (ex.: cliques rápidos, criação em lote). Um contador
 // incremental combinado ao timestamp garante unicidade dentro da sessão sem
@@ -161,14 +163,17 @@ const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounte
 // Desejo -> Previsto -> Desejo -> Previsto...), só o bloco da transferência
 // MAIS RECENTE é mantido nas notas — sem isso, um item transferido repetidas
 // vezes acumularia um histórico infinito de blocos de texto nas notas.
-const TRANSFER_NOTE_RE=/\n*— Transferido de (?:Desejos|Previstos) —\n[^\n]*$/;
+// "Desejos" continua na expressão por compatibilidade: notas gravadas antes da
+// padronização do nome da aba (Desejos -> Metas) precisam continuar sendo
+// reconhecidas e substituídas, senão o histórico volta a acumular blocos.
+const TRANSFER_NOTE_RE=/\n*— Transferido de (?:Desejos|Metas|Previstos) —\n[^\n]*$/;
 const stripTransferNote=notes=>(notes||"").replace(TRANSFER_NOTE_RE,"").trim();
 const wishToPlannedPayload=(wish,extra)=>{
   const kept=[];
   if(wish.priority)kept.push(`Prioridade original: ${wish.priority}`);
   if(wish.saved)kept.push(`Já guardado: ${fmt(wish.saved)}`);
   if(wish.monthsTarget)kept.push(`Meta original: ${wish.monthsTarget} meses`);
-  const notes=[stripTransferNote(wish.notes),kept.length?`— Transferido de Desejos —\n${kept.join(" · ")}`:""].filter(Boolean).join("\n\n");
+  const notes=[stripTransferNote(wish.notes),kept.length?`— Transferido de Metas —\n${kept.join(" · ")}`:""].filter(Boolean).join("\n\n");
   return{
     desc:wish.name,
     val:wish.price,
@@ -218,11 +223,9 @@ const URL_TEST_REGEX=/^(?:https?:\/\/|www\.)/i;
 // ============================================================================
 
 const todayFn=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
-// Limites razoáveis para os seletores de data (evita "1900" ou "2999" digitados
-// sem querer, que distorciam gráficos e projeções sem nenhum aviso). Calculado
-// a partir de hoje, não hardcoded — não fica velho como o MONTH_ORDER estava.
-const DATE_MIN=(()=>{const d=new Date();d.setFullYear(d.getFullYear()-10);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;})();
-const DATE_MAX=(()=>{const d=new Date();d.setFullYear(d.getFullYear()+10);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;})();
+// DATE_MIN/DATE_MAX vêm de lib/validation.js. Os atributos min/max do
+// <input type="date"> continuam sendo usados (dão a UI certa no seletor), mas
+// eles NÃO impedem digitação — por isso toda gravação passa por validateDate.
 
 
 
@@ -256,6 +259,13 @@ function MainApp({user,setUser}){
   const [searchQuery,setSearchQuery]=useState("");
   const [explainKey,setExplainKey]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
+  // Exclusão definitiva da conta (confirmação por frase digitada).
+  const [deleteAccountOpen,setDeleteAccountOpen]=useState(false);
+  const [deleteAccountPhrase,setDeleteAccountPhrase]=useState("");
+  const [deleteAccountBusy,setDeleteAccountBusy]=useState(false);
+  // Ref espelhando `busy`: o handler global de Esc é registrado com deps []
+  // e enxergaria sempre o valor do primeiro render se lesse o state.
+  const deleteAccountBusyRef=useRef(false);
   const [expandedNotes,setExpandedNotes]=useState({});
   const [wishSortBy,setWishSortBy]=useState("progress");
   // Mesma ideia do sortedPlannedItemsForMonth: memoiza a ordenação da lista
@@ -508,6 +518,9 @@ function MainApp({user,setUser}){
         setShowTrash(false);
         setPendingDuplicateTx(null);
         setConfirmDiscard(null);
+        // O modal de apagar conta não fecha no meio da operação (evita a
+        // pessoa achar que cancelou uma exclusão que já está em andamento).
+        if(!deleteAccountBusyRef.current){setDeleteAccountOpen(false);setDeleteAccountPhrase("");}
         cancelEditTx();
       }
     };
@@ -516,21 +529,62 @@ function MainApp({user,setUser}){
   },[]);
 
   // ==================== HOOKS: leitura via Financial Intelligence Engine ====================
-  const months=useMemo(()=>{const s=new Set(transactions.map(t=>monthKey(t.date)));return[...s].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));},[transactions]);
+  // Meses disponíveis no filtro. Chaves inválidas ("???", vindas de um dado
+  // legado com data corrompida) ficam de fora: elas não são selecionáveis de
+  // forma útil e só sujavam o seletor.
+  const months=useMemo(()=>{
+    const s=new Set(transactions.map(t=>monthKey(t.date)).filter(k=>k!=="???"));
+    return[...s].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  },[transactions]);
   const filtered=useMemo(()=>{let tx=filterMonth?transactions.filter(t=>monthKey(t.date)===filterMonth):transactions;if(filterCat)tx=tx.filter(t=>t.cat===filterCat);if(filterType)tx=tx.filter(t=>t.type===filterType);if(search.trim())tx=tx.filter(t=>t.desc.toLowerCase().includes(search.toLowerCase()));return tx;},[transactions,filterMonth,filterCat,filterType,search]);
 
-  const invNet=useMemo(()=>FinancialEngine.CashFlowAnalyzer.investmentNet(filtered),[filtered]);
-  const {totalIn,totalOut,balance}=useMemo(()=>FinancialEngine.CashFlowAnalyzer.totals(filtered),[filtered]);
+  // ---- Escopo dos números: REALIZADO (global) x VISÃO (filtrada) ----------
+  // Duas confusões moravam aqui e distorciam praticamente todos os indicadores:
+  //
+  // 1) O saldo saía de `filtered`, então qualquer filtro da aba Transações
+  //    (mês, categoria, tipo, busca) mudava o "Saldo Atual", o Patrimônio e a
+  //    saúde financeira do Dashboard — filtrar por "Lazer" fazia o usuário
+  //    parecer ter só os gastos de lazer no patrimônio.
+  //
+  // 2) O saldo somava lançamentos com data FUTURA. Mas `freeBalance` e
+  //    `projectionAt*` já assumem que o saldo contém apenas o realizado (elas
+  //    subtraem/somam o futuro por conta própria). Resultado: toda saída futura
+  //    era contada duas vezes. É a causa raiz do parcelamento derrubar o
+  //    patrimônio pelo valor TOTAL da compra no dia da criação.
+  //
+  // A partir daqui: `realized` (data <= hoje, sem filtros de tela) alimenta
+  // saldo/patrimônio/indicadores/projeções; `filtered` alimenta apenas o que a
+  // aba Transações está exibindo (lista, gráfico de categorias e o resumo dela).
+  const realized=useMemo(()=>transactions.filter(t=>t.date<=todayISO),[transactions,todayISO]);
+
+  const invNet=useMemo(()=>FinancialEngine.CashFlowAnalyzer.investmentNet(realized),[realized]);
+  const {totalIn,totalOut,balance}=useMemo(()=>FinancialEngine.CashFlowAnalyzer.totals(realized),[realized]);
+  // Totais da visão filtrada — exclusivos da aba Transações.
+  // Totais da visão filtrada — o único consumidor é o resumo da aba Transações.
+  const viewTotals=useMemo(()=>FinancialEngine.CashFlowAnalyzer.totals(filtered),[filtered]);
   const summary=useMemo(()=>FinancialEngine.CashFlowAnalyzer.monthlySummary(transactions),[transactions]);
-  const catData=useMemo(()=>FinancialEngine.ExpenseAnalyzer.byCategory(filtered,invNet),[filtered,invNet]);
-  const catDataDisplay=useMemo(()=>FinancialEngine.ExpenseAnalyzer.displayTop(catData),[catData]);
-  const topCat=useMemo(()=>catData[0]||null,[catData]);
+  // Gasto por categoria: alimenta o Dashboard ("onde seu dinheiro foi") e o
+  // insight de maior categoria — ambos globais. Antes saía de `filtered`, então
+  // um filtro esquecido na aba Transações reescrevia o Dashboard inteiro.
+  const catDataGlobal=useMemo(()=>FinancialEngine.ExpenseAnalyzer.byCategory(realized,invNet),[realized,invNet]);
+  const catDataDisplay=useMemo(()=>FinancialEngine.ExpenseAnalyzer.displayTop(catDataGlobal),[catDataGlobal]);
+  const topCat=useMemo(()=>catDataGlobal[0]||null,[catDataGlobal]);
   const groupedByDate=useMemo(()=>{const g={};[...filtered].forEach(t=>{if(!g[t.date])g[t.date]=[];g[t.date].push(t);});return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));},[filtered]);
   const txMap=useMemo(()=>new Map(transactions.map(t=>[t.id,t])),[transactions]);
   const instStats=useMemo(()=>FinancialEngine.BudgetAnalyzer.installmentStats(installments,txMap,todayFn()),[installments,txMap]);
-  const monthlyPreview=useMemo(()=>FinancialEngine.BudgetAnalyzer.monthlyInstallment(parseFloat(instDraft.totalVal),parseInt(instDraft.numParcelas)),[instDraft.totalVal,instDraft.numParcelas]);
+  const monthlyPreview=useMemo(()=>FinancialEngine.BudgetAnalyzer.monthlyInstallment(parseNum(instDraft.totalVal),parseInt(instDraft.numParcelas)),[instDraft.totalVal,instDraft.numParcelas]);
   const curM=summary[summary.length-1];const prevM=summary[summary.length-2];
-  const pctChange=(cur,prev)=>prev===0?0:Math.round((cur-prev)/prev*100);
+  // Variação percentual com base ASSINADA corretamente.
+  // (cur-prev)/prev é matematicamente correto, mas inverte o sinal quando o mês
+  // anterior foi negativo: sair de -154 para -103 (uma MELHORA de R$ 51) exibia
+  // "-33%", e piorar de -103 para -358 exibia "+249%". Dividir pelo módulo da
+  // base preserva a direção real: saldo subiu = positivo/verde, sempre.
+  // prev===0 não tem variação percentual definida — devolve null para a UI
+  // mostrar "—" em vez de fingir 0%.
+  const pctChange=(cur,prev)=>{
+    if(prev===0)return cur===0?0:null;
+    return Math.round((cur-prev)/Math.abs(prev)*100);
+  };
 
   const plannedItemsForMonth=useMemo(()=>FinancialEngine.BudgetAnalyzer.itemsForMonth(plannedExpenses,plannedMonth),[plannedExpenses,plannedMonth]);
   // Ordenação (não pagos primeiro, por valor) memoizada — antes era recalculada
@@ -546,7 +600,7 @@ function MainApp({user,setUser}){
   const currentMonthKeyReal=monthKey(todayFn());
 
   const categoryTrend=useMemo(()=>FinancialEngine.ExpenseAnalyzer.categoryTrend({transactions,curM,prevM}),[transactions,curM,prevM]);
-  const fixedVarSplit=useMemo(()=>FinancialEngine.ExpenseAnalyzer.fixedVarSplit(filtered),[filtered]);
+  const fixedVarSplit=useMemo(()=>FinancialEngine.ExpenseAnalyzer.fixedVarSplit(realized),[realized]);
   const patrimonioLiquido=balance+invNet;
   const savingsRate=FinancialEngine.IncomeAnalyzer.savingsRate(balance,totalIn);
   const committedIncome=FinancialEngine.IncomeAnalyzer.committedRatio(totalIn,totalOut);
@@ -740,8 +794,8 @@ function MainApp({user,setUser}){
   const MAIN_EXPLAIN={
     saldoAtual:{
       title:"Saldo Atual",
-      calc:"Soma de todas as receitas menos todas as despesas já lançadas até hoje (incluindo parcelas), descontando aportes e somando resgates de investimentos.",
-      factors:["Transações de entrada e saída já registradas","Aportes e resgates de investimentos já lançados"],
+      calc:"Soma de todas as receitas menos todas as despesas com data até hoje (incluindo parcelas já vencidas), descontando aportes e somando resgates de investimentos. Lançamentos com data futura NÃO entram aqui — eles aparecem no Saldo Livre e nas projeções.",
+      factors:["Transações de entrada e saída com data até hoje","Aportes e resgates de investimentos já lançados","Não é afetado pelos filtros da aba Transações"],
       meaning:"É o dinheiro que efetivamente existe na sua conta neste momento.",
       improve:["Registrar as transações assim que acontecerem","Conferir se todos os lançamentos passados estão corretos"],
     },
@@ -788,6 +842,22 @@ function MainApp({user,setUser}){
     return MAIN_EXPLAIN[key]||null;
   };
 
+  // ---- Reset do formulário de lançamento -----------------------------------
+  // Antes só descrição e valor eram limpos. Data, forma de pagamento,
+  // fixo/variável e repetição ficavam grudados entre lançamentos: quem lançasse
+  // uma compra atrasada (ex.: 02/01) via TODOS os lançamentos seguintes — de
+  // qualquer tipo, inclusive depois de trocar de Saída para Aporte — saírem
+  // com aquela data, sem nenhum aviso. Um único ponto de reset garante que
+  // "formulário novo" signifique sempre a mesma coisa.
+  const resetQuickAddForm=()=>{
+    setQaDesc("");setQaVal("");
+    setQaDate(todayFn());
+    setQaForm("pix");
+    setQaFixed("Variavel");
+    setQaRepeat("none");
+    setQaExpanded(false);
+  };
+
   // ---- Ações rápidas (Home) ----
   const qaDescRef=useRef(null);
   const quickAction=type=>{
@@ -797,12 +867,11 @@ function MainApp({user,setUser}){
     }
     setTab("transactions");
     setEditingTx(null);
-    setQaExpanded(false);
-    setQaDesc("");setQaVal("");
+    resetQuickAddForm();
     if(type==="receita"){setQaType("Entrada");setQaCat("Salario / Entradas");}
     else if(type==="despesa"){setQaType("Saída");setQaCat("Alimentação");}
-    else if(type==="transferencia"){setQaCat("Investimento");setQaInvTipo("Aporte");}
-    else if(type==="investimento"){setQaCat("Investimento");setQaInvTipo("Aporte");}
+    else if(type==="resgate"){setQaCat("Investimento");setQaInvTipo("Resgate");setQaExpanded(true);}
+    else if(type==="investimento"){setQaCat("Investimento");setQaInvTipo("Aporte");setQaExpanded(true);}
     setTimeout(()=>{qaDescRef.current?.focus();},80);
   };
 
@@ -847,18 +916,23 @@ function MainApp({user,setUser}){
     pushHistory();
     const isInv=qaCat==="Investimento";
     const derivedType=isInv?(qaInvTipo==="Aporte"?"Saída":"Entrada"):qaType;
-    const base={date:qaDate,type:derivedType,fixed:qaFixed,cat:qaCat,desc:qaDesc.trim(),val:parseNum(qaVal),form:qaForm,invTipo:isInv?qaInvTipo:null};
+    const base={date:qaDate,type:derivedType,fixed:qaFixed,cat:qaCat,desc:qaDesc.trim(),val:roundMoney(parseNum(qaVal)),form:qaForm,invTipo:isInv?qaInvTipo:null};
     if(editingTx!==null){setTransactions(p=>p.map(t=>t.id===editingTx?{...t,...base}:t));setEditingTx(null);}
     else{
       const id=genId();const newTxs=[{id,...base}];
-      if(qaRepeat!=="none"){const cnt=qaRepeat==="3m"?2:qaRepeat==="6m"?5:11;for(let i=1;i<=cnt;i++){const d=new Date(qaDate+"T12:00:00");d.setMonth(d.getMonth()+i);const nd=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;newTxs.push({id:id+i,...base,date:nd});}}
+      if(qaRepeat!=="none"){const cnt=qaRepeat==="3m"?2:qaRepeat==="6m"?5:11;for(let i=1;i<=cnt;i++){newTxs.push({id:id+i,...base,date:addMonthsStr(qaDate,i)});}}
       setTransactions(p=>[...newTxs,...p]);
     }
-    setQaDesc("");setQaVal("");setQaExpanded(false);setQaRepeat("none");
+    resetQuickAddForm();
     showToast(editingTx!==null?"Lançamento atualizado!":"Lançamento adicionado!","success");
   };
   const quickAdd=()=>{
-    if(!qaDesc.trim()||!qaVal){showToast("Preencha descrição e valor para lançar.","error");return;}
+    const err=firstError([
+      validateText(qaDesc,{label:"descrição"}),
+      validateAmount(qaVal,{label:"valor"}),
+      validateDate(qaDate,{label:"data"}),
+    ]);
+    if(err){showToast(err,"error");return;}
     // Aviso suave de possível duplicidade: só ao CRIAR (não ao editar), e só
     // quando já existe um lançamento com mesma descrição+valor+data+tipo —
     // não bloqueia (compras repetidas de propósito existem), só confirma.
@@ -870,10 +944,10 @@ function MainApp({user,setUser}){
   };
   const editTxSnapshotRef=useRef(null);
   const startEditTx=t=>{
-    setEditingTx(t.id);setQaType(t.type);setQaDesc(t.desc);setQaVal(String(t.val));setQaCat(t.cat);setQaDate(t.date);setQaForm(t.form);setQaFixed(t.fixed);if(t.invTipo)setQaInvTipo(t.invTipo);setQaExpanded(true);
-    editTxSnapshotRef.current=JSON.stringify({type:t.type,desc:t.desc,val:String(t.val),cat:t.cat,date:t.date,form:t.form,fixed:t.fixed});
+    setEditingTx(t.id);setQaType(t.type);setQaDesc(t.desc);setQaVal(toDecimalStr(t.val));setQaCat(t.cat);setQaDate(t.date);setQaForm(t.form);setQaFixed(t.fixed);if(t.invTipo)setQaInvTipo(t.invTipo);setQaExpanded(true);
+    editTxSnapshotRef.current=JSON.stringify({type:t.type,desc:t.desc,val:toDecimalStr(t.val),cat:t.cat,date:t.date,form:t.form,fixed:t.fixed});
   };
-  const cancelEditTx=()=>{setEditingTx(null);setQaDesc("");setQaVal("");setQaType("Saída");setQaCat("Alimentação");setQaExpanded(false);};
+  const cancelEditTx=()=>{setEditingTx(null);resetQuickAddForm();setQaType("Saída");setQaCat("Alimentação");};
   // Fecha o modal de editar lançamento, mas confirma antes se algo foi
   // realmente alterado (evita perder edição sem querer ao clicar fora ou no X).
   const requestCloseEditTx=()=>{
@@ -906,7 +980,10 @@ function MainApp({user,setUser}){
   },[showPlannedForm]);
   const applyFrequent=item=>{
     setQaDesc(item.desc);
-    setQaVal(String(item.val));
+    setQaVal(toDecimalStr(item.val));
+    // Repetir um lançamento frequente é sempre "de novo, hoje" — nunca herda a
+    // data do lançamento original nem a que ficou no formulário.
+    setQaDate(todayFn());
     setQaCat(item.cat);
     setQaForm(item.form);
     setQaFixed(item.fixed);
@@ -915,14 +992,24 @@ function MainApp({user,setUser}){
     setTimeout(()=>{qaValRef.current?.focus();qaValRef.current?.select();},50);
   };
   const applyFrequentToPlanned=item=>{
-    setPlannedForm(p=>({...p,desc:item.desc,val:String(item.val),cat:item.cat,form:item.form}));
+    setPlannedForm(p=>({...p,desc:item.desc,val:toDecimalStr(item.val),cat:item.cat,form:item.form}));
     setTimeout(()=>{plannedValRef.current?.focus();plannedValRef.current?.select();},50);
   };
 
   const saveWish=()=>{
-    if(!wishForm.name||!wishForm.price){showToast("Preencha nome e preço para salvar o desejo.","error");return;}
+    const priceCheck=validateAmount(wishForm.price,{label:"preço"});
+    const savedCheck=validateAmount(wishForm.saved,{label:"valor já guardado",required:false,allowZero:true});
+    const err=firstError([
+      validateText(wishForm.name,{label:"nome",maxLen:80}),
+      priceCheck,
+      savedCheck,
+      validateInt(wishForm.monthsTarget,{label:"a meta em meses",required:false,min:1,max:600}),
+      validateText(wishForm.notes,{label:"nota",required:false,maxLen:MAX_NOTES_LEN}),
+    ]);
+    if(err){showToast(err,"error");return;}
+    if(savedCheck.value>priceCheck.value){showToast("O valor já guardado não pode ser maior que o preço da meta.","error");return;}
     pushHistory();
-    const w={...wishForm,price:parseNum(wishForm.price),saved:parseNum(wishForm.saved),monthsTarget:Math.abs(parseInt(wishForm.monthsTarget)||0)};
+    const w={...wishForm,price:priceCheck.value,saved:savedCheck.value,monthsTarget:Math.abs(parseInt(wishForm.monthsTarget,10)||0)};
     if(editingWish!==null){setWishes(p=>p.map(x=>x.id===editingWish?{...x,...w}:x));setEditingWish(null);}
     else setWishes(p=>[...p,{...w,id:genId()}]);
     setShowWishForm(false);setWishForm({name:"",price:"",saved:"",priority:"Média",monthsTarget:"",notes:""});
@@ -974,15 +1061,21 @@ function MainApp({user,setUser}){
     setWishes(p=>[...p,{...payload,id:genId()}]);
     setPlannedExpenses(p=>p.filter(x=>x.id!==transferPlanned.id));
     setTransferPlanned(null);
-    showToast("✅ Item movido para Desejos.","success");
+    showToast("✅ Item movido para Metas.","success");
   };
 
+  // Converte "jul/26" + dia em ISO. O dia é limitado ao último dia REAL do mês
+  // (28, 29, 30 ou 31 conforme o mês/ano bissexto). Antes era travado em 28
+  // "por segurança", o que fazia um previsto pago em 31/07 nascer datado de
+  // 28/07 — data errada, sem explicação para o usuário.
   const monthKeyToISO=(mk,day)=>{
     const [mon,yy]=(mk||"").split("/");
     const mIdx=MONTHS_ARR.indexOf(mon);
     if(mIdx<0)return todayFn();
-    const year=2000+parseInt(yy);
-    const d=Math.min(Math.max(day,1),28);
+    const year=2000+parseInt(yy,10);
+    if(isNaN(year))return todayFn();
+    const last=daysInMonth(year,mIdx);
+    const d=Math.min(Math.max(day,1),last);
     return `${year}-${String(mIdx+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
   };
   const shiftMonth=(mk,delta)=>{
@@ -992,9 +1085,14 @@ function MainApp({user,setUser}){
     return MONTH_ORDER[ni];
   };
   const savePlannedItem=()=>{
-    if(!plannedForm.desc.trim()||!plannedForm.val){showToast("Preencha descrição e valor do gasto previsto.","error");return;}
+    const err=firstError([
+      validateText(plannedForm.desc,{label:"descrição"}),
+      validateAmount(plannedForm.val,{label:"valor"}),
+      validateText(plannedForm.notes,{label:"nota",required:false,maxLen:MAX_NOTES_LEN}),
+    ]);
+    if(err){showToast(err,"error");return;}
     pushHistory();
-    const base={desc:plannedForm.desc.trim(),val:parseNum(plannedForm.val),cat:plannedForm.cat,form:plannedForm.form,recurring:plannedForm.recurring,month:plannedForm.recurring?null:plannedForm.month,notes:plannedForm.notes||""};
+    const base={desc:plannedForm.desc.trim(),val:roundMoney(parseNum(plannedForm.val)),cat:plannedForm.cat,form:plannedForm.form,recurring:plannedForm.recurring,month:plannedForm.recurring?null:plannedForm.month,notes:plannedForm.notes||""};
     if(editingPlanned!==null){
       setPlannedExpenses(p=>p.map(x=>x.id===editingPlanned?{...x,...base}:x));
       setEditingPlanned(null);
@@ -1014,7 +1112,7 @@ function MainApp({user,setUser}){
   };
   const startEditPlanned=item=>{
     setEditingPlanned(item.id);
-    const snap={desc:item.desc,val:String(item.val),cat:item.cat,form:item.form,recurring:item.recurring,month:item.month||plannedMonth,notes:item.notes||""};
+    const snap={desc:item.desc,val:toDecimalStr(item.val),cat:item.cat,form:item.form,recurring:item.recurring,month:item.month||plannedMonth,notes:item.notes||""};
     setPlannedForm(snap);
     plannedFormSnapshotRef.current=JSON.stringify(snap);
     setShowPlannedForm(true);
@@ -1154,8 +1252,17 @@ function MainApp({user,setUser}){
     if(newName.trim())setUser(u=>({...u,name:newName.trim()}));
     setProfileMsg("Salvo!");setTimeout(()=>setProfileMsg(""),2500);
   };
+  // Exclusão definitiva da conta. Antes era um window.confirm — um único clique
+  // em "OK" apagava conta e histórico financeiro inteiro, sem volta e sem
+  // lixeira. Agora exige digitar uma frase exata: é a barreira mínima esperada
+  // de um app financeiro para uma ação irreversível.
+  const ACCOUNT_DELETE_PHRASE="APAGAR MINHA CONTA";
+  const closeDeleteAccount=()=>{setDeleteAccountOpen(false);setDeleteAccountPhrase("");};
   const deleteAccount=()=>{
-    if(!window.confirm("Tem certeza? Isso apaga TODOS os seus dados e a sua conta de login — não dá pra desfazer."))return;
+    if(deleteAccountPhrase.trim().toUpperCase()!==ACCOUNT_DELETE_PHRASE)return;
+    if(deleteAccountBusyRef.current)return; // trava reentrada (duplo clique)
+    deleteAccountBusyRef.current=true;
+    setDeleteAccountBusy(true);
     (async()=>{
       try{
         // Chama a Edge Function (roda no servidor) que apaga os dados E a
@@ -1171,6 +1278,9 @@ function MainApp({user,setUser}){
         // rede de segurança, pra não deixar a pessoa "presa".
         try{await storage.delete(storageKey(user.email));}catch{}
       }
+      deleteAccountBusyRef.current=false;
+      setDeleteAccountBusy(false);
+      closeDeleteAccount();
       setUser(null);
     })();
   };
@@ -1259,17 +1369,32 @@ function MainApp({user,setUser}){
   };
   const openInstForm=()=>{setInstDraft(d=>({...d,startDate:todayFn()}));setShowInstForm(true);};
   const addInstallment=()=>{
-    if(!instDraft.desc.trim()||!instDraft.totalVal||!instDraft.numParcelas){showToast("Preencha descrição, valor total e número de parcelas.","error");return;}
-    const total=parseNum(instDraft.totalVal),num=parseInt(instDraft.numParcelas);
-    if(isNaN(total)||isNaN(num)||num<1||num>360){showToast("Valor total ou número de parcelas inválido (máx. 360 parcelas).","error");return;}
+    const totalCheck=validateAmount(instDraft.totalVal,{label:"valor total"});
+    const numCheck=validateInt(instDraft.numParcelas,{label:"o número de parcelas",min:1,max:MAX_PARCELAS});
+    const startD=instDraft.startDate||todayFn();
+    const err=firstError([
+      validateText(instDraft.desc,{label:"descrição"}),
+      totalCheck,
+      numCheck,
+      validateDate(startD,{label:"data do primeiro vencimento"}),
+    ]);
+    if(err){showToast(err,"error");return;}
+    const total=totalCheck.value,num=numCheck.value;
+    // A última parcela não pode cair fora da janela de datas aceita.
+    const lastDue=validateDate(addMonthsStr(startD,num-1),{label:"data da última parcela"});
+    if(!lastDue.ok){showToast(`Esse parcelamento termina fora do período permitido. ${lastDue.error}`,"error");return;}
+    if(total/num<0.01){showToast("Cada parcela ficaria abaixo de R$ 0,01. Reduza o número de parcelas.","error");return;}
+    const instId=genId();
+    // Rateio sem perder centavos: arredonda por parcela e joga a diferença
+    // acumulada na ÚLTIMA. Antes, R$ 1.000 em 3x virava 3 × 333,33 = 999,99
+    // (some 1 centavo do total); agora fica 333,33 + 333,33 + 333,34.
     const monthly=Math.round((total/num)*100)/100;
-    const instId=genId(),startD=instDraft.startDate||todayFn();
+    const lastVal=Math.round((total-monthly*(num-1))*100)/100;
     const newTxs=[],txIds=[];
     for(let i=0;i<num;i++){
-      const d=new Date(startD+"T12:00:00");d.setMonth(d.getMonth()+i);
-      const nd=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      const nd=addMonthsStr(startD,i);
       const txId=instId+i+1;txIds.push(txId);
-      newTxs.push({id:txId,date:nd,type:"Saída",fixed:"Fixa",cat:instDraft.cat,desc:`${instDraft.desc.trim()} (${i+1}/${num})`,val:monthly,form:instDraft.form,invTipo:null,installmentId:instId});
+      newTxs.push({id:txId,date:nd,type:"Saída",fixed:"Fixa",cat:instDraft.cat,desc:`${instDraft.desc.trim()} (${i+1}/${num})`,val:i===num-1?lastVal:monthly,form:instDraft.form,invTipo:null,installmentId:instId});
     }
     pushHistory();
     setTransactions(p=>[...newTxs,...p]);
@@ -1327,7 +1452,7 @@ function MainApp({user,setUser}){
       )}
       <div style={{display:"flex",gap:10,marginBottom:12}}>
         <input ref={qaDescRef} placeholder="Descrição..." value={qaDesc} maxLength={120} onChange={e=>setQaDesc(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={{...SI,flex:2}}/>
-        <input ref={qaValRef} type="number" placeholder="R$" min="0" step="0.01" value={qaVal} onChange={e=>setQaVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={{...SI,flex:1,fontVariantNumeric:"tabular-nums"}}/>
+        <MoneyInput ref={qaValRef} placeholder="R$" value={qaVal} onChange={setQaVal} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={{...SI,flex:1}}/>
       </div>
       <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}}>
         {fullCats.map(c=>{const cc=catColor(c);return(
@@ -1345,7 +1470,11 @@ function MainApp({user,setUser}){
           {!isEditing&&<div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Repetir</div><select value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option></select></div>}
         </div>
       )}
-      <button onClick={quickAdd} disabled={!canAdd} style={{width:"100%",padding:"14px",borderRadius:R_BTN,border:"none",cursor:canAdd?"pointer":"not-allowed",fontSize:14,fontWeight:700,background:!canAdd?"rgba(255,255,255,0.04)":isEditing?"#F0A857":accent,color:!canAdd?TX3:"white",boxShadow:canAdd?`0 2px 10px ${isEditing?"#F0A857":accent}40`:"none",transition:"filter .15s ease, box-shadow .15s ease"}}>
+      {/* O botão continua com aparência "inativa" quando falta preencher algo,
+          mas NÃO usa `disabled`: um botão desabilitado engole o clique sem
+          explicar nada — quem chegava aqui achava que estava quebrado. Assim o
+          clique sempre roda a validação, que diz exatamente o que falta. */}
+      <button onClick={quickAdd} aria-disabled={!canAdd} style={{width:"100%",padding:"14px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:14,fontWeight:700,background:!canAdd?"rgba(255,255,255,0.04)":isEditing?"#F0A857":accent,color:!canAdd?TX3:"white",boxShadow:canAdd?`0 2px 10px ${isEditing?"#F0A857":accent}40`:"none",transition:"filter .15s ease, box-shadow .15s ease"}}>
         {isEditing?"Salvar alterações":qaCat==="Investimento"?`+ ${qaInvTipo}`:`+ Adicionar ${qaType}`}
       </button>
     </>
@@ -1357,7 +1486,7 @@ function MainApp({user,setUser}){
     {id:"transactions",label:"Transações",icon:Receipt},
     {id:"planned",label:"Previstos",icon:Calendar},
     {id:"installments",label:"Parcelas",icon:CreditCard},
-    {id:"wishes",label:"Desejos",icon:Sparkles},
+    {id:"wishes",label:"Metas",icon:Sparkles},
   ];
   const instToDelete=delInstId?installments.find(i=>i.id===delInstId):null;
   const instTxCount=instToDelete?instToDelete.txIds.filter(id=>txMap.has(id)).length:0;
@@ -1588,6 +1717,40 @@ function MainApp({user,setUser}){
           </div>
         </Modal>
       )}
+      {deleteAccountOpen&&(()=>{
+        const phraseOk=deleteAccountPhrase.trim().toUpperCase()===ACCOUNT_DELETE_PHRASE;
+        return(
+        <Modal onClose={deleteAccountBusy?()=>{}:closeDeleteAccount} maxWidth={400} padding={30} zIndex={200}>
+          <div style={{width:46,height:46,borderRadius:14,background:"#EF444418",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color="#EF4444"/></div>
+          <div style={{fontSize:17,fontWeight:700,color:TX,marginBottom:10,textAlign:"center",letterSpacing:"-0.01em"}}>Apagar sua conta para sempre?</div>
+          <div style={{fontSize:13,color:TX2,marginBottom:14,lineHeight:1.6}}>
+            Isso apaga <strong style={{color:TX}}>todos</strong> os seus lançamentos, metas, previstos e parcelamentos, além da sua conta de login. Esta ação <strong style={{color:"#EF4444"}}>não passa pela lixeira e não pode ser desfeita</strong>.
+          </div>
+          <div style={{fontSize:12.5,color:TX2,marginBottom:16,lineHeight:1.6,background:"#EF444410",border:`1px solid #EF444430`,borderRadius:R_INPUT,padding:"10px 12px"}}>
+            Se você só quer uma cópia antes, feche isto e use <strong style={{color:TX}}>Exportar dados</strong>.
+          </div>
+          <div style={{fontSize:12,color:TX2,marginBottom:6}}>Para confirmar, digite <strong style={{color:TX}}>{ACCOUNT_DELETE_PHRASE}</strong>:</div>
+          <input
+            value={deleteAccountPhrase}
+            onChange={e=>setDeleteAccountPhrase(e.target.value)}
+            disabled={deleteAccountBusy}
+            autoFocus
+            maxLength={40}
+            aria-label={`Digite ${ACCOUNT_DELETE_PHRASE} para confirmar`}
+            placeholder={ACCOUNT_DELETE_PHRASE}
+            style={{...SI,marginBottom:20,letterSpacing:"0.04em"}}
+          />
+          <div style={{display:"flex",gap:10}}>
+            <BtnGhost onClick={closeDeleteAccount} disabled={deleteAccountBusy} style={{flex:1,padding:"12px",opacity:deleteAccountBusy?0.5:1}}>Cancelar</BtnGhost>
+            <button
+              onClick={deleteAccount}
+              disabled={!phraseOk||deleteAccountBusy}
+              style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:(!phraseOk||deleteAccountBusy)?"not-allowed":"pointer",fontSize:13,fontWeight:700,background:(!phraseOk||deleteAccountBusy)?"rgba(239,68,68,0.25)":"#EF4444",color:"white"}}
+            >{deleteAccountBusy?"Apagando...":"Apagar para sempre"}</button>
+          </div>
+        </Modal>
+        );
+      })()}
       {confirmDelete&&(
         <Modal onClose={()=>setConfirmDelete(null)} maxWidth={340} padding={30} contentStyle={{textAlign:"center"}}>
           <div style={{width:46,height:46,borderRadius:14,background:"#EF444418",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#EF4444"/></div>
@@ -1598,6 +1761,7 @@ function MainApp({user,setUser}){
             <button onClick={()=>{
               if(confirmDelete.type==="wish")deleteWish(confirmDelete.id);
               else if(confirmDelete.type==="planned")deletePlannedItem(confirmDelete.id);
+              else if(confirmDelete.type==="tx")deleteTx(confirmDelete.id);
               setConfirmDelete(null);
             }} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#EF4444",color:"white"}}>Excluir</button>
           </div>
@@ -1606,7 +1770,7 @@ function MainApp({user,setUser}){
       {transferPlanned&&(
         <Modal onClose={()=>setTransferPlanned(null)} maxWidth={340} padding={30} contentStyle={{textAlign:"center"}}>
           <div style={{width:46,height:46,borderRadius:14,background:accent+"18",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Sparkles size={20} color={accent}/></div>
-          <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={transferPlanned.desc}>Mover "{transferPlanned.desc}" para Desejos?</div>
+          <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={transferPlanned.desc}>Mover "{transferPlanned.desc}" para Metas?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>As informações compatíveis serão preservadas. Categoria, forma de pagamento e mês previsto ficam guardados nas notas do desejo.</div>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setTransferPlanned(null)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
@@ -1837,7 +2001,7 @@ function MainApp({user,setUser}){
               <button onClick={addCustomCat} style={{background:"rgba(255,255,255,0.05)",border:`1px solid ${BD2}`,color:accent,borderRadius:R_INPUT,padding:"0 18px",cursor:"pointer"}}><Plus size={16}/></button>
             </div>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Undo2 size={12}/>Lixeira</div>
-            <div style={{fontSize:12,color:TX3,marginBottom:12,lineHeight:1.5}}>Desejos e previstos excluídos ficam guardados aqui por {TRASH_RETENTION_DAYS} dias e podem ser restaurados.</div>
+            <div style={{fontSize:12,color:TX3,marginBottom:12,lineHeight:1.5}}>Metas e previstos excluídos ficam guardados aqui por {TRASH_RETENTION_DAYS} dias e podem ser restaurados.</div>
             <button onClick={()=>{setShowProfile(false);setShowTrash(true);}} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD2}`,color:TX2,padding:"11px",borderRadius:R_INPUT,cursor:"pointer",fontSize:12,fontWeight:700,marginBottom:26}}><Trash2 size={14}/>Abrir lixeira {trash.length>0?`(${trash.length})`:""}</button>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Cloud size={12}/>Backup completo</div>
             <div style={{fontSize:12,color:TX3,marginBottom:12,lineHeight:1.5}}>Transações, previstos, parcelamentos, desejos e categorias — tudo num único arquivo.</div>
@@ -1848,7 +2012,7 @@ function MainApp({user,setUser}){
                 <input type="file" accept=".json" style={{display:"none"}} onChange={importAllBackup}/>
               </label>
             </div>
-            <button onClick={deleteAccount} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#EF444414",color:"#EF4444",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar conta e dados</button>
+            <button onClick={()=>{setDeleteAccountPhrase("");setDeleteAccountOpen(true);}} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#EF444414",color:"#EF4444",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar conta e dados</button>
             <BtnGhost onClick={()=>setShowProfile(false)} style={{width:"100%",padding:"10px"}}>Fechar</BtnGhost>
         </Modal>
       )}
@@ -1890,7 +2054,7 @@ function MainApp({user,setUser}){
                 {trash.map(entry=>{
                   const daysLeft=Math.max(0,TRASH_RETENTION_DAYS-Math.floor((Date.now()-entry.deletedAt)/(24*60*60*1000)));
                   const meta={
-                    wish:{label:entry.item.name,value:entry.item.price,typeName:"Desejo",Icon:Sparkles},
+                    wish:{label:entry.item.name,value:entry.item.price,typeName:"Meta",Icon:Sparkles},
                     planned:{label:entry.item.desc,value:entry.item.val,typeName:"Previsto",Icon:Calendar},
                     tx:{label:entry.item.desc,value:entry.item.val,typeName:"Transação",Icon:Receipt},
                     installment:{label:entry.item.desc,value:entry.item.totalVal,typeName:"Parcelamento",Icon:CreditCard},
@@ -1957,7 +2121,7 @@ function MainApp({user,setUser}){
                 <div style={{width:38,height:38,borderRadius:11,background:accent+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Sparkles size={18} color={accent}/></div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:6}}>Bem-vindo(a) ao {walletName}!</div>
-                  <div style={{fontSize:13,color:TX2,lineHeight:1.6,marginBottom:4}}>Pra começar: lance sua primeira <strong style={{color:TX}}>transação</strong> na aba "Transações", cadastre contas fixas em <strong style={{color:TX}}>"Previstos"</strong> e sonhos grandes em <strong style={{color:TX}}>"Desejos"</strong>. Os Insights e os gráficos vão aparecer sozinhos conforme você for usando.</div>
+                  <div style={{fontSize:13,color:TX2,lineHeight:1.6,marginBottom:4}}>Pra começar: lance sua primeira <strong style={{color:TX}}>transação</strong> na aba "Transações", cadastre contas fixas em <strong style={{color:TX}}>"Previstos"</strong> e metas de longo prazo em <strong style={{color:TX}}>"Metas"</strong>. Os Insights e os gráficos vão aparecer sozinhos conforme você for usando.</div>
                 </div>
                 <button onClick={()=>setOnboardingDismissed(true)} title="Dispensar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,flexShrink:0}}><X size={16}/></button>
               </div>
@@ -2003,11 +2167,17 @@ function MainApp({user,setUser}){
               {[
                 {label:"Nova Receita",icon:ArrowUpCircle,color:"#22C55E",title:"Registrar uma nova receita",action:()=>quickAction("receita")},
                 {label:"Nova Despesa",icon:ArrowDownCircle,color:"#EF4444",title:"Registrar uma nova despesa",action:()=>quickAction("despesa")},
-                {label:"Transferência",icon:Repeat,color:"#A78BFA",title:"Mover dinheiro para investimentos (aporte)",action:()=>quickAction("transferencia")},
-                {label:"Nova Meta",icon:Sparkles,color:accent,title:"Criar uma nova meta/desejo",action:()=>quickAction("meta")},
-                {label:"Investimento",icon:TrendingUp,color:"#3B82F6",title:"Registrar aporte, resgate ou rendimento",action:()=>quickAction("investimento")},
+                // "Transferência" abria exatamente a mesma coisa que
+                // "Investimento" (um aporte) — dois botões diferentes para a
+                // mesma ação, o que fazia um deles parecer quebrado. O app não
+                // tem modelo de contas/carteiras, então transferência entre
+                // contas não existe aqui; o par que existe de verdade é
+                // aporte (dinheiro sai da conta) e resgate (dinheiro volta).
+                {label:"Aporte",icon:TrendingUp,color:"#3B82F6",title:"Investir: tirar da conta e aplicar",action:()=>quickAction("investimento")},
+                {label:"Resgate",icon:Repeat,color:"#A78BFA",title:"Resgatar: trazer dinheiro do investimento de volta para a conta",action:()=>quickAction("resgate")},
+                {label:"Nova Meta",icon:Sparkles,color:accent,title:"Criar uma nova meta",action:()=>quickAction("meta")},
               ].map(qa=>(
-                <button key={qa.label} onClick={qa.action} title={qa.title} style={{flexShrink:0,display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderRadius:R_BTN,border:`1px solid ${BD2}`,background:"rgba(255,255,255,0.03)",color:TX,cursor:"pointer",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap"}}>
+                <button key={qa.label} onClick={qa.action} title={qa.title} aria-label={qa.title} style={{flexShrink:0,display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderRadius:R_BTN,border:`1px solid ${BD2}`,background:"rgba(255,255,255,0.03)",color:TX,cursor:"pointer",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap"}}>
                   <qa.icon size={14} color={qa.color}/>{qa.label}
                 </button>
               ))}
@@ -2363,7 +2533,7 @@ function MainApp({user,setUser}){
 
             {planTab==="metas"&&(
               <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                {enhancedWishes.length===0&&<div style={{textAlign:"center",color:TX3,padding:40,fontSize:13,background:CARD,border:`1px solid ${BD}`,borderRadius:R_CARD}}>Nenhuma meta cadastrada ainda. Adicione em "Desejos".</div>}
+                {enhancedWishes.length===0&&<div style={{textAlign:"center",color:TX3,padding:40,fontSize:13,background:CARD,border:`1px solid ${BD}`,borderRadius:R_CARD}}>Nenhuma meta cadastrada ainda. Adicione na aba "Metas".</div>}
                 {enhancedWishes.map(w=>(
                   <Card key={w.id} style={{padding:24}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:8}}>
@@ -2376,7 +2546,7 @@ function MainApp({user,setUser}){
                     <div className="bento">
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor atual</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.saved)}</div></div>
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor restante</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.remaining)}</div></div>
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Tempo estimado</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{w.estMonths?`~${w.estMonths} meses`:"sem dados suficientes"}</div></div>
+                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Tempo estimado</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{formatMonths(w.estMonths,w.estMonthsExact)}</div></div>
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Previsão de conclusão</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{w.etaDate||"—"}</div></div>
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Guardar por mês (na sua meta)</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{w.monthlyByTarget?fmt(w.monthlyByTarget):"defina um prazo em meses"}</div></div>
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4,display:"flex",alignItems:"center",gap:5}}><Hourglass size={11}/>Aportando 50% a mais</div><div style={{fontSize:14,fontWeight:700,color:"#22C55E"}}>{w.timeSaved?`economiza ~${w.timeSaved} meses`:"—"}</div></div>
@@ -2399,7 +2569,7 @@ function MainApp({user,setUser}){
                 <Card style={{padding:26}}>
                   <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><Target size={16} color={accent}/>Posso gastar isso?</div>
                   <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                    <input type="number" placeholder="Quanto você quer gastar (R$)" value={askAmount} onChange={e=>setAskAmount(e.target.value)} style={{...SI,flex:1,minWidth:180}}/>
+                    <MoneyInput placeholder="Quanto você quer gastar (R$)" value={askAmount} onChange={setAskAmount} style={{...SI,flex:1,minWidth:180}}/>
                     <Btn onClick={()=>setAskResult(FinancialEngine.DecisionEngine.canSpend({amount:parseNum(askAmount),transactions,plannedExpenses,balance,todayISO,currentMonthKey:currentMonthKeyReal}))} style={{padding:"0 20px"}}>Perguntar</Btn>
                   </div>
                   {askResult&&(
@@ -2445,20 +2615,20 @@ function MainApp({user,setUser}){
                         <option value="">Selecione uma meta</option>
                         {enhancedWishes.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
                       </select>
-                      <input type="number" placeholder="Quanto a mais guardar por mês (R$)" value={simExtra} onChange={e=>setSimExtra(e.target.value)} style={SI}/>
+                      <MoneyInput placeholder="Quanto a mais guardar por mês (R$)" value={simExtra} onChange={setSimExtra} style={SI}/>
                     </div>
                   )}
                   {simType==="compra_grande"&&(
                     <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                      <input type="number" placeholder="Valor total (R$)" value={simValue} onChange={e=>setSimValue(e.target.value)} style={{...SI,flex:1,minWidth:140}}/>
+                      <MoneyInput placeholder="Valor total (R$)" value={simValue} onChange={setSimValue} style={{...SI,flex:1,minWidth:140}}/>
                       <input type="number" placeholder="Em quantas parcelas" value={simParcelas} onChange={e=>setSimParcelas(e.target.value)} style={{...SI,flex:1,minWidth:140}}/>
                     </div>
                   )}
                   {simType==="investir_mensal"&&(
                     <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                      <input type="number" placeholder="Valor por mês (R$)" value={simValue} onChange={e=>setSimValue(e.target.value)} style={{...SI,flex:1,minWidth:120}}/>
+                      <MoneyInput placeholder="Valor por mês (R$)" value={simValue} onChange={setSimValue} style={{...SI,flex:1,minWidth:120}}/>
                       <input type="number" placeholder="Por quantos meses" value={simMonths} onChange={e=>setSimMonths(e.target.value)} style={{...SI,flex:1,minWidth:120}}/>
-                      <input type="number" placeholder="Retorno anual estimado (%)" value={simReturn} onChange={e=>setSimReturn(e.target.value)} style={{...SI,flex:1,minWidth:120}}/>
+                      <MoneyInput placeholder="Retorno anual estimado (%)" value={simReturn} onChange={setSimReturn} style={{...SI,flex:1,minWidth:120}}/>
                     </div>
                   )}
                   <Btn onClick={runSimulation} style={{padding:"10px 20px",fontSize:13}}>Simular</Btn>
@@ -2519,7 +2689,7 @@ function MainApp({user,setUser}){
                                   <td className="num" style={{padding:"12px 16px",color:"#22C55E",fontWeight:600,whiteSpace:"nowrap"}}>{fmt(m.in)}</td>
                                   <td className="num" style={{padding:"12px 16px",color:"#EF4444",fontWeight:600,whiteSpace:"nowrap"}}>{fmt(m.out)}</td>
                                   <td className="num" style={{padding:"12px 16px",color:m.balance>=0?"#22C55E":"#EF4444",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(m.balance)}</td>
-                                  <td style={{padding:"12px 16px",color:delta===null?TX3:delta>=0?"#22C55E":"#EF4444",fontWeight:600,whiteSpace:"nowrap"}}>{delta===null?"—":`${delta>0?"+":""}${delta}%`}</td>
+                                  <td title={delta===null?"Sem base de comparação no mês anterior":`Saldo ${delta>=0?"melhorou":"piorou"} ${fmt(Math.abs(m.balance-prev.balance))} em relação a ${prev.month}`} style={{padding:"12px 16px",color:delta===null?TX3:delta>=0?"#22C55E":"#EF4444",fontWeight:600,whiteSpace:"nowrap"}}>{delta===null?"—":`${delta>0?"+":""}${delta}%`}</td>
                                 </tr>
                               );
                             })}
@@ -2568,7 +2738,7 @@ function MainApp({user,setUser}){
               {(filterMonth||filterCat||filterType||search)&&<button onClick={()=>{setFilterMonth("");setFilterCat("");setFilterType("");setSearch("");}} style={{background:CARD,border:`1px solid ${BD}`,color:TX2,padding:"8px 13px",borderRadius:R_INPUT,cursor:"pointer"}}><X size={13}/></button>}
             </div>
             <div className="stat3" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-              {[{l:"Entradas",v:totalIn,c:"#22C55E"},{l:"Saídas",v:totalOut,c:"#EF4444"},{l:"Saldo",v:balance,c:balance>=0?"#22C55E":"#EF4444"}].map(c=>(
+              {[{l:"Entradas",v:viewTotals.totalIn,c:"#22C55E"},{l:"Saídas",v:viewTotals.totalOut,c:"#EF4444"},{l:"Saldo",v:viewTotals.balance,c:viewTotals.balance>=0?"#22C55E":"#EF4444"}].map(c=>(
                 <Card key={c.l} className="stat-card" style={{padding:18,textAlign:"center",overflow:"hidden"}}>
                   <div className="stat-label" style={{fontSize:11,color:TX2}}>{c.l}</div>
                   <div className="stat-val" style={{fontSize:18,fontWeight:700,color:c.c,marginTop:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><AnimatedValue value={c.v}/></div>
@@ -2609,7 +2779,7 @@ function MainApp({user,setUser}){
                         </div>
                         <div className="num" style={{fontSize:14,fontWeight:700,color:isIn?"#22C55E":"#EF4444",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{isIn?"+":"-"}{fmt(t.val)}</div>
                         <button onClick={()=>startEditTx(t)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
-                        <button onClick={()=>deleteTx(t.id)} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
+                        <button onClick={()=>setConfirmDelete({type:"tx",id:t.id,label:t.desc})} title="Excluir" aria-label={`Excluir ${t.desc}`} style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
                       </div>
                     );
                   })}
@@ -2646,7 +2816,7 @@ function MainApp({user,setUser}){
                 {editingPlanned===null&&frequentTx.length>0&&renderFrequentPicks(applyFrequentToPlanned)}
                 <div style={{display:"flex",gap:10,marginBottom:12}}>
                   <input placeholder="Ex: Kart, Smart Fit, Game Pass..." value={plannedForm.desc} maxLength={120} onChange={e=>setPlannedForm(p=>({...p,desc:e.target.value}))} style={{...SI,flex:2}}/>
-                  <input ref={plannedValRef} type="number" placeholder="R$" min="0" step="0.01" value={plannedForm.val} onChange={e=>setPlannedForm(p=>({...p,val:e.target.value}))} style={{...SI,flex:1}}/>
+                  <MoneyInput ref={plannedValRef} placeholder="R$" value={plannedForm.val} onChange={v=>setPlannedForm(p=>({...p,val:v}))} style={{...SI,flex:1}}/>
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
                   {fullCats.filter(c=>c!=="Investimento"&&c!=="Salario / Entradas").map(c=>{const cc=catColor(c);return(
@@ -2671,7 +2841,7 @@ function MainApp({user,setUser}){
                   <textarea value={plannedForm.notes||""} maxLength={2000} onChange={e=>setPlannedForm(p=>({...p,notes:e.target.value}))} rows={4} placeholder="Motivo do lançamento, observações, links, planejamento..." style={{...SI,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}}/>
                 </div>
                 <div style={{display:"flex",gap:10}}>
-                  <Btn onClick={savePlannedItem} disabled={!plannedForm.desc.trim()||!plannedForm.val} style={{padding:"10px 20px",fontSize:13,opacity:(!plannedForm.desc.trim()||!plannedForm.val)?0.5:1,cursor:(!plannedForm.desc.trim()||!plannedForm.val)?"not-allowed":"pointer"}}>{editingPlanned!==null?"Salvar":"Adicionar"}</Btn>
+                  <Btn onClick={savePlannedItem} aria-disabled={!plannedForm.desc.trim()||!plannedForm.val} style={{padding:"10px 20px",fontSize:13,opacity:(!plannedForm.desc.trim()||!plannedForm.val)?0.5:1,cursor:"pointer"}}>{editingPlanned!==null?"Salvar":"Adicionar"}</Btn>
                   <BtnGhost onClick={closePlannedForm} style={{padding:"10px 18px",fontSize:13}}>Cancelar</BtnGhost>
                 </div>
               </Card>
@@ -2703,7 +2873,7 @@ function MainApp({user,setUser}){
                       </div>
                       <div className="num" style={{fontSize:14,fontWeight:700,color:isPaid?"#22C55E":TX,flexShrink:0}}>{fmt(item.val)}</div>
                       {item.notes&&<button onClick={()=>toggleNotes(notesKey)} title="Ver notas" style={{background:"none",border:"none",color:expandedNotes[notesKey]?accent:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Info size={14}/></button>}
-                      <button onClick={()=>openTransferToWish(item)} title="Mover para Desejos" aria-label="Mover para Desejos" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><ArrowRightLeft size={14}/></button>
+                      <button onClick={()=>openTransferToWish(item)} title="Mover para Metas" aria-label="Mover para Metas" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><ArrowRightLeft size={14}/></button>
                       <button onClick={()=>startEditPlanned(item)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
                       <button onClick={()=>setConfirmDelete({type:"planned",id:item.id,label:item.desc})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
                     </div>
@@ -2735,7 +2905,7 @@ function MainApp({user,setUser}){
                 <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:18,letterSpacing:"-0.01em"}}>Nova compra parcelada</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:14}}>
                   <div style={{gridColumn:"1/-1"}}><div style={{fontSize:11,color:TX2,marginBottom:5}}>Descrição</div><input placeholder="Ex: iPhone" value={instDraft.desc} maxLength={120} onChange={e=>setInstDraft(d=>({...d,desc:e.target.value}))} style={SI}/></div>
-                  <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Valor total (R$)</div><input type="number" placeholder="6000" value={instDraft.totalVal} onChange={e=>setInstDraft(d=>({...d,totalVal:e.target.value}))} style={SI}/></div>
+                  <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Valor total (R$)</div><MoneyInput placeholder="6000" value={instDraft.totalVal} onChange={v=>setInstDraft(d=>({...d,totalVal:v}))} style={SI}/></div>
                   <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Nº de parcelas</div><input type="number" min="1" max="360" placeholder="12" value={instDraft.numParcelas} onChange={e=>setInstDraft(d=>({...d,numParcelas:e.target.value}))} style={SI}/></div>
                   {monthlyPreview&&(
                     <div style={{gridColumn:"1/-1",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_INPUT,padding:"10px 15px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
@@ -2756,7 +2926,7 @@ function MainApp({user,setUser}){
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   <BtnGhost onClick={()=>setShowInstForm(false)} style={{flex:1,padding:"11px",minWidth:100}}>Cancelar</BtnGhost>
-                  <button onClick={addInstallment} disabled={!instDraft.desc||!instDraft.totalVal} style={{flex:2,padding:"11px",borderRadius:R_BTN,border:"none",cursor:(!instDraft.desc||!instDraft.totalVal)?"not-allowed":"pointer",fontSize:13,fontWeight:700,background:(!instDraft.desc||!instDraft.totalVal)?"rgba(255,255,255,0.04)":accent,color:(!instDraft.desc||!instDraft.totalVal)?TX3:"white",minWidth:180}}>
+                  <button onClick={addInstallment} aria-disabled={!instDraft.desc||!instDraft.totalVal} style={{flex:2,padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:(!instDraft.desc||!instDraft.totalVal)?"rgba(255,255,255,0.04)":accent,color:(!instDraft.desc||!instDraft.totalVal)?TX3:"white",minWidth:180}}>
                     {monthlyPreview?`Criar ${instDraft.numParcelas}x de ${fmt(monthlyPreview)}`:"Criar parcelamento"}
                   </button>
                 </div>
@@ -2813,7 +2983,7 @@ function MainApp({user,setUser}){
         {tab==="wishes"&&(
           <div style={{display:"flex",flexDirection:"column",gap:20}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-              <div style={{fontSize:17,fontWeight:700,color:TX,letterSpacing:"-0.01em"}}>Meus Desejos Futuros</div>
+              <div style={{fontSize:17,fontWeight:700,color:TX,letterSpacing:"-0.01em"}}>Minhas Metas</div>
               <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                 <div style={{display:"flex",borderRadius:R_INPUT,overflow:"hidden",background:CARD,border:`1px solid ${BD}`}}>
                   <button onClick={()=>setWishSortBy("progress")} title="Ordenar por progresso" style={{padding:"8px 14px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:wishSortBy==="progress"?accent:"transparent",color:wishSortBy==="progress"?"white":TX2}}>Progresso</button>
@@ -2827,8 +2997,10 @@ function MainApp({user,setUser}){
               <Card style={{padding:26}}>
                 <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:18,letterSpacing:"-0.01em"}}>{editingWish!==null?"Editar":"Novo desejo"}</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12}}>
-                  {[{l:"Nome",k:"name",t:"text"},{l:"Preço (R$)",k:"price",t:"number"},{l:"Já guardei (R$)",k:"saved",t:"number"},{l:"Meta (meses)",k:"monthsTarget",t:"number"}].map(f=>(
-                    <div key={f.k}><div style={{fontSize:11,color:TX2,marginBottom:5}}>{f.l}</div><input type={f.t} value={wishForm[f.k]} maxLength={f.t==="text"?80:undefined} onChange={e=>setWishForm(p=>({...p,[f.k]:e.target.value}))} style={SI}/></div>
+                  {[{l:"Nome",k:"name",t:"text"},{l:"Preço (R$)",k:"price",t:"money"},{l:"Já guardei (R$)",k:"saved",t:"money"},{l:"Meta (meses)",k:"monthsTarget",t:"number"}].map(f=>(
+                    <div key={f.k}><div style={{fontSize:11,color:TX2,marginBottom:5}}>{f.l}</div>{f.t==="money"
+                      ?<MoneyInput value={wishForm[f.k]} onChange={v=>setWishForm(p=>({...p,[f.k]:v}))} style={SI}/>
+                      :<input type={f.t} value={wishForm[f.k]} maxLength={f.t==="text"?80:undefined} onChange={e=>setWishForm(p=>({...p,[f.k]:e.target.value}))} style={SI}/>}</div>
                   ))}
                   <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Prioridade</div><select value={wishForm.priority} onChange={e=>setWishForm(p=>({...p,priority:e.target.value}))} style={SI}>{["Alta","Média","Baixa"].map(o=><option key={o}>{o}</option>)}</select></div>
                   <div style={{gridColumn:"1/-1"}}>
@@ -2836,7 +3008,7 @@ function MainApp({user,setUser}){
                     <textarea value={wishForm.notes||""} maxLength={2000} onChange={e=>setWishForm(p=>({...p,notes:e.target.value}))} rows={4} placeholder="Detalhes, observações, planejamento, links de produtos..." style={{...SI,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}}/>
                   </div>
                   <div style={{display:"flex",gap:10,alignItems:"flex-end",gridColumn:"1/-1",flexWrap:"wrap"}}>
-                    <Btn onClick={saveWish} disabled={!wishForm.name||!wishForm.price} style={{padding:"10px 20px",fontSize:13,opacity:(!wishForm.name||!wishForm.price)?0.5:1,cursor:(!wishForm.name||!wishForm.price)?"not-allowed":"pointer"}}>{editingWish!==null?"Salvar":"Adicionar"}</Btn>
+                    <Btn onClick={saveWish} aria-disabled={!wishForm.name||!wishForm.price} style={{padding:"10px 20px",fontSize:13,opacity:(!wishForm.name||!wishForm.price)?0.5:1,cursor:"pointer"}}>{editingWish!==null?"Salvar":"Adicionar"}</Btn>
                     <BtnGhost onClick={closeWishForm} style={{padding:"10px 18px",fontSize:13}}>Cancelar</BtnGhost>
                   </div>
                 </div>
@@ -2864,7 +3036,7 @@ function MainApp({user,setUser}){
                     <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
                       <span style={{background:pColor+"22",color:pColor,fontSize:11,padding:"4px 10px",borderRadius:R_CHIP,fontWeight:700}}>{w.priority}</span>
                       <button onClick={()=>openTransferToPlanned(w)} title="Mover para Previstos" aria-label="Mover para Previstos" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"5px 8px",color:TX2,cursor:"pointer"}}><ArrowRightLeft size={12}/></button>
-                      <button onClick={()=>{const snap={name:w.name,price:String(w.price),saved:String(w.saved),priority:w.priority,monthsTarget:String(w.monthsTarget||""),notes:w.notes||""};setEditingWish(w.id);setWishForm(snap);wishFormSnapshotRef.current=JSON.stringify(snap);setShowWishForm(true);}} title="Editar" aria-label="Editar" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"5px 8px",color:TX2,cursor:"pointer"}}><Pencil size={12}/></button>
+                      <button onClick={()=>{const snap={name:w.name,price:toDecimalStr(w.price),saved:toDecimalStr(w.saved),priority:w.priority,monthsTarget:String(w.monthsTarget||""),notes:w.notes||""};setEditingWish(w.id);setWishForm(snap);wishFormSnapshotRef.current=JSON.stringify(snap);setShowWishForm(true);}} title="Editar" aria-label="Editar" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"5px 8px",color:TX2,cursor:"pointer"}}><Pencil size={12}/></button>
                       <button onClick={()=>setConfirmDelete({type:"wish",id:w.id,label:w.name})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4}}><Trash2 size={14}/></button>
                     </div>
                   </div>
