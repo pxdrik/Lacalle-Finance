@@ -97,7 +97,8 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
 import AuthScreen from "./components/AuthScreen";
-import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR } from "./lib/financialEngine";
+import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
+import ProjectionDrawer from "./components/ProjectionDrawer";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
@@ -109,7 +110,7 @@ import {
   ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard,
   Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Landmark, Rocket,
   Gem, Star, Trophy, Lightbulb, ShieldCheck, Target, Percent, Activity, CalendarDays, Bell, Flag, Hourglass, Clock,
-  ArrowRightLeft
+  ArrowRightLeft, EyeOff, Eye
 } from "lucide-react";
 
 const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
@@ -258,6 +259,12 @@ function MainApp({user,setUser}){
   const [showSearch,setShowSearch]=useState(false);
   const [searchQuery,setSearchQuery]=useState("");
   const [explainKey,setExplainKey]=useState(null);
+  // ---- Drawer de projeção: a versão "auditável" dos cartões de previsão do
+  // dashboard (Quanto posso gastar / Previsto no fim do mês). Guarda só a
+  // chave e o horizonte em dias — os dados em si são recalculados ao vivo
+  // via ProjectionExplainer, então nunca ficam desatualizados depois de uma
+  // ação rápida (marcar como pago, ignorar, excluir...) feita dentro dele.
+  const [projectionDrawer,setProjectionDrawer]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
   // Exclusão definitiva da conta (confirmação por frase digitada).
   const [deleteAccountOpen,setDeleteAccountOpen]=useState(false);
@@ -772,7 +779,7 @@ function MainApp({user,setUser}){
   const freeBalance=useMemo(()=>FinancialEngine.CashFlowAnalyzer.freeBalance({transactions,plannedExpenses,balance,todayISO,currentMonthKey:currentMonthKeyReal}),[transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal]);
   const freeBalanceBreakdown=useMemo(()=>{
     const futureOut=transactions.filter(t=>t.date>todayISO&&t.type==="Saída"&&t.cat!=="Investimento").reduce((s,t)=>s+t.val,0);
-    const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKeyReal).reduce((s,p)=>s+(p.paid?.[currentMonthKeyReal]?0:p.val),0);
+    const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKeyReal).reduce((s,p)=>s+(PlannedStatus.isPending(p,currentMonthKeyReal)?p.val:0),0);
     return{futureOut,plannedPending};
   },[transactions,plannedExpenses,todayISO,currentMonthKeyReal]);
 
@@ -806,21 +813,10 @@ function MainApp({user,setUser}){
       meaning:"Mostra quanto do seu saldo atual já está comprometido com compromissos que ainda vão sair da conta.",
       improve:["Quitar ou renegociar parcelas com juros altos","Cancelar assinaturas que você não usa mais","Manter os previstos atualizados para refletir a realidade"],
     },
-    saldoPrevisto:{
-      title:"Previsto no Fim do Mês",
-      calc:projection?`Receitas do mês (${fmt(projection.inc)}) menos despesas já ocorridas e futuras (${fmt(projection.out)})${projection.plannedPending>0?` menos previstos pendentes (${fmt(projection.plannedPending)})`:""}.`:"Ainda não há dados suficientes neste mês.",
-      factors:["Receitas já recebidas e futuras do mês","Despesas já pagas e futuras do mês","Previstos ainda não pagos"],
-      meaning:"É uma estimativa de como seu saldo deve fechar ao final do mês atual, considerando o que já está cadastrado.",
-      improve:["Reduzir despesas variáveis que ainda podem ser evitadas","Antecipar recebíveis quando possível","Cadastrar previstos que ainda faltam para uma projeção mais precisa"],
-    },
-    quantoPossoGastar:{
-      title:"Quanto você pode gastar",
-      calc:"Projeção de saldo em 30 dias, considerando o saldo atual, receitas e despesas futuras já cadastradas e previstos ainda pendentes.",
-      factors:["Saldo atual","Receitas e despesas futuras já cadastradas","Previstos pendentes nos próximos 30 dias"],
-      meaning:"É o valor que você pode gastar sem comprometer os próximos 30 dias, de acordo com o que já está cadastrado.",
-      improve:["Evitar grandes compras não planejadas","Cadastrar todos os previstos para uma projeção mais precisa","Revisar essa estimativa sempre que fizer um lançamento grande"],
-    },
   };
+  // Nota: "Previsto no Fim do Mês" e "Quanto você pode gastar" deixaram de
+  // usar este texto genérico — agora abrem o ProjectionDrawer (item por
+  // item, agrupado por categoria, editável). Ver setProjectionDrawer abaixo.
   const HEALTH_EXPLAIN={
     "Taxa de economia":{factors:["Total de receitas do período selecionado","Total de despesas do período selecionado"],improve:["Reduzir gastos variáveis","Buscar receitas extras","Definir um valor fixo de economia mensal"]},
     "Receita comprometida":{factors:["Despesas totais, incluindo aportes","Receitas totais do período"],improve:["Renegociar dívidas e assinaturas","Reduzir despesas fixas"]},
@@ -1097,7 +1093,7 @@ function MainApp({user,setUser}){
       setPlannedExpenses(p=>p.map(x=>x.id===editingPlanned?{...x,...base}:x));
       setEditingPlanned(null);
     }else{
-      setPlannedExpenses(p=>[...p,{...base,id:genId(),paid:{}}]);
+      setPlannedExpenses(p=>[...p,{...base,id:genId(),paid:{},ignored:{}}]);
     }
     setShowPlannedForm(false);
     setPlannedForm({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:plannedMonth,notes:""});
@@ -1124,19 +1120,44 @@ function MainApp({user,setUser}){
     if(item)moveToTrash("planned",item);
     showToast("Previsto excluído.","info");
   };
-  const togglePlannedPaid=item=>{
+  // ---- Marcar/desmarcar como pago, para um mês específico -------------------
+  // Recebe o mês explicitamente (em vez de sempre usar `plannedMonth`, o mês
+  // selecionado na aba Previstos) porque o drawer de projeção do dashboard
+  // mostra itens de vários meses ao mesmo tempo (30 dias pode atravessar a
+  // virada do mês) — cada item ali sabe o próprio mês.
+  const togglePlannedPaidForMonth=(item,month)=>{
     pushHistory();
-    const paidTxId=item.paid?.[plannedMonth];
+    const paidTxId=item.paid?.[month];
     if(paidTxId){
       setTransactions(p=>p.filter(t=>t.id!==paidTxId));
-      setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,paid:{...x.paid,[plannedMonth]:undefined}}:x));
+      setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,paid:{...x.paid,[month]:undefined}}:x));
     }else{
       const txId=genId();
-      const date=monthKeyToISO(plannedMonth,new Date().getDate());
+      const date=monthKeyToISO(month,new Date().getDate());
       const newTx={id:txId,date,type:"Saída",fixed:item.recurring?"Fixa":"Variavel",cat:item.cat,desc:item.desc,val:item.val,form:item.form,invTipo:null,plannedId:item.id};
       setTransactions(p=>[newTx,...p]);
-      setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,paid:{...x.paid,[plannedMonth]:txId}}:x));
+      setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,paid:{...x.paid,[month]:txId}}:x));
     }
+  };
+  const togglePlannedPaid=item=>togglePlannedPaidForMonth(item,plannedMonth);
+
+  // ---- Ignorar um previsto recorrente só num mês (sem apagar o cadastro) ----
+  // Ex.: assinatura pausada esse mês, conta que excepcionalmente não vai
+  // vencer dessa vez. Diferente de excluir (que apaga o previsto pra sempre)
+  // e diferente de marcar como pago (que cria uma transação real). O item
+  // continua existindo e volta a contar normalmente no mês seguinte — ou a
+  // qualquer momento, se a pessoa desfizer.
+  const togglePlannedIgnoredForMonth=(item,month)=>{
+    pushHistory();
+    const isIgnored=!!item.ignored?.[month];
+    setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,ignored:{...x.ignored,[month]:isIgnored?undefined:true}}:x));
+    return!isIgnored;
+  };
+  // ---- Transforma um previsto de "só este mês" em recorrente todo mês ----
+  const makePlannedRecurring=item=>{
+    pushHistory();
+    setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,recurring:true,month:null}:x));
+    showToast(`"${item.desc}" agora é recorrente (todo mês).`,"success");
   };
 
   const importCSV=e=>{
@@ -1755,6 +1776,9 @@ function MainApp({user,setUser}){
         <Modal onClose={()=>setConfirmDelete(null)} maxWidth={340} padding={30} contentStyle={{textAlign:"center"}}>
           <div style={{width:46,height:46,borderRadius:14,background:"#EF444418",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#EF4444"/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={confirmDelete.label}>Excluir "{confirmDelete.label}"?</div>
+          {confirmDelete.impact&&(
+            <div style={{fontSize:12.5,color:TX,fontWeight:600,lineHeight:1.5,background:"rgba(255,255,255,0.04)",border:`1px solid ${BD2}`,borderRadius:R_INPUT,padding:"10px 12px",marginBottom:14,textAlign:"left"}}>{confirmDelete.impact}</div>
+          )}
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você pode usar o botão "desfazer" no topo logo em seguida, caso mude de ideia.</div>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setConfirmDelete(null)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
@@ -1847,6 +1871,28 @@ function MainApp({user,setUser}){
           </Modal>
         );
       })()}
+      {projectionDrawer&&(
+        <ProjectionDrawer
+          config={projectionDrawer}
+          onClose={()=>setProjectionDrawer(null)}
+          transactions={transactions}
+          plannedExpenses={plannedExpenses}
+          balance={balance}
+          todayISO={todayISO}
+          currentMonthKey={currentMonthKeyReal}
+          accent={accent}
+          catColor={catColor}
+          showToast={showToast}
+          onTogglePaid={(item,month)=>togglePlannedPaidForMonth(item,month)}
+          onToggleIgnored={(item,month)=>togglePlannedIgnoredForMonth(item,month)}
+          onMakeRecurring={makePlannedRecurring}
+          onRequestDeletePlanned={(item,impact)=>setConfirmDelete({type:"planned",id:item.id,label:item.desc,impact})}
+          onRequestDeleteTx={(tx,impact)=>setConfirmDelete({type:"tx",id:tx.id,label:tx.desc,impact})}
+          onEditPlanned={item=>{startEditPlanned(item);setTab("planned");setProjectionDrawer(null);}}
+          onEditTx={tx=>{startEditTx(tx);setTab("transactions");setProjectionDrawer(null);}}
+          onViewAllPlanned={()=>{setTab("planned");setProjectionDrawer(null);}}
+        />
+      )}
       {showSearch&&(
         <Modal onClose={closeSearch} maxWidth={560} padding={0} align="top" scroll={false} contentStyle={{maxHeight:"70vh",display:"flex",flexDirection:"column",overflow:"hidden"}} zIndex={200}>
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"16px 18px",borderBottom:`1px solid ${BD}`,flexShrink:0}}>
@@ -2203,7 +2249,7 @@ function MainApp({user,setUser}){
                 <div style={{fontSize:24,fontWeight:800,color:freeBalance>=0?"#22C55E":"#EF4444",letterSpacing:"-0.02em"}}><AnimatedValue value={freeBalance}/></div>
                 <div style={{fontSize:11,color:TX3,marginTop:6,lineHeight:1.4}}>{(freeBalanceBreakdown.futureOut+freeBalanceBreakdown.plannedPending)>0?`Já descontando ${fmt(freeBalanceBreakdown.futureOut+freeBalanceBreakdown.plannedPending)} em parcelas, contas e recorrências.`:"Nenhum compromisso futuro cadastrado ainda."}</div>
               </div>
-              <div className="bento-half fc-card" onClick={()=>setExplainKey("saldoPrevisto")} title="Toque para entender este número" style={{...cardStyle,padding:24,cursor:"pointer"}}>
+              <div className="bento-half fc-card" onClick={()=>setProjectionDrawer({key:"saldoPrevisto",daysAhead:daysToEndOfMonth,title:"Previsto no Fim do Mês"})} title="Toque para ver de onde vem esse número" style={{...cardStyle,padding:24,cursor:"pointer"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                   <div style={{width:28,height:28,borderRadius:9,background:"#3B82F61f",display:"flex",alignItems:"center",justifyContent:"center"}}><Target size={14} color="#3B82F6"/></div>
                   <div style={{fontSize:11.5,color:TX2,fontWeight:600,flex:1}}>Previsto no Fim do Mês</div>
@@ -2216,7 +2262,7 @@ function MainApp({user,setUser}){
 
             {/* ---- Quanto posso gastar ---- */}
             {proj30&&(
-              <div onClick={()=>setExplainKey("quantoPossoGastar")} className="fc-card" title="Toque para entender este número" style={{...cardStyle,padding:26,cursor:"pointer",background:proj30.value>=0?`linear-gradient(120deg, ${accent}14, ${CARD} 70%)`:`linear-gradient(120deg, #EF444414, ${CARD} 70%)`,border:`1px solid ${proj30.value>=0?accent+"30":"#EF444440"}`}}>
+              <div onClick={()=>setProjectionDrawer({key:"quantoPossoGastar",daysAhead:30,title:"Quanto você pode gastar"})} className="fc-card" title="Toque para ver de onde vem esse número" style={{...cardStyle,padding:26,cursor:"pointer",background:proj30.value>=0?`linear-gradient(120deg, ${accent}14, ${CARD} 70%)`:`linear-gradient(120deg, #EF444414, ${CARD} 70%)`,border:`1px solid ${proj30.value>=0?accent+"30":"#EF444440"}`}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                   <div style={{width:32,height:32,borderRadius:10,background:(proj30.value>=0?accent:"#EF4444")+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{proj30.value>=0?<Check size={16} color={accent}/>:<AlertTriangle size={16} color="#EF4444"/>}</div>
                   <div style={{fontSize:13.5,fontWeight:700,color:TX,flex:1}}>Quanto você pode gastar?</div>
@@ -2857,22 +2903,25 @@ function MainApp({user,setUser}){
               {sortedPlannedItemsForMonth.map(item=>{
                 const itemColor=catColor(item.cat);
                 const isPaid=!!item.paid?.[plannedMonth];
+                const isIgnored=!!item.ignored?.[plannedMonth];
                 const notesKey=`planned-${item.id}`;
                 return(
-                  <div key={item.id} style={{background:isPaid?"#22C55E12":CARD,border:`1px solid ${isPaid?"#22C55E30":BD}`,borderRadius:R_INPUT,padding:"14px 16px",boxShadow:SH_SM}}>
+                  <div key={item.id} style={{background:isPaid?"#22C55E12":isIgnored?"#F0A85712":CARD,border:`1px solid ${isPaid?"#22C55E30":isIgnored?"#F0A85730":BD}`,borderRadius:R_INPUT,padding:"14px 16px",boxShadow:SH_SM,opacity:isIgnored?0.75:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:12}}>
                       <button onClick={()=>togglePlannedPaid(item)} title={isPaid?"Marcar como não pago":"Marcar como pago"} style={{width:24,height:24,borderRadius:8,border:isPaid?"none":`1.5px solid ${BD2}`,background:isPaid?"#22C55E":"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{isPaid&&<Check size={13}/>}</button>
                       <div style={{width:34,height:34,borderRadius:11,background:itemColor+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><CategoryIcon cat={item.cat} size={15} color={itemColor}/></div>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,color:isPaid?TX2:TX,textDecoration:isPaid?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.desc}</div>
+                        <div style={{fontSize:13,fontWeight:600,color:isPaid?TX2:TX,textDecoration:isPaid||isIgnored?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.desc}</div>
                         <div style={{fontSize:11,color:TX2,marginTop:3,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
                           <span style={{color:itemColor,fontWeight:600}}>{item.cat}</span>
                           {item.recurring&&<span style={{display:"flex",alignItems:"center",gap:3,color:accent}}>· <Repeat size={10}/>mensal</span>}
                           <span>· {item.form}</span>
+                          {isIgnored&&<span style={{color:"#F0A857",fontWeight:600}}>· ignorado este mês</span>}
                         </div>
                       </div>
                       <div className="num" style={{fontSize:14,fontWeight:700,color:isPaid?"#22C55E":TX,flexShrink:0}}>{fmt(item.val)}</div>
                       {item.notes&&<button onClick={()=>toggleNotes(notesKey)} title="Ver notas" style={{background:"none",border:"none",color:expandedNotes[notesKey]?accent:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Info size={14}/></button>}
+                      {item.recurring&&<button onClick={()=>togglePlannedIgnoredForMonth(item,plannedMonth)} title={isIgnored?"Reativar este mês":"Ignorar apenas este mês"} style={{background:"none",border:"none",color:isIgnored?"#F0A857":TX3,cursor:"pointer",flexShrink:0,padding:4}}>{isIgnored?<Eye size={14}/>:<EyeOff size={14}/>}</button>}
                       <button onClick={()=>openTransferToWish(item)} title="Mover para Metas" aria-label="Mover para Metas" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><ArrowRightLeft size={14}/></button>
                       <button onClick={()=>startEditPlanned(item)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
                       <button onClick={()=>setConfirmDelete({type:"planned",id:item.id,label:item.desc})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>

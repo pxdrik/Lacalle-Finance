@@ -65,6 +65,23 @@ export const addMonthsStr=(dateStr,n)=>{
   return toISO(target);
 };
 
+// ---- Status de um previsto num mês específico -------------------------------
+// Um previsto pode estar, num dado mês: pago (virou uma transação real),
+// ignorado (o usuário decidiu não contar com ele só naquele mês, sem apagar o
+// cadastro — ex.: assinatura pausada, conta que não vai vencer dessa vez) ou
+// pendente (nenhum dos dois — ainda entra nas projeções e no orçamento).
+// Essa mesma pergunta ("esse previsto conta pra esse mês?") se repete em
+// quase uma dezena de lugares (projeção de fluxo de caixa, saldo livre,
+// orçamento do mês, lembretes, linha do tempo). Fica aqui, no escopo do
+// módulo, porque FinancialEngine e InsightEngine são duas IIFEs separadas e
+// ambas precisam da mesma regra — do jeito que já acontece com monthKey,
+// addDaysStr etc. logo acima.
+export const PlannedStatus={
+  isPaid:(item,month)=>!!item.paid?.[month],
+  isIgnored:(item,month)=>!!item.ignored?.[month],
+  isPending:(item,month)=>!PlannedStatus.isPaid(item,month)&&!PlannedStatus.isIgnored(item,month),
+};
+
 export const FinancialEngine=(()=>{
   const isSaidaReal=t=>t.type==="Saída"&&t.cat!=="Investimento";
   const isEntradaReal=t=>t.type==="Entrada"&&t.cat!=="Investimento";
@@ -96,6 +113,52 @@ export const FinancialEngine=(()=>{
     const avgIn=Object.values(inByIdx).reduce((a,b)=>a+b,0)/n;
     const avgOut=Object.values(outByIdx).reduce((a,b)=>a+b,0)/n;
     return{avgIn:Math.max(0,avgIn),avgOut:Math.max(0,avgOut),monthsUsed:idxs.size};
+  };
+
+  // ---- Média típica de gasto POR CATEGORIA, mesma janela de typicalMonthly ---
+  // typicalMonthly só devolve um número único (avgOut) — quando a projeção
+  // usa a média porque ela é maior que o já cadastrado, a diferença ("Gasto
+  // típico estimado") não tinha de onde vir uma categoria e caía tudo em
+  // "Outros" por padrão. Isso é enganoso: o gasto médio histórico claramente
+  // teve categoria (Alimentação, Transporte etc.), só não tinha sido
+  // atribuído. Aqui a mesma média é recalculada categoria a categoria, na
+  // MESMA janela (meses fechados, até 6 atrás) e com o MESMO sinal (Saída
+  // conta, Aporte conta como saída, Resgate abate) — a soma de todas as
+  // categorias bate exatamente com o avgOut de typicalMonthly.
+  const typicalMonthlyByCategory=(transactions,currentMonthKey)=>{
+    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const sumByIdxCat={};
+    transactions.forEach(t=>{
+      const idx=MONTH_ORDER.indexOf(monthKey(t.date));
+      if(idx<0||idx>=currentIdx||currentIdx-idx>6)return;
+      let delta=0;
+      if(isSaidaReal(t))delta=t.val;
+      else if(isAporte(t))delta=t.val;
+      else if(isResgate(t))delta=-t.val;
+      else return;
+      if(!sumByIdxCat[idx])sumByIdxCat[idx]={};
+      sumByIdxCat[idx][t.cat]=(sumByIdxCat[idx][t.cat]||0)+delta;
+    });
+    const n=Object.keys(sumByIdxCat).length||1;
+    const totalByCat={};
+    Object.values(sumByIdxCat).forEach(catMap=>{
+      Object.entries(catMap).forEach(([cat,v])=>{totalByCat[cat]=(totalByCat[cat]||0)+v;});
+    });
+    const avgByCat={};
+    Object.entries(totalByCat).forEach(([cat,v])=>{avgByCat[cat]=v/n;});
+    return avgByCat;
+  };
+  // Distribui um valor (o "resto" que a média típica ainda não teve como
+  // atribuir a um lançamento real) proporcionalmente ao peso histórico de
+  // cada categoria — em vez de um único item genérico em "Outros". Sempre
+  // soma exatamente `total`, então não quebra a invariante usada em
+  // ProjectionExplainer.impactOfRemoving.
+  const splitEstimateByCategory=(total,avgByCat,labelFor)=>{
+    if(total<=0.005)return[];
+    const positive=Object.entries(avgByCat).filter(([,v])=>v>0.005);
+    const sum=positive.reduce((s,[,v])=>s+v,0);
+    if(sum<=0.005)return[{label:labelFor("Outros"),value:total,cat:"Outros",kind:"estimado"}];
+    return positive.map(([cat,v])=>({label:labelFor(cat),value:total*(v/sum),cat,kind:"estimado"}));
   };
 
   const CashFlowAnalyzer={
@@ -143,6 +206,7 @@ export const FinancialEngine=(()=>{
       let idxEnd=MONTH_ORDER.indexOf(endMk);
       if(idxEnd<idxCur)idxEnd=idxCur;
       const {avgIn,avgOut}=typicalMonthly(transactions,currentMonthKey);
+      const avgByCat=typicalMonthlyByCategory(transactions,currentMonthKey);
       const sumIf=(pred)=>sumVal(transactions.filter(pred));
       let incTotal=0,outTotal=0;
       const incomeItems=[],outItems=[],plannedItems=[];
@@ -157,7 +221,7 @@ export const FinancialEngine=(()=>{
         const futOutTx=transactions.filter(t=>(isSaidaReal(t)||isAporte(t))&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
         const futIn=sumVal(futInTx);
         const futOut=sumVal(futOutTx)-sumIf(t=>isResgate(t)&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
-        const plannedList=plannedExpenses.filter(p=>p.recurring?!p.paid?.[mk]:(p.month===mk&&!p.paid?.[mk]));
+        const plannedList=plannedExpenses.filter(p=>p.recurring?PlannedStatus.isPending(p,mk):(p.month===mk&&PlannedStatus.isPending(p,mk)));
         const plannedPending=plannedList.reduce((s,p)=>s+p.val,0);
         // Total esperado do mês = o maior entre a média típica e o já conhecido.
         const fullIn=Math.max(avgIn,alreadyIn+futIn);
@@ -168,13 +232,13 @@ export const FinancialEngine=(()=>{
         // ---- Itemização (detalhamento): lista os lançamentos futuros e os
         // previstos concretos, e mostra o restante como estimativa típica. A soma
         // dos itens é igual à contribuição do mês — não duplica no total.
-        futInTx.forEach(t=>incomeItems.push({label:cleanDesc(t.desc),value:t.val,date:t.date}));
+        futInTx.forEach(t=>incomeItems.push({label:cleanDesc(t.desc),value:t.val,date:t.date,id:t.id,cat:t.cat}));
         const remIn=contribIn-futIn;
         if(remIn>0.005)incomeItems.push({label:`Renda típica estimada · ${mk}`,value:remIn,date:mk,recurring:true});
-        plannedList.forEach(p=>plannedItems.push({label:p.desc,value:p.val,recurring:!!p.recurring,month:mk}));
-        futOutTx.forEach(t=>outItems.push({label:cleanDesc(t.desc),value:t.val,date:t.date,kind:t.installmentId?"parcela":(t.plannedId?"conta":"despesa")}));
+        plannedList.forEach(p=>plannedItems.push({label:p.desc,value:p.val,recurring:!!p.recurring,month:mk,id:p.id,cat:p.cat}));
+        futOutTx.forEach(t=>outItems.push({label:cleanDesc(t.desc),value:t.val,date:t.date,kind:t.installmentId?"parcela":(t.plannedId?"conta":"despesa"),id:t.id,cat:t.cat}));
         const remOut=contribOut-futOut-plannedPending;
-        if(remOut>0.005)outItems.push({label:`Gasto típico estimado · ${mk}`,value:remOut,date:mk,kind:"estimado"});
+        outItems.push(...splitEstimateByCategory(remOut,avgByCat,cat=>`Estimativa (média) · ${cat} · ${mk}`).map(it=>({...it,date:mk})));
       }
       const value=balance+incTotal-outTotal;
       return{value,incomeItems,outItems,plannedItems,totals:{inc:incTotal,outReal:outTotal,plannedOut:0,invAp:0,invRe:0}};
@@ -187,24 +251,121 @@ export const FinancialEngine=(()=>{
     },
     freeBalance({transactions,plannedExpenses,balance,todayISO,currentMonthKey}){
       const futureOut=transactions.filter(t=>t.date>todayISO&&t.type==="Saída"&&t.cat!=="Investimento").reduce((s,t)=>s+t.val,0);
-      const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKey).reduce((s,p)=>s+(p.paid?.[currentMonthKey]?0:p.val),0);
+      const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKey).reduce((s,p)=>s+(PlannedStatus.isPending(p,currentMonthKey)?p.val:0),0);
       return balance-futureOut-plannedPending;
+    },
+  };
+
+  // ---- Explicação da projeção para a interface --------------------------
+  // Não recalcula nada: pega os MESMOS outItems/plannedItems que já compõem
+  // matematicamente o total de projectionAtDetailed (a soma deles bate exato
+  // com outTotal — ver comentário acima) e só reorganiza isso pra virar algo
+  // que a tela consegue mostrar de forma auditável — agrupado por categoria,
+  // com a origem de cada item em português, pronto pra receber ações rápidas.
+  // Como a soma dos itens é sempre igual ao total, o impacto de remover um
+  // item é uma subtração exata: nenhum risco de esse número divergir da
+  // projeção real por arredondamento ou por regra de negócio esquecida.
+  const originInfo=item=>{
+    if(item.sourceType==="planned")return item.recurring?{code:"recorrente",label:"Despesa recorrente"}:{code:"previsto_mes",label:"Lançamento previsto"};
+    if(item.kind==="parcela")return{code:"parcela",label:"Compra parcelada"};
+    if(item.kind==="conta")return{code:"conta_lancada",label:"Conta prevista (já lançada)"};
+    if(item.kind==="estimado")return{code:"estimativa",label:"Estimativa (média dos últimos meses)"};
+    return{code:"lancamento",label:"Lançamento futuro cadastrado"};
+  };
+  const ProjectionExplainer={
+    // mode "window" (padrão): projeção de saldo em N dias (usada em "Quanto
+    // você pode gastar"), inclui o saldo atual — netProjection é o saldo
+    // projetado nessa data.
+    // mode "endOfMonth": resultado esperado do mês corrente (usada em
+    // "Previsto no Fim do Mês"), NÃO inclui o saldo — netProjection aqui é
+    // receitas menos despesas esperadas do mês, exatamente o que já era
+    // mostrado nesse cartão antes de existir este drawer. Cada modo usa a
+    // sua própria função "detalhada" do engine, mas os dois convergem pro
+    // mesmo formato normalizado logo abaixo — por isso o resto do drawer
+    // (agrupamento por categoria, ações rápidas, "e se eu remover") não
+    // precisa saber qual dos dois está olhando.
+    build({transactions,plannedExpenses,balance,todayISO,currentMonthKey,daysAhead,mode="window"}){
+      let detailed,netProjection,outTotal,incTotal;
+      if(mode==="endOfMonth"){
+        const d=ForecastEngine.endOfMonthProjectionDetailed({transactions,plannedExpenses,currentMonthKey});
+        detailed={outItems:d?d.outItems:[],plannedItems:d?d.plannedItems:[],incomeItems:d?d.incomeItems:[]};
+        incTotal=d?d.inc:0;
+        outTotal=d?d.out:0;
+        netProjection=d?d.expected:0;
+      }else{
+        const d=CashFlowAnalyzer.projectionAtDetailed({transactions,plannedExpenses,balance,todayISO,currentMonthKey,daysAhead});
+        detailed=d;
+        incTotal=d.totals.inc;
+        outTotal=d.totals.outReal;
+        netProjection=balance+d.totals.inc-d.totals.outReal;
+      }
+      const normalized=[
+        ...detailed.plannedItems.map(i=>({...i,sourceType:"planned"})),
+        ...detailed.outItems.map(i=>({...i,sourceType:i.kind==="estimado"?"estimate":"transaction"})),
+      ].map((i,idx)=>{
+        const origin=originInfo(i);
+        return{
+          key:`${i.sourceType}-${i.id??"x"}-${i.month??i.date??idx}`,
+          id:i.id??null,
+          label:i.label,
+          value:i.value,
+          cat:i.cat||"Outros",
+          date:i.date||null,
+          month:i.month||currentMonthKey,
+          recurring:!!i.recurring,
+          kind:i.kind||null,
+          sourceType:i.sourceType,
+          originCode:origin.code,
+          originLabel:origin.label,
+          editable:i.sourceType!=="estimate",
+        };
+      });
+      const groupsMap={};
+      normalized.forEach(i=>{
+        if(!groupsMap[i.cat])groupsMap[i.cat]={cat:i.cat,total:0,items:[]};
+        groupsMap[i.cat].total+=i.value;
+        groupsMap[i.cat].items.push(i);
+      });
+      const groups=Object.values(groupsMap).sort((a,b)=>b.total-a.total).map(g=>({...g,items:[...g.items].sort((a,b)=>b.value-a.value)}));
+      return{
+        mode,
+        daysAhead,
+        balance,
+        incTotal,
+        outTotal,
+        netProjection,
+        items:normalized,
+        groups,
+        incomeItems:detailed.incomeItems,
+      };
+    },
+    // Soma dos itens === outTotal sempre, então tirar um item específico do
+    // total é subtração direta — não precisa reprocessar a projeção inteira
+    // (e por isso não tem como esse "e se" divergir do valor real depois).
+    // Vale para os dois modos: em "window" o saldo entra igual dos dois
+    // lados e cancela; em "endOfMonth" nem existe saldo na conta.
+    impactOfRemoving(explain,item){
+      return{outTotal:explain.outTotal-item.value,netProjection:explain.netProjection+item.value};
     },
   };
 
   const BudgetAnalyzer={
     itemsForMonth(plannedExpenses,month){return plannedExpenses.filter(p=>p.recurring||p.month===month);},
     stats(items,month){
-      let total=0,paid=0;
-      items.forEach(p=>{total+=p.val;if(p.paid?.[month])paid+=p.val;});
-      return{total,paid,pending:total-paid};
+      let total=0,paid=0,ignored=0;
+      items.forEach(p=>{
+        total+=p.val;
+        if(PlannedStatus.isPaid(p,month))paid+=p.val;
+        else if(PlannedStatus.isIgnored(p,month))ignored+=p.val;
+      });
+      return{total,paid,ignored,pending:total-paid-ignored};
     },
     committedForMonth({transactions,plannedExpenses,month,todayISO}){
       let total=0;
       transactions.forEach(t=>{if(t.installmentId&&monthKey(t.date)===month&&t.date>=todayISO)total+=t.val;});
       plannedExpenses.forEach(p=>{
-        if(p.recurring){if(!p.paid?.[month])total+=p.val;}
-        else if(p.month===month&&!p.paid?.[month])total+=p.val;
+        if(p.recurring){if(PlannedStatus.isPending(p,month))total+=p.val;}
+        else if(p.month===month&&PlannedStatus.isPending(p,month))total+=p.val;
       });
       return total;
     },
@@ -219,7 +380,7 @@ export const FinancialEngine=(()=>{
       if(recurring.length===0)return null;
       const total=sumVal(recurring);
       const biggest=[...recurring].sort((a,b)=>b.val-a.val)[0];
-      const pendingThisMonth=recurring.filter(p=>!p.paid?.[month]);
+      const pendingThisMonth=recurring.filter(p=>PlannedStatus.isPending(p,month));
       return{count:recurring.length,total,biggest,pendingCount:pendingThisMonth.length};
     },
     installmentStats(installments,txMap,todayISO){
@@ -380,7 +541,7 @@ export const FinancialEngine=(()=>{
       plannedExpenses.forEach(p=>{
         const relevantMonths=p.recurring?[currentMonthKey,nextMonthKey]:[p.month];
         relevantMonths.forEach(mk=>{
-          if(!mk||p.paid?.[mk])return;
+          if(!mk||!PlannedStatus.isPending(p,mk))return;
           const bk=mk===currentMonthKey?"mes":mk===nextMonthKey?"prox_mes":null;
           if(bk)b[bk].push({kind:"planned",data:p,color:p.recurring?"#A78BFA":"#EF4444",label:p.recurring?"Assinatura":"Conta",month:mk});
         });
@@ -409,7 +570,7 @@ export const FinancialEngine=(()=>{
       if(todayMonthDays-dayOfMonth<=5){
         plannedExpenses.forEach(p=>{
           const isRelevant=p.recurring||p.month===currentMonthKey;
-          if(isRelevant&&!p.paid?.[currentMonthKey])list.push({type:"previsto",text:`${p.desc} ainda não foi paga este mês.`});
+          if(isRelevant&&PlannedStatus.isPending(p,currentMonthKey))list.push({type:"previsto",text:`${p.desc} ainda não foi paga este mês.`});
         });
       }
       enhancedWishes.forEach(w=>{if(w.pct>=90&&w.pct<100)list.push({type:"meta",text:`Meta "${w.name}" está a ${100-w.pct}% de ser concluída!`});});
@@ -426,20 +587,48 @@ export const FinancialEngine=(()=>{
       const maiorEntrada=entradas.length?[...entradas].sort((a,b)=>b.val-a.val)[0]:null;
       return{proximaConta,proximaReceita,proximaParcela,maiorPagamento,maiorEntrada};
     },
-    endOfMonthProjection({transactions,plannedExpenses,currentMonthKey}){
+    // ---- Versão "detalhada": expõe os MESMOS itens que já compõem inc/out
+    // (mesmo padrão de CashFlowAnalyzer.projectionAtDetailed — ver comentário
+    // lá em cima). endOfMonthProjection() abaixo passou a DELEGAR pra cá, então
+    // o valor numérico que ela devolve continua idêntico a antes (mesmos
+    // testes, mesmo resultado); o que ganhamos é um caminho de auditoria para
+    // a interface montar o drawer de "Previsto no Fim do Mês".
+    endOfMonthProjectionDetailed({transactions,plannedExpenses,currentMonthKey}){
       const monthTx=transactions.filter(t=>monthKey(t.date)===currentMonthKey);
       const {avgIn,avgOut}=typicalMonthly(transactions,currentMonthKey);
+      const avgByCat=typicalMonthlyByCategory(transactions,currentMonthKey);
       if(monthTx.length===0&&plannedExpenses.length===0&&avgIn===0&&avgOut===0)return null;
       const inSoFar=sumVal(monthTx.filter(isEntradaReal));
       const outSoFar=sumVal(monthTx.filter(isSaidaReal))+sumVal(monthTx.filter(isAporte))-sumVal(monthTx.filter(isResgate));
-      const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKey).reduce((s,p)=>s+(p.paid?.[currentMonthKey]?0:p.val),0);
-      // Simétrico: renda esperada do mês = maior entre a média típica e o que já
-      // entrou; gasto esperado = maior entre a média típica e (o que já saiu +
-      // previstos pendentes). Assim o "previsto no fim do mês" não fica otimista
-      // por só somar a renda esperada sem estimar o gasto que ainda vem.
+      const plannedList=plannedExpenses.filter(p=>(p.recurring||p.month===currentMonthKey)&&PlannedStatus.isPending(p,currentMonthKey));
+      const plannedPending=plannedList.reduce((s,p)=>s+p.val,0);
       const inc=Math.max(avgIn,inSoFar);
       const out=Math.max(avgOut,outSoFar+plannedPending);
-      return{expected:inc-out,inc,out,plannedPending};
+      const incomeItems=monthTx.filter(isEntradaReal).map(t=>({label:cleanDesc(t.desc),value:t.val,date:t.date,id:t.id,cat:t.cat}));
+      const remIn=inc-inSoFar;
+      if(remIn>0.005)incomeItems.push({label:`Renda típica estimada · ${currentMonthKey}`,value:remIn,date:currentMonthKey,recurring:true});
+      // Mesma forma de CashFlowAnalyzer.projectionAtDetailed: outItems são
+      // transações reais, plannedItems são os previstos — separados, pra
+      // ProjectionExplainer.build tratar os dois modos (por dias / fim do mês)
+      // com o mesmo código de agrupamento.
+      const outItems=monthTx.filter(t=>isSaidaReal(t)||isAporte(t)).map(t=>({label:cleanDesc(t.desc),value:t.val,date:t.date,id:t.id,cat:t.cat,kind:t.installmentId?"parcela":(t.plannedId?"conta":"despesa")}));
+      const plannedItems=plannedList.map(p=>({label:p.desc,value:p.val,recurring:!!p.recurring,month:currentMonthKey,id:p.id,cat:p.cat}));
+      // Igual ao remOut de projectionAtDetailed: se resgates de investimento
+      // caíram nesse mês, eles reduzem outSoFar sem virar um item visível —
+      // a diferença aparece embutida nesta estimativa, do mesmo jeito que já
+      // acontece (mesma limitação, não uma nova) na projeção por dias.
+      const remOut=out-outSoFar-plannedPending;
+      outItems.push(...splitEstimateByCategory(remOut,avgByCat,cat=>`Estimativa (média) · ${cat} · restante do mês`));
+      return{expected:inc-out,inc,out,plannedPending,incomeItems,outItems,plannedItems};
+    },
+    // Simétrico: renda esperada do mês = maior entre a média típica e o que já
+    // entrou; gasto esperado = maior entre a média típica e (o que já saiu +
+    // previstos pendentes). Assim o "previsto no fim do mês" não fica otimista
+    // por só somar a renda esperada sem estimar o gasto que ainda vem.
+    endOfMonthProjection({transactions,plannedExpenses,currentMonthKey}){
+      const d=ForecastEngine.endOfMonthProjectionDetailed({transactions,plannedExpenses,currentMonthKey});
+      if(!d)return null;
+      return{expected:d.expected,inc:d.inc,out:d.out,plannedPending:d.plannedPending};
     },
   };
 
@@ -505,8 +694,8 @@ export const FinancialEngine=(()=>{
       };
       const usedPct=Math.round((plannedStats.paid/plannedStats.total)*100);
       const items=plannedItemsForMonth||[];
-      const pendingItems=items.filter(p=>!p.paid?.[month]).map(p=>({label:p.desc,value:p.val,tag:p.recurring?"Assinatura":"Conta prevista"})).sort((a,b)=>b.value-a.value);
-      const paidItems=items.filter(p=>p.paid?.[month]).map(p=>({label:p.desc,value:p.val,tag:"Pago"})).sort((a,b)=>b.value-a.value);
+      const pendingItems=items.filter(p=>PlannedStatus.isPending(p,month)).map(p=>({label:p.desc,value:p.val,tag:p.recurring?"Assinatura":"Conta prevista"})).sort((a,b)=>b.value-a.value);
+      const paidItems=items.filter(p=>PlannedStatus.isPaid(p,month)).map(p=>({label:p.desc,value:p.val,tag:"Pago"})).sort((a,b)=>b.value-a.value);
       return{
         key:"orcamento",question:"Estou dentro do orçamento previsto?",
         answer:plannedStats.pending>=0?"Sim, ainda dentro do previsto":"Você já passou do previsto",
@@ -659,7 +848,7 @@ export const FinancialEngine=(()=>{
     },
   };
 
-  return{CashFlowAnalyzer,BudgetAnalyzer,ExpenseAnalyzer,IncomeAnalyzer,InvestmentAnalyzer,GoalAnalyzer,ForecastEngine,HealthScoreEngine,InsightsGenerator,DecisionEngine,SimulationEngine};
+  return{CashFlowAnalyzer,BudgetAnalyzer,ExpenseAnalyzer,IncomeAnalyzer,InvestmentAnalyzer,GoalAnalyzer,ForecastEngine,HealthScoreEngine,InsightsGenerator,DecisionEngine,SimulationEngine,ProjectionExplainer};
 })();
 
 // ============================================================================
@@ -988,7 +1177,7 @@ export const InsightEngine=(()=>{
     if(plannedStats&&plannedStats.total>0){
       const usedPct=Math.round((plannedStats.paid/plannedStats.total)*100);
       if(usedPct>=90){
-        const pendingItems=(plannedItemsForMonth||[]).filter(p=>!p.paid?.[plannedMonth]).map(p=>({label:p.desc,value:p.val,tag:p.recurring?"Assinatura":"Conta prevista"})).sort((a,b)=>b.value-a.value);
+        const pendingItems=(plannedItemsForMonth||[]).filter(p=>PlannedStatus.isPending(p,plannedMonth)).map(p=>({label:p.desc,value:p.val,tag:p.recurring?"Assinatura":"Conta prevista"})).sort((a,b)=>b.value-a.value);
         out.push({
           category:"atencao",priority:"alta",
           title:"Orçamento do mês quase no limite",
