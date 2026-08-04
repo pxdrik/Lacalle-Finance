@@ -9,7 +9,7 @@
 // ============================================================================
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { FinancialEngine, monthKey, addMonthsStr, daysInMonth, formatMonths } from "./financialEngine.js";
+import { FinancialEngine, InsightEngine, monthKey, addMonthsStr, daysInMonth, formatMonths, MONTH_ORDER, flowOf, FLOW } from "./financialEngine.js";
 import {
   parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt,
   firstError, MAX_TX_VAL,
@@ -269,5 +269,97 @@ describe("Escopo do saldo — filtros não podem contaminar o patrimônio", () =
     assert.equal(global, 4000);
     assert.equal(filtradoPorLazer, -200);
     assert.notEqual(global, filtradoPorLazer, "por isso o Dashboard nunca pode usar a lista filtrada");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("BUG semântico — insight tratava RECEITA recorrente como gasto", () => {
+  // Sintoma: uma receita recorrente ("Brasileiríssimo") que parou de entrar
+  // gerava o card "Gasto com Brasileiríssimo parou". O motor agrupava por
+  // descrição recorrente e assumia "gasto", sem nunca perguntar se o dinheiro
+  // entrava ou saía. A correção é na origem (flowOf + buildDescMemory), não
+  // no texto: qualquer transação, atual ou futura, é classificada antes de
+  // qualquer frase ser escrita.
+  const cur = MONTH_ORDER[12];
+  const at = (idx, day) => {
+    const [mon, yy] = MONTH_ORDER[idx].split("/");
+    const mi = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"].indexOf(mon);
+    return `20${yy}-${String(mi + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  };
+  const baseCtx = (transactions) => ({
+    transactions, currentMonthKey: cur,
+    plannedStats: { total: 0, paid: 0, pending: 0 }, plannedItemsForMonth: [], plannedMonth: cur,
+    plannedExpenses: [], cashFlowProjections: [{ days: 30, value: 5000 }], committedIncome: 20,
+    todayISO: at(12, 20), reservaMeses: 3, reservaFinanceira: 5000, avgMonthlyOut: 1000,
+    balance: 5000, totalIn: 40000, totalOut: 10000, invNet: 0, enhancedWishes: [],
+    avgMonthlySavings: 500, summary: [], investmentParticipacao: 0, patrimonioLiquido: 5000, patrimonio: 5000,
+  });
+  const allText = (insights) => insights
+    .map(i => `${i.title} ${i.explanation} ${i.reason} ${i.recommendation}`).join(" ").toLowerCase();
+
+  test("classificação por direção acontece antes de qualquer texto", () => {
+    assert.equal(flowOf({ type: "Entrada", cat: "Salario / Entradas" }), FLOW.RECEITA);
+    assert.equal(flowOf({ type: "Saída", cat: "Assinaturas" }), FLOW.DESPESA);
+    // Movimentação interna nunca é receita nem despesa.
+    assert.equal(flowOf({ type: "Saída", cat: "Investimento", invTipo: "Aporte" }), FLOW.INTERNA);
+    assert.equal(flowOf({ type: "Entrada", cat: "Investimento", invTipo: "Resgate" }), FLOW.INTERNA);
+  });
+
+  test("receita recorrente interrompida NÃO é descrita como gasto", () => {
+    const transactions = [
+      ...[5, 6, 7, 8].map((i, n) => tx({ id: 200 + n, date: at(i, 10), type: "Entrada", cat: "Salario / Entradas", desc: "Brasileiríssimo", val: 1200 })),
+      ...Array.from({ length: 7 }, (_, k) => tx({ id: 300 + k, date: at(6 + k, 5), type: "Entrada", cat: "Salario / Entradas", desc: "Salario Empresa", val: 5000 })),
+    ];
+    const card = InsightEngine.generate(baseCtx(transactions)).find(i => i.title.includes("Brasileiríssimo"));
+    assert.ok(card, "o insight sobre a receita interrompida deve existir");
+    const text = `${card.title} ${card.explanation} ${card.reason} ${card.recommendation}`.toLowerCase();
+    for (const proibida of ["gasto", "gastos", "despesa", "economia"]) {
+      assert.ok(!text.includes(proibida), `receita não pode usar a palavra "${proibida}": ${text}`);
+    }
+    assert.match(card.explanation, /não recebeu mais valores/i);
+  });
+
+  test("despesa recorrente interrompida continua sendo descrita como gasto", () => {
+    const transactions = [
+      ...[5, 6, 7, 8].map((i, n) => tx({ id: 400 + n, date: at(i, 15), type: "Saída", cat: "Assinaturas", desc: "Netflix", val: 39.9 })),
+      ...Array.from({ length: 7 }, (_, k) => tx({ id: 500 + k, date: at(6 + k, 5), type: "Entrada", cat: "Salario / Entradas", desc: "Salario Empresa", val: 5000 })),
+    ];
+    const card = InsightEngine.generate(baseCtx(transactions)).find(i => i.title.includes("Netflix"));
+    assert.ok(card, "o insight sobre o gasto interrompido deve existir");
+    const text = `${card.title} ${card.explanation}`.toLowerCase();
+    for (const proibida of ["receita", "recebeu", "rendimento"]) {
+      assert.ok(!text.includes(proibida), `despesa não pode usar a palavra "${proibida}": ${text}`);
+    }
+    assert.match(card.explanation, /não teve mais gastos/i);
+  });
+
+  test("mesma descrição com entrada e saída não vira um hábito só", () => {
+    // Antes, os dois caíam no mesmo cluster e o texto seguia o ÚLTIMO
+    // lançamento — o mesmo nome podia ser descrito como gasto ou receita
+    // dependendo da ordem das datas.
+    const transactions = [
+      ...[5, 6, 7, 8].map((i, n) => tx({ id: 600 + n, date: at(i, 10), type: "Entrada", cat: "Rembolsos", desc: "Mercado X", val: 300 })),
+      ...[5, 6, 7, 8].map((i, n) => tx({ id: 700 + n, date: at(i, 12), type: "Saída", cat: "Rembolsos", desc: "Mercado X", val: 800 })),
+    ];
+    const insights = InsightEngine.generate(baseCtx(transactions));
+    const card = insights.find(i => i.title.includes("Mercado X"));
+    assert.ok(card, "deve gerar um insight para o hábito interrompido");
+    // Seja qual for a direção escolhida, o texto tem que ser internamente
+    // coerente: nunca misturar vocabulário de receita e de despesa.
+    const text = `${card.title} ${card.explanation}`.toLowerCase();
+    const falaDeReceita = /recebeu|receita|entradas/.test(text);
+    const falaDeGasto = /gasto|gastos|despesa/.test(text);
+    assert.ok(falaDeReceita !== falaDeGasto, `texto misturou as duas direções: ${text}`);
+  });
+
+  test("aporte recorrente que para não vira 'gasto parou' nem 'receita parou'", () => {
+    const transactions = [
+      ...[5, 6, 7, 8].map((i, n) => tx({ id: 800 + n, date: at(i, 20), type: "Saída", cat: "Investimento", invTipo: "Aporte", desc: "Tesouro Direto", val: 500 })),
+      ...Array.from({ length: 7 }, (_, k) => tx({ id: 900 + k, date: at(6 + k, 5), type: "Entrada", cat: "Salario / Entradas", desc: "Salario Empresa", val: 5000 })),
+    ];
+    const insights = InsightEngine.generate(baseCtx(transactions));
+    assert.equal(insights.filter(i => i.title.includes("Tesouro Direto")).length, 0,
+      "movimentação interna não pode gerar insight de hábito de consumo/renda");
+    assert.ok(!allText(insights).includes("gasto com tesouro"));
   });
 });

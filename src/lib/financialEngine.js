@@ -82,6 +82,63 @@ export const PlannedStatus={
   isPending:(item,month)=>!PlannedStatus.isPaid(item,month)&&!PlannedStatus.isIgnored(item,month),
 };
 
+// ---- Direção financeira de uma transação ------------------------------------
+// Responde a pergunta que TEM que vir antes de qualquer texto de insight:
+// esse lançamento é dinheiro entrando, saindo, ou é movimentação interna?
+//
+// Existia um bug de origem por não perguntar isso: a memória de hábitos
+// (buildDescMemory) agrupava lançamentos só pela descrição recorrente e os
+// textos assumiam "gasto". Uma RECEITA recorrente que parava virava
+// "Gasto com <nome> parou" — semanticamente errado, porque o dinheiro
+// entrava, não saía. A correção não pode ser por descrição ou por caso
+// específico: é a classificação que precisa existir antes da redação.
+//
+//   receita  -> dinheiro entra (Entrada que não é investimento)
+//   despesa  -> dinheiro sai   (Saída que não é investimento)
+//   interna  -> aporte, resgate e qualquer movimentação de investimento.
+//               NUNCA conta como receita nem como despesa: o dinheiro só
+//               muda de lugar (conta <-> investimento), o patrimônio não
+//               muda. Já era assim nos cálculos (isAporte/isResgate); o que
+//               faltava era o texto respeitar a mesma regra.
+//
+// Vive aqui fora, junto de PlannedStatus, porque FinancialEngine e
+// InsightEngine são IIFEs separadas e as duas precisam da mesma regra.
+export const FLOW={RECEITA:"receita",DESPESA:"despesa",INTERNA:"interna"};
+export const flowOf=t=>{
+  if(!t)return FLOW.INTERNA;
+  if(t.cat==="Investimento")return FLOW.INTERNA;
+  return t.type==="Entrada"?FLOW.RECEITA:FLOW.DESPESA;
+};
+export const isReceita=t=>flowOf(t)===FLOW.RECEITA;
+export const isDespesa=t=>flowOf(t)===FLOW.DESPESA;
+
+// ---- Vocabulário por direção -------------------------------------------------
+// Centraliza as palavras para que nenhum insight escreva "gasto"/"economia"
+// sobre uma entrada, nem "receita"/"recebeu" sobre uma saída. Quem gera texto
+// pede o termo aqui em vez de escrever a palavra na mão.
+export const FLOW_WORDS={
+  [FLOW.RECEITA]:{
+    noun:"receita",nounPlural:"receitas",
+    // "Você não recebeu mais valores de X desde abril."
+    stoppedSentence:(desc,when)=>`Você não recebeu mais valores de ${desc} desde ${when}.`,
+    stoppedTitle:desc=>`Receita de ${desc} foi interrompida`,
+    stoppedDetail:desc=>`As entradas provenientes de ${desc} deixaram de ocorrer.`,
+    startedTitle:desc=>`Nova receita recorrente: ${desc}`,
+    startedSentence:(desc,n)=>`Já são ${n} ${n===1?"mês":"meses"} seguidos recebendo de ${desc} — parece ser uma entrada recorrente.`,
+    verbPast:"recebeu",
+  },
+  [FLOW.DESPESA]:{
+    noun:"gasto",nounPlural:"gastos",
+    stoppedSentence:(desc,when)=>`Você não teve mais gastos com ${desc} desde ${when}.`,
+    stoppedTitle:desc=>`Gasto com ${desc} parou`,
+    stoppedDetail:desc=>`O gasto com ${desc} deixou de ocorrer.`,
+    startedTitle:desc=>`Novo gasto recorrente: ${desc}`,
+    startedSentence:(desc,n)=>`Já são ${n} ${n===1?"mês":"meses"} seguidos com gastos em ${desc} — parece estar virando hábito.`,
+    verbPast:"gastou",
+  },
+};
+export const wordsFor=flow=>FLOW_WORDS[flow]||FLOW_WORDS[FLOW.DESPESA];
+
 export const FinancialEngine=(()=>{
   const isSaidaReal=t=>t.type==="Saída"&&t.cat!=="Investimento";
   const isEntradaReal=t=>t.type==="Entrada"&&t.cat!=="Investimento";
@@ -888,25 +945,36 @@ export const InsightEngine=(()=>{
   const monthNameMap={jan:"Janeiro",fev:"Fevereiro",mar:"Março",abr:"Abril",mai:"Maio",jun:"Junho",jul:"Julho",ago:"Agosto",set:"Setembro",out:"Outubro",nov:"Novembro",dez:"Dezembro"};
 
   // ---- Memória financeira: agrupa transações por "hábito" (descrição normalizada) ----
+  // Agrupa por descrição normalizada E por direção financeira. A direção faz
+  // parte da identidade do hábito: "Brasileiríssimo" entrando é uma receita
+  // recorrente, "Brasileiríssimo" saindo seria um gasto recorrente — são dois
+  // hábitos diferentes, mesmo com o nome igual, e nunca podem cair no mesmo
+  // cluster (senão o `type` do grupo passa a depender de qual lançamento veio
+  // por último, que foi exatamente como nascia o texto errado). Movimentação
+  // interna (investimento) fica fora: não é hábito de consumo nem de renda.
   const buildDescMemory=(transactions,currentMonthKey)=>{
     const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
     const rawGroups={};
     transactions.forEach(t=>{
-      if(t.cat==="Investimento")return;
+      const flow=flowOf(t);
+      if(flow===FLOW.INTERNA)return;
       const key=normKey(t.desc);
       if(!key)return;
-      if(!rawGroups[key])rawGroups[key]=[];
-      rawGroups[key].push(t);
+      const groupKey=`${flow}::${key}`;
+      if(!rawGroups[groupKey])rawGroups[groupKey]={flow,key,txs:[]};
+      rawGroups[groupKey].txs.push(t);
     });
-    const sortedKeys=Object.keys(rawGroups).sort((a,b)=>b.length-a.length);
+    const sortedKeys=Object.keys(rawGroups).sort((a,b)=>rawGroups[b].txs.length-rawGroups[a].txs.length);
     const clusters=[];
-    sortedKeys.forEach(k=>{
+    sortedKeys.forEach(gk=>{
+      const g=rawGroups[gk];
       let found=null;
       for(const cl of clusters){
-        if(k.length>=3&&(cl.rep.includes(k)||k.includes(cl.rep))){found=cl;break;}
+        // Só funde descrições parecidas se forem da MESMA direção.
+        if(cl.flow===g.flow&&g.key.length>=3&&(cl.rep.includes(g.key)||g.key.includes(cl.rep))){found=cl;break;}
       }
-      if(found)found.txs.push(...rawGroups[k]);
-      else clusters.push({rep:k,txs:[...rawGroups[k]]});
+      if(found)found.txs.push(...g.txs);
+      else clusters.push({rep:g.key,flow:g.flow,txs:[...g.txs]});
     });
     return clusters.map(cl=>{
       const txs=[...cl.txs].sort((a,b)=>a.date.localeCompare(b.date));
@@ -935,6 +1003,9 @@ export const InsightEngine=(()=>{
       return{
         key:cl.rep,desc:last.desc.replace(/\s*\(\d+\/\d+\)$/,""),cat:last.cat,
         monthsPresent,firstIdx,lastIdx,lastGapMonths,type:last.type,
+        // `flow` vem do cluster, não do último lançamento: todos os itens do
+        // grupo têm a mesma direção por construção, então isso é estável.
+        flow:cl.flow,words:wordsFor(cl.flow),
         isHabitLike,status,count:txs.length,lastVal:last.val,avgVal,sampleTxs,
       };
     }).filter(Boolean);
@@ -1091,16 +1162,28 @@ export const InsightEngine=(()=>{
     const discontinued=descMemory.filter(m=>m.isHabitLike&&m.status==="inativo");
     const emergent=descMemory.filter(m=>m.status==="emergente"||(m.isHabitLike&&m.firstIdx>=currentIdx-2));
     discontinued.forEach(d=>{
-      const match=emergent.find(e=>e.cat===d.cat&&e.key!==d.key&&e.firstIdx>=d.lastIdx&&e.firstIdx<=d.lastIdx+2);
+      const w=d.words;
+      const isRec=d.flow===FLOW.RECEITA;
+      // A substituição só faz sentido entre hábitos da MESMA direção: um gasto
+      // que vira outro gasto, uma receita que vira outra receita. Trocar uma
+      // receita perdida por um gasto novo não é "troca de hábito", é outra
+      // coisa — e o texto de troca não descreveria isso corretamente.
+      const match=emergent.find(e=>e.cat===d.cat&&e.key!==d.key&&e.flow===d.flow&&e.firstIdx>=d.lastIdx&&e.firstIdx<=d.lastIdx+2);
       const monthLabel=monthNameMap[(MONTH_ORDER[d.lastIdx]||"").split("/")[0]]||MONTH_ORDER[d.lastIdx]||"";
       if(match){
         out.push({
           category:"mudanca",priority:"media",
-          title:"Novo hábito financeiro detectado",
+          title:isRec?"Sua fonte de receita mudou":"Novo hábito financeiro detectado",
           heroNumber:match.lastVal?{value:match.lastVal,format:"currency",sign:"none"}:{value:d.count,format:"plain",suffix:" meses",sign:"none"},
-          explanation:`Você deixou de gastar com ${d.desc} e passou a ter gastos com ${match.desc}, mantido desde ${monthLabel}.`,
-          reason:"Um gasto recorrente parou e outro começou logo em seguida, na mesma categoria — por isso entendemos como uma troca de hábito.",
-          recommendation:`Vale conferir se ${match.desc} realmente compensa financeiramente frente ao que era gasto antes com ${d.desc}.`,
+          explanation:isRec
+            ?`Você deixou de receber de ${d.desc} e passou a receber de ${match.desc}, mantido desde ${monthLabel}.`
+            :`Você deixou de gastar com ${d.desc} e passou a ter gastos com ${match.desc}, mantido desde ${monthLabel}.`,
+          reason:isRec
+            ?"Uma entrada recorrente parou e outra começou logo em seguida, na mesma categoria — por isso entendemos como uma troca de fonte de renda."
+            :"Um gasto recorrente parou e outro começou logo em seguida, na mesma categoria — por isso entendemos como uma troca de hábito.",
+          recommendation:isRec
+            ?`Vale conferir se ${match.desc} substitui integralmente o que você recebia de ${d.desc}.`
+            :`Vale conferir se ${match.desc} realmente compensa financeiramente frente ao que era gasto antes com ${d.desc}.`,
           confidence:d.isHabitLike?"alta":"media",
           breakdown:{
             lineItems:[...(d.sampleTxs||[]).map(t=>({...t,tag:"antigo"})),...(match.sampleTxs||[]).map(t=>({...t,tag:"novo"}))],
@@ -1110,28 +1193,42 @@ export const InsightEngine=(()=>{
         });
       }else{
         out.push({
-          category:"mudanca",priority:"baixa",
-          title:`Gasto com ${d.desc} parou`,
-          heroNumber:d.lastVal?{value:d.lastVal,format:"currency",sign:"-"}:{value:d.count,format:"plain",suffix:" meses",sign:"none"},
-          explanation:`Você não tem mais gastos com ${d.desc} desde ${monthLabel}. Esse gasto deixou de fazer parte da sua rotina.`,
-          reason:`Esse hábito apareceu em ${d.count} lançamento(s) ao longo de vários meses e não aparece mais recentemente.`,
-          recommendation:`Considere realocar o valor que ia para ${d.desc} para uma meta ou investimento.`,
+          category:isRec?"atencao":"mudanca",
+          // Perder uma receita recorrente é mais relevante que perder um gasto:
+          // gasto que some é dinheiro que sobra, receita que some é dinheiro
+          // que falta. Por isso prioridade e pontuação maiores nesse caso.
+          priority:isRec?"media":"baixa",
+          title:w.stoppedTitle(d.desc),
+          heroNumber:d.lastVal?{value:d.lastVal,format:"currency",sign:isRec?"none":"-"}:{value:d.count,format:"plain",suffix:" meses",sign:"none"},
+          explanation:`${w.stoppedSentence(d.desc,monthLabel)} ${w.stoppedDetail(d.desc)}`,
+          reason:`Essa ${isRec?"entrada":"saída"} apareceu em ${d.count} lançamento(s) ao longo de vários meses e não aparece mais recentemente.`,
+          recommendation:isRec
+            ?`Se essa receita não vai voltar, vale rever seu orçamento — ele provavelmente contava com ela.`
+            :`Considere realocar o valor que ia para ${d.desc} para uma meta ou investimento.`,
           confidence:d.isHabitLike?"alta":"media",
           breakdown:{lineItems:d.sampleTxs||[]},
           evidence:{period:`desde ${monthLabel}`,categories:[d.cat],dataUsed:["transacoes","periodo"]},
-          score:50,
+          score:isRec?72:50,
         });
       }
     });
     descMemory.filter(m=>m.isHabitLike&&m.status==="ativo"&&m.firstIdx>=currentIdx-3).slice(0,2).forEach(h=>{
       const n=currentIdx-h.firstIdx+1;
+      const w=h.words;
+      const isRec=h.flow===FLOW.RECEITA;
       out.push({
-        category:"mudanca",priority:"baixa",
-        title:`Novo gasto recorrente: ${h.desc}`,
-        heroNumber:h.lastVal?{value:h.lastVal,format:"currency",sign:"+"}:{value:n,format:"plain",suffix:" meses",sign:"none"},
-        explanation:`Já são ${n} ${n===1?"mês":"meses"} seguidos com gastos em ${h.desc} — parece estar virando hábito.`,
-        reason:"Detectamos a mesma descrição de gasto se repetindo em meses consecutivos.",
-        recommendation:`Se for um gasto fixo, vale já planejá-lo no seu orçamento mensal.`,
+        category:isRec?"oportunidade":"mudanca",priority:"baixa",
+        title:w.startedTitle(h.desc),
+        // Uma receita nova é dinheiro a mais (sinal "+"); um gasto novo é
+        // dinheiro a menos. O sinal estava "+" para os dois — errado para gasto.
+        heroNumber:h.lastVal?{value:h.lastVal,format:"currency",sign:isRec?"+":"-"}:{value:n,format:"plain",suffix:" meses",sign:"none"},
+        explanation:w.startedSentence(h.desc,n),
+        reason:isRec
+          ?"Detectamos a mesma descrição de entrada se repetindo em meses consecutivos."
+          :"Detectamos a mesma descrição de gasto se repetindo em meses consecutivos.",
+        recommendation:isRec
+          ?`Se essa entrada for fixa, dá pra contar com ela no seu planejamento mensal.`
+          :`Se for um gasto fixo, vale já planejá-lo no seu orçamento mensal.`,
         confidence:n>=3?"media":"nova",
         breakdown:{lineItems:h.sampleTxs||[]},
         evidence:{period:`últimos ${n} meses`,categories:[h.cat],dataUsed:["transacoes","periodo"]},
@@ -1645,7 +1742,11 @@ export const InsightEngine=(()=>{
       sentence2="Você economizou menos do que costuma economizar em média.";
     }else{
       const habitChange=descMemory.find(m=>m.isHabitLike&&m.status==="inativo");
-      if(habitChange)sentence2=`Percebemos um novo hábito financeiro: os gastos com ${habitChange.desc} pararam.`;
+      if(habitChange){
+        sentence2=habitChange.flow===FLOW.RECEITA
+          ?`Percebemos uma mudança: as entradas de ${habitChange.desc} deixaram de ocorrer.`
+          :`Percebemos um novo hábito financeiro: os gastos com ${habitChange.desc} pararam.`;
+      }
     }
     if(!sentence2&&plannedStats&&plannedStats.total>0){
       const usedPct=Math.round((plannedStats.paid/plannedStats.total)*100);
