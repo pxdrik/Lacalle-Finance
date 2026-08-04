@@ -9,7 +9,7 @@
 // ============================================================================
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { FinancialEngine, InsightEngine, monthKey, addMonthsStr, daysInMonth, formatMonths, MONTH_ORDER, flowOf, FLOW } from "./financialEngine.js";
+import { FinancialEngine, InsightEngine, monthKey, addMonthsStr, daysInMonth, formatMonths, MONTH_ORDER, flowOf, FLOW, monthProgress } from "./financialEngine.js";
 import {
   parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt,
   firstError, MAX_TX_VAL,
@@ -361,5 +361,98 @@ describe("BUG semântico — insight tratava RECEITA recorrente como gasto", () 
     assert.equal(insights.filter(i => i.title.includes("Tesouro Direto")).length, 0,
       "movimentação interna não pode gerar insight de hábito de consumo/renda");
     assert.ok(!allText(insights).includes("gasto com tesouro"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("BUG temporal — economia anunciada com o mês ainda em andamento", () => {
+  // Sintoma: dia 4 de agosto, R$ 10 em Lazer contra média mensal de R$ 294,71
+  // → "Economia em Lazer: R$ 284,71". Mas agosto não acabou: o dinheiro ainda
+  // pode ser gasto. O motor comparava um mês PARCIAL contra meses COMPLETOS e
+  // apresentava a projeção como fato consumado.
+  const cur = MONTH_ORDER[12];
+  const at = (idx, day) => {
+    const [mon, yy] = MONTH_ORDER[idx].split("/");
+    const mi = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"].indexOf(mon);
+    return `20${yy}-${String(mi + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  };
+  const lastDayOfCur = () => {
+    const [mon, yy] = cur.split("/");
+    const mi = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"].indexOf(mon);
+    return new Date(2000 + parseInt(yy, 10), mi + 1, 0).getDate();
+  };
+  const ctxWith = (transactions, todayISO) => ({
+    transactions, currentMonthKey: cur, todayISO,
+    plannedStats: { total: 0, paid: 0, pending: 0 }, plannedItemsForMonth: [], plannedMonth: cur,
+    plannedExpenses: [], cashFlowProjections: [{ days: 30, value: 5000 }], committedIncome: 20,
+    reservaMeses: 3, reservaFinanceira: 5000, avgMonthlyOut: 1000, balance: 5000,
+    totalIn: 40000, totalOut: 10000, invNet: 0, enhancedWishes: [], avgMonthlySavings: 500,
+    summary: [], investmentParticipacao: 0, patrimonioLiquido: 5000, patrimonio: 5000,
+  });
+  // Histórico: Lazer gasto no FIM do mês (dia 18 e 24) — exatamente o padrão
+  // que produzia o falso positivo no dia 4.
+  const historicoTardio = () => {
+    const out = [];
+    [7, 8, 9, 10, 11].forEach((i, n) => {
+      out.push(tx({ id: 1000 + n * 3, date: at(i, 18), type: "Saída", cat: "Lazer", desc: "Show", val: 200 }));
+      out.push(tx({ id: 1001 + n * 3, date: at(i, 24), type: "Saída", cat: "Lazer", desc: "Bar", val: 94.71 }));
+      out.push(tx({ id: 1002 + n * 3, date: at(i, 5), type: "Entrada", cat: "Salario / Entradas", desc: "Salario", val: 5000 }));
+    });
+    return out;
+  };
+  // Histórico: Lazer gasto CEDO (dia 2) — aí a diferença no dia 4 é real.
+  const historicoCedo = () => {
+    const out = [];
+    [7, 8, 9, 10, 11].forEach((i, n) => {
+      out.push(tx({ id: 2000 + n * 2, date: at(i, 2), type: "Saída", cat: "Lazer", desc: "Show", val: 300 }));
+      out.push(tx({ id: 2001 + n * 2, date: at(i, 5), type: "Entrada", cat: "Salario / Entradas", desc: "Salario", val: 5000 }));
+    });
+    return out;
+  };
+
+  test("não inventa economia comparando mês parcial com meses completos", () => {
+    const transactions = [...historicoTardio(), tx({ id: 3000, date: at(12, 3), type: "Saída", cat: "Lazer", desc: "Cafe", val: 10 })];
+    const cards = InsightEngine.generate(ctxWith(transactions, at(12, 4)));
+    const lazer = cards.find(c => c.title.includes("Lazer"));
+    assert.equal(lazer, undefined,
+      "no mesmo período (dias 1–4) não há diferença relevante — o card não deve existir");
+  });
+
+  test("com o mês em andamento, fala em tendência e nunca em economia consolidada", () => {
+    const transactions = [...historicoCedo(), tx({ id: 3100, date: at(12, 3), type: "Saída", cat: "Lazer", desc: "Cafe", val: 10 })];
+    const card = InsightEngine.generate(ctxWith(transactions, at(12, 4))).find(c => c.title.includes("Lazer"));
+    assert.ok(card, "com diferença real no mesmo período, o card deve aparecer");
+    const texto = `${card.title} ${card.explanation} ${card.reason} ${card.recommendation}`.toLowerCase();
+    for (const proibida of ["você economizou", "economia de", "deixou de gastar"]) {
+      assert.ok(!texto.includes(proibida), `mês em andamento não pode afirmar "${proibida}": ${texto}`);
+    }
+    assert.match(card.title, /tend[êe]ncia/i, "o título deve comunicar tendência, não conclusão");
+    assert.match(card.explanation, /ainda|ritmo|mantendo|at[ée] o momento/i);
+  });
+
+  test("a comparação usa o mesmo recorte de dias em todos os meses", () => {
+    const transactions = [...historicoCedo(), tx({ id: 3200, date: at(12, 3), type: "Saída", cat: "Lazer", desc: "Cafe", val: 10 })];
+    const card = InsightEngine.generate(ctxWith(transactions, at(12, 4))).find(c => c.title.includes("Lazer"));
+    // A média exibida tem de ser a do período 1–4 (R$ 300), não a do mês
+    // inteiro. Se voltasse a comparar com mês cheio, o número mudaria.
+    assert.match(card.explanation, /R\$\s*300,00/, `média deveria ser a do mesmo período: ${card.explanation}`);
+    assert.match(card.reason, /dias 1 a 4/i);
+  });
+
+  test("depois do fechamento do mês, a economia vira fato e pode ser afirmada", () => {
+    const transactions = [...historicoCedo(), tx({ id: 3300, date: at(12, 3), type: "Saída", cat: "Lazer", desc: "Cafe", val: 10 })];
+    const card = InsightEngine.generate(ctxWith(transactions, at(12, lastDayOfCur()))).find(c => c.title.includes("Lazer"));
+    assert.ok(card);
+    assert.match(card.title, /^Economia em/, "mês fechado pode afirmar economia");
+    assert.doesNotMatch(card.title, /tend[êe]ncia/i);
+  });
+
+  test("monthProgress distingue mês em andamento de mês encerrado", () => {
+    const emAndamento = monthProgress(at(12, 4), cur);
+    assert.equal(emAndamento.isComplete, false);
+    assert.equal(emAndamento.dayOfMonth, 4);
+    assert.equal(monthProgress(at(12, lastDayOfCur()), cur).isComplete, true);
+    // Um mês anterior ao corrente já fechou.
+    assert.equal(monthProgress(at(12, 4), MONTH_ORDER[11]).isComplete, true);
   });
 });

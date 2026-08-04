@@ -139,6 +139,35 @@ export const FLOW_WORDS={
 };
 export const wordsFor=flow=>FLOW_WORDS[flow]||FLOW_WORDS[FLOW.DESPESA];
 
+// ---- Contexto temporal: o mês de referência já terminou? --------------------
+// Segunda pergunta obrigatória antes de escrever um insight comparativo (a
+// primeira é a direção do dinheiro, acima): esse mês já fechou?
+//
+// Existia um bug de origem por não perguntar isso: no dia 4 de agosto, com
+// R$ 10 em Lazer contra uma média mensal de R$ 294,71, o motor anunciava
+// "Economia em Lazer: R$ 284,71". Mas agosto não acabou — o dinheiro ainda
+// pode ser gasto. Era uma projeção apresentada como fato consumado, e o erro
+// vinha de comparar um mês PARCIAL contra meses COMPLETOS.
+//
+// Regra: enquanto o mês corre, só se compara período equivalente (1–4 de
+// agosto contra 1–4 de julho, 1–4 de junho...) e o texto fala em tendência.
+// Economia consolidada só depois do fechamento.
+export const dayOfMonthOf=dateStr=>{
+  const d=parseInt(String(dateStr??"").split("-")[2],10);
+  return Number.isFinite(d)?d:null;
+};
+export const monthProgress=(todayISO,refMonthKey)=>{
+  const dt=new Date(String(todayISO??"")+"T12:00:00");
+  if(isNaN(dt.getTime()))return{isComplete:true,dayOfMonth:31,daysInMonth:31,elapsedRatio:1};
+  const totalDays=daysInMonth(dt.getFullYear(),dt.getMonth());
+  const day=dayOfMonthOf(todayISO)||1;
+  const curIdx=MONTH_ORDER.indexOf(monthKey(todayISO));
+  const refIdx=MONTH_ORDER.indexOf(refMonthKey);
+  // Um mês anterior ao corrente já fechou — comparação plena é legítima.
+  if(refIdx>=0&&curIdx>=0&&refIdx<curIdx)return{isComplete:true,dayOfMonth:totalDays,daysInMonth:totalDays,elapsedRatio:1};
+  return{isComplete:day>=totalDays,dayOfMonth:day,daysInMonth:totalDays,elapsedRatio:totalDays>0?day/totalDays:1};
+};
+
 export const FinancialEngine=(()=>{
   const isSaidaReal=t=>t.type==="Saída"&&t.cat!=="Investimento";
   const isEntradaReal=t=>t.type==="Entrada"&&t.cat!=="Investimento";
@@ -1035,10 +1064,17 @@ export const InsightEngine=(()=>{
     }).filter(Boolean);
   };
 
-  const monthlyCategoryTotals=transactions=>{
+  // `maxDay` recorta TODOS os meses no mesmo dia — é o que torna a comparação
+  // "1–4 de agosto vs 1–4 de julho vs 1–4 de junho" possível. Sem ele, o mês
+  // corrente (parcial) era comparado com meses inteiros.
+  const monthlyCategoryTotals=(transactions,maxDay=null)=>{
     const m={};
     transactions.forEach(t=>{
       if(t.type!=="Saída"||t.cat==="Investimento")return;
+      if(maxDay!==null){
+        const d=dayOfMonthOf(t.date);
+        if(d===null||d>maxDay)return;
+      }
       const mk=monthKey(t.date);
       if(!m[t.cat])m[t.cat]={};
       m[t.cat][mk]=(m[t.cat][mk]||0)+t.val;
@@ -1084,12 +1120,21 @@ export const InsightEngine=(()=>{
 
   // ---- Tendências: mês atual vs média ponderada recente ----
   const genTrends=ctx=>{
-    const{transactions,currentMonthKey,catMonthly}=ctx;
+    const{transactions,currentMonthKey,catMonthly,catMonthlyToDate,monthProg}=ctx;
     const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
     const monthLabel=monthNameMap[currentMonthKey.split("/")[0]]||currentMonthKey;
     const out=[];
-    const analyzed=Object.keys(catMonthly).map(cat=>{
-      const monthly=catMonthly[cat];
+    // Mês em andamento -> base recortada no mesmo dia em todos os meses, e o
+    // texto fala em tendência. Mês fechado -> base cheia e texto de fato
+    // consumado. A escolha da BASE e a escolha das PALAVRAS saem da mesma
+    // condição, então é impossível uma divergir da outra.
+    const done=!!monthProg?.isComplete;
+    const base=done?catMonthly:(catMonthlyToDate||catMonthly);
+    const dayN=monthProg?.dayOfMonth??null;
+    const periodLabel=done?monthLabel:`até o dia ${dayN} de ${monthLabel}`;
+    const sameWindow=done?"":` (mesmo período: dias 1 a ${dayN})`;
+    const analyzed=Object.keys(base).map(cat=>{
+      const monthly=base[cat];
       const curVal=monthly[currentMonthKey]||0;
       const{avg,monthsUsed}=catWeightedAvg(monthly,currentIdx);
       return{cat,curVal,avg,monthsUsed};
@@ -1104,24 +1149,28 @@ export const InsightEngine=(()=>{
         const topTx=topTxForCategory(transactions,a.cat,currentMonthKey);
         out.push({
           category:"atencao",priority:a.pct>=35?"alta":"media",
-          title:`${a.cat} acima do normal`,
+          title:done?`${a.cat} acima do normal`:`${a.cat} acima do ritmo normal`,
           heroNumber:{value:a.delta,format:"currency",sign:"+"},
-          comparison:{aLabel:"Sua média",aValue:a.avg,bLabel:monthLabel,bValue:a.curVal},
-          explanation:`Você gastou ${fmt(a.curVal)} em ${a.cat} neste mês — ${a.pct}% acima da sua média recente de ${fmt(a.avg)}.`,
+          comparison:{aLabel:done?"Sua média":"Média até o dia "+dayN,aValue:a.avg,bLabel:done?monthLabel:`Dia ${dayN}`,bValue:a.curVal},
+          explanation:done
+            ?`Você gastou ${fmt(a.curVal)} em ${a.cat} neste mês — ${a.pct}% acima da sua média recente de ${fmt(a.avg)}.`
+            :`Até o dia ${dayN}, você gastou ${fmt(a.curVal)} em ${a.cat} — ${a.pct}% acima do que costuma ter gasto a essa altura do mês (${fmt(a.avg)}). ${monthLabel} ainda não terminou, então isso é um ritmo, não um resultado final.`,
           reason:topTx.length>0
             ?`O aumento foi causado principalmente por ${topTx.map(t=>t.label).slice(0,2).join(" e ")}.${wknd>=0.5?` ${Math.round(wknd*100)}% desses gastos aconteceram em finais de semana.`:""}`
             :(wknd>=0.5?`Boa parte aconteceu em gastos concentrados nos finais de semana (${Math.round(wknd*100)}% do total).`:"O aumento se espalhou ao longo do mês, sem um padrão claro de dia."),
-          recommendation:`Se voltar para sua média de ${fmt(a.avg)}, você poderia economizar cerca de ${fmt(suggestion)} por mês.`,
+          recommendation:done
+            ?`Se voltar para sua média de ${fmt(a.avg)}, você poderia economizar cerca de ${fmt(suggestion)} por mês.`
+            :`Segurando o ritmo daqui pra frente, dá pra fechar o mês perto da sua média habitual.`,
           confidence:a.monthsUsed>=4?"alta":"media",
           breakdown:{
             lineItems:topTx,
             calcRows:[
-              {label:"Sua média recente",value:fmt(a.avg)},
-              {label:`Gasto em ${monthLabel}`,value:fmt(a.curVal)},
+              {label:done?"Sua média recente":`Sua média até o dia ${dayN}`,value:fmt(a.avg)},
+              {label:done?`Gasto em ${monthLabel}`:`Gasto até o dia ${dayN}`,value:fmt(a.curVal)},
               {label:"Diferença",value:`+${fmt(a.delta)} (${a.pct}%)`,highlight:true,color:"#EF4444"},
             ],
           },
-          evidence:{period:monthLabel,categories:[a.cat],dataUsed:["categorias","media","transacoes","periodo"]},
+          evidence:{period:`${periodLabel}${sameWindow}`,categories:[a.cat],dataUsed:["categorias","media","transacoes","periodo"]},
           score:55+Math.min(30,a.pct),
         });
       });
@@ -1132,22 +1181,33 @@ export const InsightEngine=(()=>{
       .forEach(a=>{
         out.push({
           category:"oportunidade",priority:"baixa",
-          title:`Economia em ${a.cat}`,
+          // Enquanto o mês corre isso é TENDÊNCIA: o dinheiro ainda pode ser
+          // gasto. Nada de "economia", "economizou" ou "deixou de gastar" —
+          // essas palavras só entram depois do fechamento, quando viram fato.
+          title:done?`Economia em ${a.cat}`:`Tendência: ${a.cat} abaixo da média`,
           heroNumber:{value:a.delta,format:"currency",sign:"-"},
-          comparison:{aLabel:"Sua média",aValue:a.avg,bLabel:monthLabel,bValue:a.curVal},
-          explanation:`Você gastou ${fmt(a.curVal)} em ${a.cat} neste mês — ${a.pct}% abaixo da sua média recente de ${fmt(a.avg)}. Um bom sinal de controle.`,
-          reason:`Isso é ${a.pct}% a menos que seu padrão recente nessa categoria.`,
-          recommendation:`Vale direcionar essa sobra de aproximadamente ${fmt(a.delta)} para sua reserva ou para uma meta.`,
-          confidence:a.monthsUsed>=4?"alta":"media",
+          comparison:{aLabel:done?"Sua média":`Média até o dia ${dayN}`,aValue:a.avg,bLabel:done?monthLabel:`Dia ${dayN}`,bValue:a.curVal},
+          explanation:done
+            ?`Você gastou ${fmt(a.curVal)} em ${a.cat} neste mês — ${a.pct}% abaixo da sua média recente de ${fmt(a.avg)}. Um bom sinal de controle.`
+            :`Até o momento você gastou menos em ${a.cat} do que costuma gastar neste período do mês: ${fmt(a.curVal)} contra ${fmt(a.avg)} de média até o dia ${dayN}. Mantendo esse ritmo, você poderá terminar ${monthLabel} gastando menos que sua média.`,
+          reason:done
+            ?`Isso é ${a.pct}% a menos que seu padrão recente nessa categoria.`
+            :`Comparação feita sobre o mesmo período (dias 1 a ${dayN}) dos meses anteriores. Como ${monthLabel} ainda está em andamento, esse valor pode mudar até o fim do mês.`,
+          recommendation:done
+            ?`Vale direcionar essa sobra de aproximadamente ${fmt(a.delta)} para sua reserva ou para uma meta.`
+            :`Se o ritmo se mantiver até o fim do mês, essa diferença pode virar uma sobra real para sua reserva ou uma meta.`,
+          confidence:done?(a.monthsUsed>=4?"alta":"media"):"nova",
           breakdown:{
             calcRows:[
-              {label:"Sua média recente",value:fmt(a.avg)},
-              {label:`Gasto em ${monthLabel}`,value:fmt(a.curVal)},
-              {label:"Economizado",value:`-${fmt(a.delta)} (${a.pct}%)`,highlight:true,color:"#22C55E"},
+              {label:done?"Sua média recente":`Sua média até o dia ${dayN}`,value:fmt(a.avg)},
+              {label:done?`Gasto em ${monthLabel}`:`Gasto até o dia ${dayN}`,value:fmt(a.curVal)},
+              {label:done?"Economizado":"Diferença até agora",value:`-${fmt(a.delta)} (${a.pct}%)`,highlight:true,color:"#22C55E"},
             ],
           },
-          evidence:{period:monthLabel,categories:[a.cat],dataUsed:["categorias","media","periodo"]},
-          score:45+Math.min(25,a.pct),
+          evidence:{period:`${periodLabel}${sameWindow}`,categories:[a.cat],dataUsed:["categorias","media","periodo"]},
+          // Tendência não confirmada vale menos que um fato: pontua abaixo
+          // para não ocupar o lugar de um insight consolidado.
+          score:(done?45:30)+Math.min(25,a.pct),
         });
       });
 
@@ -1596,7 +1656,7 @@ export const InsightEngine=(()=>{
   };
 
   const genCashFlowAndNetWorth=ctx=>{
-    const{summary,currentMonthKey,patrimonio}=ctx;
+    const{summary,currentMonthKey,patrimonio,monthProg}=ctx;
     const out=[];
     const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
     const curEntry=summary.find(m=>m.month===currentMonthKey);
@@ -1638,7 +1698,11 @@ export const InsightEngine=(()=>{
         });
       }
     }
-    if(curEntry&&closed.length>=2){
+    // "Recorde" é, por definição, um fato de fechamento. Com o mês em
+    // andamento o saldo parcial é enganoso — o salário já entrou e boa parte
+    // das despesas ainda não saiu, então quase todo início de mês pareceria
+    // recorde. Só afirmamos depois que o mês fecha.
+    if(curEntry&&closed.length>=2&&monthProg?.isComplete){
       const bestPrev=Math.max(...closed.map(m=>m.balance));
       if(curEntry.balance>0&&curEntry.balance>bestPrev){
         out.push({
@@ -1672,7 +1736,12 @@ export const InsightEngine=(()=>{
     const descMemory=buildDescMemory(ctx.transactions,currentMonthKey);
     const catLifecycle=buildCategoryLifecycle(ctx.transactions,currentMonthKey);
     const catMonthly=monthlyCategoryTotals(ctx.transactions);
-    const fullCtx={...ctx,descMemory,catLifecycle,catMonthly};
+    // Enquanto o mês corre, as comparações usam a base recortada no dia de
+    // hoje (mesmo dia em todos os meses). Quando o mês fecha, as duas bases
+    // coincidem e a comparação plena volta a valer sozinha.
+    const prog=monthProgress(ctx.todayISO,currentMonthKey);
+    const catMonthlyToDate=prog.isComplete?catMonthly:monthlyCategoryTotals(ctx.transactions,prog.dayOfMonth);
+    const fullCtx={...ctx,descMemory,catLifecycle,catMonthly,catMonthlyToDate,monthProg:prog};
 
     let all=[
       ...genRiskAlerts(fullCtx),
@@ -1721,10 +1790,15 @@ export const InsightEngine=(()=>{
 
   // ---- Resumo do mês: estatísticas de destaque + narrativa curta (máx. 2 frases) ----
   const generateSummary=ctx=>{
-    const{transactions,currentMonthKey,summary,enhancedWishes,plannedStats,patrimonio}=ctx;
+    const{transactions,currentMonthKey,summary,enhancedWishes,plannedStats,patrimonio,todayISO}=ctx;
     const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
     const curEntry=summary.find(m=>m.month===currentMonthKey);
     if(!curEntry)return null;
+    // Mesma regra temporal dos insights: com o mês em andamento o saldo
+    // parcial não pode ser narrado como resultado fechado ("foi um mês...",
+    // "você economizou"). Vira leitura de andamento.
+    const prog=monthProgress(todayISO,currentMonthKey);
+    const done=prog.isComplete;
     const descMemory=buildDescMemory(transactions,currentMonthKey);
     const monthName=monthNameMap[currentMonthKey.split("/")[0]]||currentMonthKey;
 
@@ -1732,14 +1806,23 @@ export const InsightEngine=(()=>{
     const histAvgBalance=closed.length?closed.reduce((s,m)=>s+m.balance,0)/closed.length:null;
     const bestPrev=closed.length?Math.max(...closed.map(m=>m.balance)):null;
 
-    let sentence1=`${monthName} foi um mês ${curEntry.balance>=0?"positivo":"mais apertado"}.`;
+    let sentence1=done
+      ?`${monthName} foi um mês ${curEntry.balance>=0?"positivo":"mais apertado"}.`
+      :`Até aqui, ${monthName} vem sendo um mês ${curEntry.balance>=0?"positivo":"mais apertado"}.`;
     let sentence2=null;
-    if(bestPrev!==null&&curEntry.balance>0&&curEntry.balance>bestPrev){
+    // Patrimônio é um saldo do momento (estoque), não um resultado do mês:
+    // dizer que ele "está" em um recorde é verdade em qualquer dia. Já
+    // "economizou" descreve o fechamento de um fluxo — só depois do mês.
+    if(bestPrev!==null&&curEntry.balance>0&&curEntry.balance>bestPrev&&done){
       sentence2="Seu patrimônio atingiu um novo recorde neste mês.";
     }else if(histAvgBalance!==null&&curEntry.balance>histAvgBalance){
-      sentence2="Você economizou mais do que sua média histórica recente.";
+      sentence2=done
+        ?"Você economizou mais do que sua média histórica recente."
+        :"No ritmo atual, seu saldo está acima da sua média histórica para este ponto do mês.";
     }else if(histAvgBalance!==null&&curEntry.balance<histAvgBalance*0.7){
-      sentence2="Você economizou menos do que costuma economizar em média.";
+      sentence2=done
+        ?"Você economizou menos do que costuma economizar em média."
+        :"No ritmo atual, seu saldo está abaixo do que você costuma ter guardado nesta altura.";
     }else{
       const habitChange=descMemory.find(m=>m.isHabitLike&&m.status==="inativo");
       if(habitChange){
@@ -1750,7 +1833,9 @@ export const InsightEngine=(()=>{
     }
     if(!sentence2&&plannedStats&&plannedStats.total>0){
       const usedPct=Math.round((plannedStats.paid/plannedStats.total)*100);
-      sentence2=usedPct<100?"Você permaneceu dentro do orçamento previsto para o mês.":"Você ultrapassou o orçamento previsto para o mês.";
+      sentence2=done
+        ?(usedPct<100?"Você permaneceu dentro do orçamento previsto para o mês.":"Você ultrapassou o orçamento previsto para o mês.")
+        :(usedPct<100?`Você já usou ${usedPct}% do orçamento previsto para o mês.`:"Você já ultrapassou o orçamento previsto para o mês.");
     }
     if(!sentence2)sentence2="Continue acompanhando de perto para manter o ritmo.";
 
