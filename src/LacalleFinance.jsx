@@ -50,7 +50,10 @@
  * ----------------------------------------------------------------------------
  * O antigo `InsightsGenerator` (comparação simples mês-a-mês) foi substituído
  * por um `InsightEngine` totalmente separado da interface — nenhuma tela
- * contém lógica de geração de insight. O motor:
+ * contém lógica de geração de insight. (O `InsightsGenerator` ficou como
+ * código morto por algumas sprints e foi removido; os textos dele comparavam
+ * mês parcial com mês fechado, o mesmo defeito corrigido depois no
+ * InsightEngine.) O motor:
  *   • aplica peso temporal (30 dias > 3 meses > 6 meses > histórico antigo)
  *   • constrói uma "memória financeira" por descrição (hábito) e por
  *     categoria, classificando-os como ativo / inativo / emergente
@@ -82,7 +85,7 @@
  * não manipula estado — apenas recebe dados e devolve números/objetos.
  * Módulos: CashFlowAnalyzer, BudgetAnalyzer, ExpenseAnalyzer, IncomeAnalyzer,
  * InvestmentAnalyzer, GoalAnalyzer, ForecastEngine, HealthScoreEngine,
- * InsightsGenerator, DecisionEngine, SimulationEngine.
+ * DecisionEngine, SimulationEngine, ProjectionExplainer.
  * Nenhum componente calcula indicadores diretamente: todos consomem o
  * resultado desses módulos.
  *
@@ -104,12 +107,12 @@ import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, 
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
 import {
-  Wallet, TrendingUp, TrendingDown, CreditCard, Calendar, Sparkles, Gamepad2, UtensilsCrossed,
+  Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Gamepad2, UtensilsCrossed,
   Car, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, Repeat, Undo2, Gift, Tag,
   Settings, LogOut, Search, X, Plus, Pencil, Trash2, Check, ChevronLeft, ChevronRight, ChevronDown,
   ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard,
   Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Landmark, Rocket,
-  Gem, Star, Trophy, Lightbulb, ShieldCheck, Target, Percent, Activity, CalendarDays, Bell, Flag, Hourglass, Clock,
+  Gem, Star, Trophy, Lightbulb, ShieldCheck, Target, CalendarDays, Bell, Flag, Hourglass, Clock,
   ArrowRightLeft, EyeOff, Eye
 } from "lucide-react";
 
@@ -575,12 +578,10 @@ function MainApp({user,setUser}){
   // um filtro esquecido na aba Transações reescrevia o Dashboard inteiro.
   const catDataGlobal=useMemo(()=>FinancialEngine.ExpenseAnalyzer.byCategory(realized,invNet),[realized,invNet]);
   const catDataDisplay=useMemo(()=>FinancialEngine.ExpenseAnalyzer.displayTop(catDataGlobal),[catDataGlobal]);
-  const topCat=useMemo(()=>catDataGlobal[0]||null,[catDataGlobal]);
   const groupedByDate=useMemo(()=>{const g={};[...filtered].forEach(t=>{if(!g[t.date])g[t.date]=[];g[t.date].push(t);});return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));},[filtered]);
   const txMap=useMemo(()=>new Map(transactions.map(t=>[t.id,t])),[transactions]);
   const instStats=useMemo(()=>FinancialEngine.BudgetAnalyzer.installmentStats(installments,txMap,todayFn()),[installments,txMap]);
   const monthlyPreview=useMemo(()=>FinancialEngine.BudgetAnalyzer.monthlyInstallment(parseNum(instDraft.totalVal),parseInt(instDraft.numParcelas)),[instDraft.totalVal,instDraft.numParcelas]);
-  const curM=summary[summary.length-1];const prevM=summary[summary.length-2];
   // Variação percentual com base ASSINADA corretamente.
   // (cur-prev)/prev é matematicamente correto, mas inverte o sinal quando o mês
   // anterior foi negativo: sair de -154 para -103 (uma MELHORA de R$ 51) exibia
@@ -606,7 +607,6 @@ function MainApp({user,setUser}){
 
   const currentMonthKeyReal=monthKey(todayFn());
 
-  const categoryTrend=useMemo(()=>FinancialEngine.ExpenseAnalyzer.categoryTrend({transactions,curM,prevM}),[transactions,curM,prevM]);
   const fixedVarSplit=useMemo(()=>FinancialEngine.ExpenseAnalyzer.fixedVarSplit(realized),[realized]);
   const patrimonioLiquido=balance+invNet;
   const savingsRate=FinancialEngine.IncomeAnalyzer.savingsRate(balance,totalIn);
@@ -615,7 +615,6 @@ function MainApp({user,setUser}){
   const avgMonthlyOut=useMemo(()=>summary.length?summary.reduce((s,m)=>s+m.out,0)/summary.length:0,[summary]);
   const reservaMeses=avgMonthlyOut>0?Math.round((reservaFinanceira/avgMonthlyOut)*10)/10:null;
 
-  const currentMonthStats=useMemo(()=>FinancialEngine.ExpenseAnalyzer.dailyAverage({transactions,currentMonthKey:currentMonthKeyReal,todayISO}),[transactions,currentMonthKeyReal,todayISO]);
   const projection=useMemo(()=>FinancialEngine.ForecastEngine.endOfMonthProjection({transactions,plannedExpenses,currentMonthKey:currentMonthKeyReal}),[transactions,plannedExpenses,currentMonthKeyReal]);
   const subscriptions=useMemo(()=>FinancialEngine.BudgetAnalyzer.subscriptions(plannedExpenses,plannedMonth),[plannedExpenses,plannedMonth]);
   const investmentStats=useMemo(()=>FinancialEngine.InvestmentAnalyzer.stats(transactions),[transactions]);
@@ -712,7 +711,6 @@ function MainApp({user,setUser}){
       .slice(0,15);
   },[transactions]);
 
-  const insights=useMemo(()=>FinancialEngine.InsightsGenerator.generate({curM,prevM,categoryTrend,currentMonthStats,plannedStats,topCat,transactions,pendingParcelasCount,investmentStats,patrimonio:patrimonioLiquido,currentMonthKey:currentMonthKeyReal}),[curM,prevM,categoryTrend,currentMonthStats,plannedStats,topCat,transactions,pendingParcelasCount,investmentStats,patrimonioLiquido,currentMonthKeyReal]);
   const healthIndicators=useMemo(()=>FinancialEngine.HealthScoreEngine.compute({savingsRate,committedIncome,fixedVarSplit,patrimonio:patrimonioLiquido,balance,reservaMeses,reservaFinanceira}),[savingsRate,committedIncome,fixedVarSplit,patrimonioLiquido,balance,reservaMeses,reservaFinanceira]);
 
   // ---- Insight Engine: contexto único usado tanto pelos cartões de consultor
@@ -750,21 +748,6 @@ function MainApp({user,setUser}){
   const resumoDoMes=useMemo(()=>InsightEngine.generateSummary(insightCtx),[insightCtx]);
 
   // ---- Mapeamento de apresentação: o Engine devolve `type`, o componente decide ícone/cor ----
-  const insightVisual=(type,critical)=>({
-    gasto_menor:{Ic:TrendingDown,c:"#22C55E"},
-    gasto_maior:{Ic:TrendingUp,c:"#EF4444"},
-    economia_maior:{Ic:PiggyBank,c:"#22C55E"},
-    renda_maior:{Ic:TrendingUp,c:"#22C55E"},
-    renda_menor:{Ic:TrendingDown,c:"#EF4444"},
-    categoria_cresceu:{Ic:TrendingUp,c:"#F0A857"},
-    gasto_medio:{Ic:Activity,c:accent},
-    orcamento_usado:{Ic:Percent,c:critical?"#EF4444":accent},
-    maior_gasto:{Ic:Trophy,c:"#F0A857"},
-    recorrentes:{Ic:Repeat,c:accent},
-    parcelas:{Ic:CreditCard,c:accent},
-    investiu_mais:{Ic:TrendingUp,c:"#22C55E"},
-    patrimonio_positivo:{Ic:Landmark,c:"#22C55E"},
-  }[type]||{Ic:Info,c:TX2});
   const reminderVisual=type=>({
     parcela:{Ic:CreditCard,c:"#F0A857"},
     assinatura:{Ic:Repeat,c:"#A78BFA"},

@@ -504,29 +504,6 @@ export const FinancialEngine=(()=>{
       });
       return{fixed,variavel};
     },
-    categoryTrend({transactions,curM,prevM}){
-      if(!curM||!prevM)return null;
-      const catMonth=mk=>{
-        const m={};
-        transactions.forEach(t=>{if(t.type!=="Saída"||t.cat==="Investimento")return;if(monthKey(t.date)!==mk)return;m[t.cat]=(m[t.cat]||0)+t.val;});
-        return m;
-      };
-      const curCats=catMonth(curM.month),prevCats=catMonth(prevM.month);
-      const allCats=new Set([...Object.keys(curCats),...Object.keys(prevCats)]);
-      let grew=null,shrank=null;
-      allCats.forEach(c=>{
-        const delta=(curCats[c]||0)-(prevCats[c]||0);
-        if(grew===null||delta>grew.delta)grew={cat:c,delta};
-        if(shrank===null||delta<shrank.delta)shrank={cat:c,delta};
-      });
-      return{grew,shrank};
-    },
-    dailyAverage({transactions,currentMonthKey,todayISO}){
-      const day=parseInt(todayISO.split("-")[2],10);
-      const txThisMonth=transactions.filter(t=>monthKey(t.date)===currentMonthKey&&t.date<=todayISO);
-      const outSoFar=sumVal(txThisMonth.filter(isSaidaReal));
-      return{outSoFar,avgDaily:day>0?outSoFar/day:0,day};
-    },
   };
 
   const IncomeAnalyzer={
@@ -732,39 +709,6 @@ export const FinancialEngine=(()=>{
     },
   };
 
-  const InsightsGenerator={
-    generate({curM,prevM,categoryTrend,currentMonthStats,plannedStats,topCat,transactions,pendingParcelasCount,investmentStats,patrimonio,currentMonthKey}){
-      const pctChangeLocal=(cur,prev)=>prev===0?0:Math.round((cur-prev)/prev*100);
-      const list=[];
-      if(curM&&prevM){
-        const outDelta=pctChangeLocal(curM.out,prevM.out);
-        if(outDelta<0)list.push({type:"gasto_menor",text:`Você gastou ${Math.abs(outDelta)}% menos que no mês passado.`});
-        else if(outDelta>0)list.push({type:"gasto_maior",text:`Você gastou ${outDelta}% mais que no mês passado.`});
-        if(curM.balance>prevM.balance)list.push({type:"economia_maior",text:`Você economizou mais que no mês anterior: ${fmt(curM.balance)} agora contra ${fmt(prevM.balance)} no mês passado.`});
-        const incDelta=pctChangeLocal(curM.in,prevM.in);
-        if(incDelta>0)list.push({type:"renda_maior",text:`Sua receita aumentou ${incDelta}%.`});
-        else if(incDelta<0)list.push({type:"renda_menor",text:`Sua receita caiu ${Math.abs(incDelta)}%.`});
-      }
-      if(categoryTrend?.grew&&categoryTrend.grew.delta>0)list.push({type:"categoria_cresceu",text:`Sua categoria que mais cresceu foi ${categoryTrend.grew.cat}.`});
-      if(currentMonthStats.avgDaily>0)list.push({type:"gasto_medio",text:`Seu gasto médio diário é de ${fmt(currentMonthStats.avgDaily)}.`});
-      if(plannedStats.total>0){
-        const usedPct=Math.round((plannedStats.paid/plannedStats.total)*100);
-        list.push({type:"orcamento_usado",text:`Você já utilizou ${usedPct}% do seu orçamento previsto do mês.`,critical:usedPct>=90});
-      }
-      if(topCat)list.push({type:"maior_gasto",text:`Seu maior gasto foi com ${topCat.name}.`});
-      const recorrentes=transactions.filter(t=>t.fixed==="Fixa"&&monthKey(t.date)===(curM?curM.month:currentMonthKey)).length;
-      if(recorrentes>0)list.push({type:"recorrentes",text:`Você possui ${recorrentes} despesa(s) recorrente(s) este mês.`});
-      if(pendingParcelasCount>0)list.push({type:"parcelas",text:`Você possui ${pendingParcelasCount} parcela(s) restante(s).`});
-      if(investmentStats&&prevM&&curM){
-        const curAportes=transactions.filter(t=>t.cat==="Investimento"&&monthKey(t.date)===curM.month&&isAporte(t)).reduce((s,t)=>s+t.val,0);
-        const prevAportes=transactions.filter(t=>t.cat==="Investimento"&&monthKey(t.date)===prevM.month&&isAporte(t)).reduce((s,t)=>s+t.val,0);
-        if(curAportes>prevAportes)list.push({type:"investiu_mais",text:`Você aportou mais em investimentos este mês: ${fmt(curAportes)} (mês passado foi ${fmt(prevAportes)}).`});
-      }
-      if(patrimonio>0)list.push({type:"patrimonio_positivo",text:`Seu patrimônio líquido está positivo: ${fmt(patrimonio)}.`});
-      return list;
-    },
-  };
-
   // ---- DecisionEngine ----------------------------------------------------
   // Continua respondendo com as MESMAS regras/limiares de antes (ok / atenção
   // / crítico). O que mudou: cada resposta agora vem acompanhada de um
@@ -934,7 +878,7 @@ export const FinancialEngine=(()=>{
     },
   };
 
-  return{CashFlowAnalyzer,BudgetAnalyzer,ExpenseAnalyzer,IncomeAnalyzer,InvestmentAnalyzer,GoalAnalyzer,ForecastEngine,HealthScoreEngine,InsightsGenerator,DecisionEngine,SimulationEngine,ProjectionExplainer};
+  return{CashFlowAnalyzer,BudgetAnalyzer,ExpenseAnalyzer,IncomeAnalyzer,InvestmentAnalyzer,GoalAnalyzer,ForecastEngine,HealthScoreEngine,DecisionEngine,SimulationEngine,ProjectionExplainer};
 })();
 
 // ============================================================================
