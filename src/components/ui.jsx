@@ -9,6 +9,7 @@ import { useState, useRef, useEffect, forwardRef } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
+import LogoSymbol from "./LogoSymbol";
 
 const CAT_ICON_COMPONENTS={
   "Lazer":Gamepad2,"Alimentação":UtensilsCrossed,"Transporte":Car,"Desejos":Sparkles,"Roupas":Shirt,
@@ -115,6 +116,71 @@ function useCountUp(value,duration=520){
 export function AnimatedValue({value}){
   const display=useCountUp(value);
   return <span style={{fontFamily:NUM_FONT,fontVariantNumeric:"tabular-nums"}}>{fmt(display)}</span>;
+}
+
+// ---- Progress motion (pág. 37) ----------------------------------------
+// "Dados não aparecem prontos: eles se constroem." A barra nunca nasce já
+// preenchida — na primeira vez que aparece na tela ela parte de 0% e sobe
+// até o valor real em 600ms com LaCalle Ease Out. Atualizações depois disso
+// (usuário editou o valor) só fazem a barra deslizar do width antigo pro
+// novo — sem resetar a animação de novo, senão toda edição faria a barra
+// "piscar" de volta a zero.
+export function ProgressBar({pct,color,trackColor,height=8,radius=R_CHIP,duration=600,style}){
+  const target=Math.max(0,Math.min(100,Number.isFinite(pct)?pct:0));
+  const [width,setWidth]=useState(0);
+  const mountedRef=useRef(false);
+  useEffect(()=>{
+    if(prefersReducedMotion()){mountedRef.current=true;setWidth(target);return;}
+    if(!mountedRef.current){
+      mountedRef.current=true;
+      setWidth(0);
+      let raf1,raf2;
+      raf1=requestAnimationFrame(()=>{raf2=requestAnimationFrame(()=>setWidth(target));});
+      return()=>{cancelAnimationFrame(raf1);cancelAnimationFrame(raf2);};
+    }
+    setWidth(target);
+  },[target]);
+  return(
+    <div style={{background:trackColor||"rgba(255,255,255,0.06)",borderRadius:radius,height,overflow:"hidden",...style}}>
+      <div style={{width:`${width}%`,height:"100%",background:color,borderRadius:radius,transition:`width ${duration}ms ${EASE_OUT}`}}/>
+    </div>
+  );
+}
+
+// ---- LaCalle Reveal (pág. 35) -------------------------------------------
+// A transição de identidade da marca: o símbolo expande em círculo até
+// cobrir a tela e recua revelando o conteúdo por baixo — nunca em
+// navegação comum, só em splash, login e abertura do dashboard após
+// autenticação (no máximo 1x por sessão). Cor do acento porque quem decide
+// o acento é a pessoa, na aba Minha Conta — a marca-mãe não fixa uma cor.
+export function LaCalleReveal({accent,duration=350,onDone}){
+  const [phase,setPhase]=useState("start"); // start -> in -> out
+  useEffect(()=>{
+    if(prefersReducedMotion()){
+      const t0=setTimeout(()=>setPhase("out"),10);
+      const t1=setTimeout(()=>onDone?.(),130);
+      return()=>{clearTimeout(t0);clearTimeout(t1);};
+    }
+    let raf1,raf2;
+    raf1=requestAnimationFrame(()=>{raf2=requestAnimationFrame(()=>setPhase("in"));});
+    const t1=setTimeout(()=>setPhase("out"),duration*0.55);
+    const t2=setTimeout(()=>onDone?.(),duration*0.55+duration*0.6+40);
+    return()=>{cancelAnimationFrame(raf1);cancelAnimationFrame(raf2);clearTimeout(t1);clearTimeout(t2);};
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[duration]);
+
+  if(prefersReducedMotion()){
+    return <div aria-hidden style={{position:"fixed",inset:0,zIndex:600,background:accent,opacity:phase==="out"?0:1,transition:"opacity 120ms linear",pointerEvents:"none"}}/>;
+  }
+  const clip=phase==="in"?"circle(75% at 50% 50%)":"circle(0% at 50% 50%)";
+  const clipDuration=phase==="out"?Math.round(duration*0.6):duration;
+  return(
+    <div aria-hidden style={{position:"fixed",inset:0,zIndex:600,background:accent,clipPath:clip,transition:phase==="start"?"none":`clip-path ${clipDuration}ms ${EASE_OUT}`,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+      <div style={{opacity:phase==="out"?0:1,transform:phase==="out"?"scale(0.85)":"scale(1)",transition:`opacity 200ms ${EASE_OUT}, transform 200ms ${EASE_OUT}`}}>
+        <LogoSymbol size={64} color="#FFFFFF"/>
+      </div>
+    </div>
+  );
 }
 
 export function ChartTooltip({active,payload,label}){

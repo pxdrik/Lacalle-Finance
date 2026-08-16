@@ -104,7 +104,7 @@ import LogoSymbol from "./components/LogoSymbol";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR } from "./components/ui";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
 import {
@@ -235,6 +235,10 @@ const todayFn=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMo
 
 function MainApp({user,setUser}){
   const [isLoaded,setIsLoaded]=useState(false);
+  // LaCalle Reveal (pág. 35): toca uma única vez, na abertura do dashboard
+  // logo depois da autenticação — nunca de novo na mesma sessão, mesmo que
+  // o componente re-renderize.
+  const [revealActive,setRevealActive]=useState(true);
   const [syncStatus,setSyncStatus]=useState("loading");
   const [tab,setTab]=useState("dashboard");
   const [transactions,setTransactions]=useState([]);
@@ -1501,6 +1505,7 @@ function MainApp({user,setUser}){
 
   return(
     <AccentContext.Provider value={accent}>
+    {revealActive&&<LaCalleReveal accent={accent} duration={350} onDone={()=>setRevealActive(false)}/>}
     <div style={{background:BG,minHeight:"100vh",color:TX,fontFamily:"'Inter Variable','Inter',system-ui,sans-serif",overflowX:"hidden"}}>
       <style>{`
         *{box-sizing:border-box;}
@@ -2324,7 +2329,7 @@ function MainApp({user,setUser}){
                             <span style={{fontSize:12.5,color:TX,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>{d.name==="Outras categorias"?<Package size={12} color={cc}/>:<CategoryIcon cat={d.name} size={12} color={cc}/>}{d.name}</span>
                             <span className="num" style={{fontSize:12.5,fontWeight:700,color:TX}}>{fmt(d.value)}</span>
                           </div>
-                          <div style={{background:"rgba(255,255,255,0.06)",borderRadius:20,height:5,overflow:"hidden"}}><div style={{width:`${pct}%`,height:"100%",background:cc,borderRadius:20}}/></div>
+                          <ProgressBar pct={pct} color={cc} height={5}/>
                         </div>
                       );
                     })}
@@ -2556,9 +2561,7 @@ function MainApp({user,setUser}){
                       <div style={{fontSize:15,fontWeight:700,color:TX}}>{w.name}</div>
                       <div style={{fontSize:13,fontWeight:700,color:accent}}>{w.pct}%</div>
                     </div>
-                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:R_CHIP,height:8,overflow:"hidden",marginBottom:16}}>
-                      <div style={{width:`${w.pct}%`,height:"100%",background:accent,borderRadius:R_CHIP,transition:`width .5s ${EASE_OUT}`}}/>
-                    </div>
+                    <ProgressBar pct={w.pct} color={accent} style={{marginBottom:16}}/>
                     <div className="bento">
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor atual</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.saved)}</div></div>
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor restante</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.remaining)}</div></div>
@@ -2987,9 +2990,7 @@ function MainApp({user,setUser}){
                       <button onClick={()=>setDelInstId(inst.id)} title="Remover parcelamento" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:2}}><X size={16}/></button>
                     </div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.06)",borderRadius:20,height:6,overflow:"hidden",marginBottom:12}}>
-                    <div style={{width:`${pct}%`,height:"100%",background:isComplete?"#34D399":dotColor,borderRadius:20,transition:"width .5s"}}/>
-                  </div>
+                  <ProgressBar pct={pct} color={isComplete?"#34D399":dotColor} height={6} style={{marginBottom:12}}/>
                   <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:TX2,flexWrap:"wrap",gap:4}}>
                     <span>pago: {fmt(totalPaidVal)}</span><span style={{color:accent,fontWeight:700}}>{pct}%</span><span>total: {fmt(inst.totalVal)}</span>
                   </div>
@@ -3059,9 +3060,7 @@ function MainApp({user,setUser}){
                       <button onClick={()=>setConfirmDelete({type:"wish",id:w.id,label:w.name})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4}}><Trash2 size={14}/></button>
                     </div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.06)",borderRadius:R_CHIP,height:7,overflow:"hidden"}}>
-                    <div style={{width:`${pct2}%`,height:"100%",background:accent,borderRadius:R_CHIP,transition:`width .5s ${EASE_OUT}`}}/>
-                  </div>
+                  <ProgressBar pct={pct2} color={accent} height={7}/>
                   <div style={{fontSize:11,color:TX2,marginTop:8}}>{pct2}% conquistado</div>
                   {w.notes&&(
                     <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${BD}`}}>
