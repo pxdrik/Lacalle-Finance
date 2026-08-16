@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { FinancialEngine, fmt } from "../lib/financialEngine";
 import { CategoryIcon, LineItemsList } from "./ui";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, HOVER, R_CARD, R_BTN, R_INPUT, SH_LG, NUM_FONT } from "../lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_LG, NUM_FONT, EASE_OUT } from "../lib/theme";
 
 const MONTH_NAME_SHORT = { jan: "jan", fev: "fev", mar: "mar", abr: "abr", mai: "mai", jun: "jun", jul: "jul", ago: "ago", set: "set", out: "out", nov: "nov", dez: "dez" };
 
@@ -68,7 +68,7 @@ export default function ProjectionDrawer({
   if (!config || !explain) return null;
 
   const headline = mode === "window" ? Math.max(0, explain.netProjection) : explain.netProjection;
-  const headlineColor = explain.netProjection >= 0 ? "#22C55E" : "#EF4444";
+  const headlineColor = explain.netProjection >= 0 ? "#34D399" : "#F87171";
   const horizonLabel = mode === "window"
     ? `Próximos ${config.daysAhead} dias`
     : `Restante de ${currentMonthKey}`;
@@ -134,10 +134,10 @@ export default function ProjectionDrawer({
     <>
       <style>{`
         .proj-drawer-overlay{position:fixed;inset:0;background:rgba(2,7,14,0.72);z-index:190;animation:overlayIn .15s ease-out;}
-        .proj-drawer-panel{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:${CARD};border-left:1px solid ${BD2};box-shadow:${SH_LG};z-index:191;display:flex;flex-direction:column;animation:projDrawerInRight .28s cubic-bezier(.2,.8,.2,1);}
+        .proj-drawer-panel{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:${CARD};border-left:1px solid ${BD2};box-shadow:${SH_LG};z-index:191;display:flex;flex-direction:column;animation:projDrawerInRight .28s ${EASE_OUT};}
         @keyframes projDrawerInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
         @media(max-width:760px){
-          .proj-drawer-panel{top:auto;right:0;left:0;width:100%;max-height:88vh;border-left:none;border-top:1px solid ${BD2};border-radius:20px 20px 0 0;animation:projDrawerInUp .28s cubic-bezier(.2,.8,.2,1);}
+          .proj-drawer-panel{top:auto;right:0;left:0;width:100%;max-height:88vh;border-left:none;border-top:1px solid ${BD2};border-radius:24px 24px 0 0;animation:projDrawerInUp .28s ${EASE_OUT};}
           @keyframes projDrawerInUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
         }
         .proj-drawer-body{overflow-y:auto;flex:1;}
@@ -167,10 +167,10 @@ export default function ProjectionDrawer({
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: TX2 }}>
-              <span>+ Receitas previstas</span><span style={{ fontFamily: NUM_FONT, color: "#22C55E" }}>{fmt(explain.incTotal)}</span>
+              <span>+ Receitas previstas</span><span style={{ fontFamily: NUM_FONT, color: "#34D399" }}>{fmt(explain.incTotal)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: TX2 }}>
-              <span>− Gastos previstos</span><span style={{ fontFamily: NUM_FONT, color: "#EF4444" }}>{fmt(explain.outTotal)}</span>
+              <span>− Gastos previstos</span><span style={{ fontFamily: NUM_FONT, color: "#F87171" }}>{fmt(explain.outTotal)}</span>
             </div>
           </div>
           {explain.incomeItems?.length > 0 && (
@@ -179,7 +179,7 @@ export default function ProjectionDrawer({
             </button>
           )}
           {showIncome && explain.incomeItems?.length > 0 && (
-            <div style={{ marginTop: 8 }}><LineItemsList items={explain.incomeItems} accentColor="#22C55E" limit={8} /></div>
+            <div style={{ marginTop: 8 }}><LineItemsList items={explain.incomeItems} accentColor="#34D399" limit={8} /></div>
           )}
         </div>
 
@@ -193,7 +193,7 @@ export default function ProjectionDrawer({
             return (
               <div key={g.cat} style={{ borderBottom: `1px solid ${BD}` }}>
                 <div className="proj-cat-header" onClick={() => toggleCat(g.cat)}>
-                  <div style={{ width: 28, height: 28, borderRadius: 9, background: gColor + "1f", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: R_CHIP, background: gColor + "1f", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <CategoryIcon cat={g.cat} size={13} color={gColor} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: TX }}>{g.cat}</div>
@@ -213,8 +213,8 @@ export default function ProjectionDrawer({
                             <div style={{ fontSize: 10.5, color: TX3, marginTop: 2, display: "flex", gap: 5, flexWrap: "wrap" }}>
                               <span>{item.originLabel}</span>
                               {formatItemDate(item) && <span>· {formatItemDate(item)}</span>}
-                              {ignored && <span style={{ color: "#F0A857", fontWeight: 600 }}>· ignorado este mês</span>}
-                              {paid && <span style={{ color: "#22C55E", fontWeight: 600 }}>· pago</span>}
+                              {ignored && <span style={{ color: "#FBBF24", fontWeight: 600 }}>· ignorado este mês</span>}
+                              {paid && <span style={{ color: "#34D399", fontWeight: 600 }}>· pago</span>}
                             </div>
                           </div>
                           <div style={{ fontFamily: NUM_FONT, fontSize: 13, fontWeight: 700, color: TX, flexShrink: 0, whiteSpace: "nowrap" }}>{fmt(item.value)}</div>
@@ -227,7 +227,7 @@ export default function ProjectionDrawer({
                                 <button title={ignored ? "Reativar este mês" : "Ignorar apenas este mês"} onClick={() => handleToggleIgnored(item)}>{ignored ? <Eye size={13} /> : <EyeOff size={13} />}</button>
                               )}
                               {item.sourceType === "planned" && (
-                                <button title={paid ? "Desfazer pagamento" : "Marcar como pago"} onClick={() => handleTogglePaid(item)} style={paid ? { color: "#22C55E" } : undefined}><Check size={13} /></button>
+                                <button title={paid ? "Desfazer pagamento" : "Marcar como pago"} onClick={() => handleTogglePaid(item)} style={paid ? { color: "#34D399" } : undefined}><Check size={13} /></button>
                               )}
                               <button title="Editar" onClick={() => (item.sourceType === "planned" ? handleEditPlanned(item) : handleEditTx(item))}><Pencil size={13} /></button>
                               <button title="Excluir" onClick={() => (item.sourceType === "planned" ? handleDeletePlanned(item) : handleDeleteTx(item))}><Trash2 size={13} /></button>
@@ -247,12 +247,12 @@ export default function ProjectionDrawer({
             <div style={{ fontSize: 11, fontWeight: 700, color: TX3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Como este valor foi calculado</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
               {INCLUDED.map((t) => (
-                <div key={t} style={{ display: "flex", gap: 7, fontSize: 11.5, color: TX2, lineHeight: 1.4 }}><Check size={12} color="#22C55E" style={{ flexShrink: 0, marginTop: 2 }} />{t}</div>
+                <div key={t} style={{ display: "flex", gap: 7, fontSize: 11.5, color: TX2, lineHeight: 1.4 }}><Check size={12} color="#34D399" style={{ flexShrink: 0, marginTop: 2 }} />{t}</div>
               ))}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {NOT_INCLUDED.map((t) => (
-                <div key={t} style={{ display: "flex", gap: 7, fontSize: 11.5, color: TX3, lineHeight: 1.4 }}><X size={12} color="#EF4444" style={{ flexShrink: 0, marginTop: 2 }} />{t}</div>
+                <div key={t} style={{ display: "flex", gap: 7, fontSize: 11.5, color: TX3, lineHeight: 1.4 }}><X size={12} color="#F87171" style={{ flexShrink: 0, marginTop: 2 }} />{t}</div>
               ))}
             </div>
           </div>

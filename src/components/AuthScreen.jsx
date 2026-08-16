@@ -1,21 +1,7 @@
 import { useState } from "react";
 import { Wallet, Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-
-// Reaproveita os mesmos tokens visuais do resto do app (definidos como
-// consts no LacalleFinance.jsx) — copiados aqui pra este componente ficar
-// independente e fácil de mexer sem precisar tocar no arquivo gigante.
-const BG = "#071421";
-const CARD = "#11253A";
-const BD = "rgba(255,255,255,0.08)";
-const BD2 = "rgba(255,255,255,0.14)";
-const TX = "#F8FAFC";
-const TX2 = "#A7B6C7";
-const TEAL = "#3B82F6";
-const R_CARD = 24;
-const R_BTN = 14;
-const R_INPUT = 14;
-const SH_MD = "0 20px 48px -16px rgba(2,8,16,0.55)";
+import { BG, CARD, BD, BD2, TX, TX2, TEAL, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, EASE_OUT, SUCCESS, ERROR } from "../lib/theme";
 
 const inputStyle = {
   background: "rgba(255,255,255,0.03)",
@@ -91,28 +77,27 @@ export default function AuthScreen({ onLogin }) {
   };
 
   return (
-    <div style={{ background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',system-ui,sans-serif", padding: 24 }}>
+    <div style={{ background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter Variable','Inter',system-ui,sans-serif", padding: 24 }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         .wl-input:focus{outline:none;border-color:${TEAL}80 !important;box-shadow:0 0 0 3px ${TEAL}22;}
-        .wl-btn{transition:filter .15s ease, transform .15s ease, box-shadow .15s ease;}
+        .wl-btn{transition:filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT};}
         .wl-btn:hover{filter:brightness(1.1);box-shadow:0 8px 24px -8px ${TEAL}70;}
         .wl-btn:active{transform:scale(0.98);}
         .wl-btn:disabled{opacity:0.6;cursor:not-allowed;}
       `}</style>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ background: `linear-gradient(135deg, ${TEAL}22, ${TEAL}0A)`, border: `1px solid ${TEAL}40`, borderRadius: 18, width: 54, height: 54, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: `0 8px 24px -8px ${TEAL}45` }}>
+          <div style={{ background: `linear-gradient(135deg, ${TEAL}22, ${TEAL}0A)`, border: `1px solid ${TEAL}40`, borderRadius: R_MODAL, width: 54, height: 54, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: `0 8px 24px -8px ${TEAL}45` }}>
             <Wallet size={23} color={TEAL} strokeWidth={2} />
           </div>
-          <div style={{ fontWeight: 800, fontSize: 27, color: TX, letterSpacing: "-0.035em" }}>Lacalle Finance</div>
+          <div style={{ fontWeight: 700, fontSize: 27, color: TX, letterSpacing: "-0.025em" }}>LaCalle <span style={{ color: TEAL }}>Finance</span></div>
           <div style={{ fontSize: 13, color: TX2, marginTop: 8 }}>Sincronizado em todos os dispositivos</div>
         </div>
 
         <div style={{ background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD, padding: 32, boxShadow: SH_MD }}>
           <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", border: `1px solid ${BD}`, borderRadius: R_INPUT, padding: 4, marginBottom: 22 }}>
-            <button onClick={() => { setMode("login"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_INPUT - 4, cursor: "pointer", fontSize: 13, fontWeight: 700, background: mode === "login" ? TEAL : "transparent", color: mode === "login" ? "#071421" : TX2 }}>Entrar</button>
-            <button onClick={() => { setMode("signup"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_INPUT - 4, cursor: "pointer", fontSize: 13, fontWeight: 700, background: mode === "signup" ? TEAL : "transparent", color: mode === "signup" ? "#071421" : TX2 }}>Criar conta</button>
+            <button onClick={() => { setMode("login"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "login" ? TEAL : "transparent", color: mode === "login" ? "#FFFFFF" : TX2 }}>Entrar</button>
+            <button onClick={() => { setMode("signup"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "signup" ? TEAL : "transparent", color: mode === "signup" ? "#FFFFFF" : TX2 }}>Criar conta</button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -133,10 +118,10 @@ export default function AuthScreen({ onLogin }) {
               </div>
             )}
 
-            {err && <div style={{ background: "#EF444414", borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: "#EF4444", display: "flex", alignItems: "center", gap: 8 }}><AlertCircle size={14} />{err}</div>}
-            {info && <div style={{ background: "#22C55E14", borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: "#22C55E", display: "flex", alignItems: "center", gap: 8 }}><CheckCircle2 size={14} />{info}</div>}
+            {err && <div style={{ background: `${ERROR}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: ERROR, display: "flex", alignItems: "center", gap: 8 }}><AlertCircle size={14} />{err}</div>}
+            {info && <div style={{ background: `${SUCCESS}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: SUCCESS, display: "flex", alignItems: "center", gap: 8 }}><CheckCircle2 size={14} />{info}</div>}
 
-            <button className="wl-btn" disabled={loading} onClick={submit} style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, marginTop: 4, background: TEAL, color: "#071421", boxShadow: `0 2px 8px ${TEAL}45` }}>
+            <button className="wl-btn" disabled={loading} onClick={submit} style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: TEAL, color: "#FFFFFF", boxShadow: `0 2px 8px ${TEAL}45` }}>
               {loading ? "Um momento..." : mode === "signup" ? "Criar conta" : mode === "forgot" ? "Enviar link de recuperação" : "Entrar"}
             </button>
 

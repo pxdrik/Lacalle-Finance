@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, forwardRef } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT } from "../lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
 
 const CAT_ICON_COMPONENTS={
   "Lazer":Gamepad2,"Alimentação":UtensilsCrossed,"Transporte":Car,"Desejos":Sparkles,"Roupas":Shirt,
@@ -43,7 +43,7 @@ export const Modal=({onClose,children,maxWidth=420,align="center",zIndex=170,pad
   return(
     <div
       role="presentation"
-      style={{position:"fixed",inset:0,background:"rgba(2,7,14,0.78)",zIndex,display:"flex",alignItems:align==="top"?"flex-start":"center",justifyContent:"center",padding:align==="top"?"10vh 20px 20px":20,animation:"overlayIn .15s ease-out"}}
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex,display:"flex",alignItems:align==="top"?"flex-start":"center",justifyContent:"center",padding:align==="top"?"10vh 20px 20px":20,animation:"overlayIn .15s ease-out"}}
       onMouseDown={e=>{pressedOnOverlay.current=e.target===e.currentTarget;}}
       onMouseUp={e=>{
         if(pressedOnOverlay.current&&e.target===e.currentTarget)onClose?.();
@@ -55,7 +55,7 @@ export const Modal=({onClose,children,maxWidth=420,align="center",zIndex=170,pad
         aria-modal="true"
         aria-label={label}
         onMouseDown={e=>e.stopPropagation()}
-        style={{background:CARD,border:`1px solid ${BD2}`,borderRadius:R_CARD,padding,width:"100%",maxWidth,...(scroll?{maxHeight:"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:"modalIn .25s cubic-bezier(.2,.8,.2,1)",...contentStyle}}
+        style={{background:CARD,border:`1px solid ${BD2}`,borderRadius:R_MODAL,padding,width:"100%",maxWidth,...(scroll?{maxHeight:"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:`modalIn .2s ${EASE_OUT}`,...contentStyle}}
       >
         {children}
       </div>
@@ -120,7 +120,7 @@ export function AnimatedValue({value}){
 export function ChartTooltip({active,payload,label}){
   if(!active||!payload||!payload.length)return null;
   return(
-    <div style={{background:"rgba(11,27,43,0.96)",backdropFilter:"blur(12px)",borderRadius:14,padding:"13px 17px",boxShadow:SH_MD,border:`1px solid ${BD2}`}}>
+    <div style={{background:"rgba(22,25,29,0.96)",backdropFilter:"blur(12px)",borderRadius:R_BTN,padding:"13px 17px",boxShadow:SH_MD,border:`1px solid ${BD2}`}}>
       {label&&<div style={{fontSize:11,color:TX2,marginBottom:6,fontWeight:600,letterSpacing:"0.02em"}}>{label}</div>}
       {payload.map((p,i)=>(
         <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:TX,fontWeight:600,marginTop:i>0?4:0}}>
@@ -207,8 +207,8 @@ export function DataUsedChecklist({tags}){
       <div style={{fontSize:10,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:9}}>Dados usados nessa conclusão</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
         {tags.map(t=>(
-          <span key={t} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:TX2,background:"rgba(255,255,255,0.04)",border:`1px solid ${BD}`,borderRadius:20,padding:"5px 11px",fontWeight:600}}>
-            <Check size={10} color="#22C55E"/>{DATA_TAG_LABELS[t]||t}
+          <span key={t} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:TX2,background:"rgba(255,255,255,0.04)",border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"5px 11px",fontWeight:600}}>
+            <Check size={10} color={SUCCESS}/>{DATA_TAG_LABELS[t]||t}
           </span>
         ))}
       </div>
@@ -237,11 +237,11 @@ export function ComparisonBar({aLabel,aValue,bLabel,bValue,color}){
     <div style={{display:"flex",flexDirection:"column",gap:7,margin:"14px 0"}}>
       <div style={{display:"flex",alignItems:"center",gap:9}}>
         <span style={{fontSize:10.5,color:TX3,width:76,flexShrink:0,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{aLabel}</span>
-        <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:7,height:8,overflow:"hidden"}}><div style={{width:`${aPct}%`,height:"100%",background:TX3,borderRadius:7,transition:"width .6s cubic-bezier(.2,.8,.2,1)"}}/></div>
+        <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:R_CHIP,height:8,overflow:"hidden"}}><div style={{width:`${aPct}%`,height:"100%",background:TX3,borderRadius:R_CHIP,transition:`width .6s ${EASE_OUT}`}}/></div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:9}}>
         <span style={{fontSize:10.5,color:TX,width:76,flexShrink:0,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bLabel}</span>
-        <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:7,height:8,overflow:"hidden"}}><div style={{width:`${bPct}%`,height:"100%",background:color,borderRadius:7,transition:"width .6s cubic-bezier(.2,.8,.2,1)"}}/></div>
+        <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:R_CHIP,height:8,overflow:"hidden"}}><div style={{width:`${bPct}%`,height:"100%",background:color,borderRadius:R_CHIP,transition:`width .6s ${EASE_OUT}`}}/></div>
       </div>
     </div>
   );
@@ -252,7 +252,7 @@ const CONFIDENCE_LABEL={alta:"Alta confiança",media:"Média confiança",nova:"N
 // resultado do "Posso gastar?". Enquanto ficou só aqui, aquele arquivo
 // referenciava um nome inexistente e o clique em "Perguntar" derrubava a tela
 // com ReferenceError.
-export const DECISION_STATUS_COLOR={ok:"#22C55E",atencao:"#F0A857",critico:"#EF4444",neutro:TX3};
+export const DECISION_STATUS_COLOR={ok:SUCCESS,atencao:WARNING,critico:ERROR,neutro:TX3};
 
 // ---- Cartão de consultor financeiro ------------------------------------
 // Título → número-herói → comparação visual → o que aconteceu (explanation)
@@ -282,13 +282,13 @@ export function InsightCard({item,index=0,action}){
         </div>
       )}
       {item.recommendation&&(
-        <div style={{marginTop:16,padding:"12px 14px",background:`${item.categoryColor}12`,border:`1px solid ${item.categoryColor}2a`,borderRadius:14,display:"flex",alignItems:"flex-start",gap:9}}>
+        <div style={{marginTop:16,padding:"12px 14px",background:`${item.categoryColor}12`,border:`1px solid ${item.categoryColor}2a`,borderRadius:R_BTN,display:"flex",alignItems:"flex-start",gap:9}}>
           <Lightbulb size={13} color={item.categoryColor} style={{flexShrink:0,marginTop:1}}/>
           <div style={{fontSize:12,color:TX,fontWeight:600,lineHeight:1.5}}>{item.recommendation}</div>
         </div>
       )}
       {action&&(
-        <button onClick={action.onClick} style={{marginTop:16,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:`${item.categoryColor}1a`,border:`1px solid ${item.categoryColor}45`,color:item.categoryColor,borderRadius:12,padding:"10px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",transition:"filter .15s ease"}}>
+        <button onClick={action.onClick} style={{marginTop:16,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:`${item.categoryColor}1a`,border:`1px solid ${item.categoryColor}45`,color:item.categoryColor,borderRadius:R_BTN,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer",transition:`filter .15s ${EASE_OUT}`}}>
           {action.label}<ArrowRight size={14}/>
         </button>
       )}
@@ -335,7 +335,7 @@ export function DecisionRow({d}){
           {paidItems.length>0&&(
             <div>
               <div style={{fontSize:10,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Já pagos este mês</div>
-              <LineItemsList items={paidItems} accentColor="#22C55E"/>
+              <LineItemsList items={paidItems} accentColor={SUCCESS}/>
             </div>
           )}
           <DataUsedChecklist tags={d.evidence?.dataUsed}/>
@@ -384,6 +384,6 @@ MoneyInput.displayName="MoneyInput";
 
 export const Btn=(props)=>{
   const accent=useAccent();
-  return <button {...props} className={`btn-primary ${props.className||""}`} style={{background:accent,border:"none",color:"white",borderRadius:R_BTN,cursor:"pointer",fontWeight:700,fontSize:13.5,boxShadow:`0 2px 10px ${accent}40`,transition:"filter .15s ease, transform .15s ease, box-shadow .15s ease",...props.style}}/>;
+  return <button {...props} className={`btn-primary ${props.className||""}`} style={{background:accent,border:"none",color:"white",borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,boxShadow:`0 2px 10px ${accent}40`,transition:`filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT}`,...props.style}}/>;
 };
-export const BtnGhost=(props)=><button {...props} className={`btn-ghost ${props.className||""}`} style={{background:"transparent",border:`1px solid ${BD2}`,color:TX2,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:13.5,transition:"border-color .15s ease, color .15s ease, background .15s ease",...props.style}}/>;
+export const BtnGhost=(props)=><button {...props} className={`btn-ghost ${props.className||""}`} style={{background:"transparent",border:`1px solid ${BD2}`,color:TX2,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,transition:`border-color .15s ${EASE_OUT}, color .15s ${EASE_OUT}, background .15s ${EASE_OUT}`,...props.style}}/>;

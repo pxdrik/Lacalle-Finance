@@ -10,13 +10,13 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "apple-touch-icon.png"],
       manifest: {
-        name: "Lacalle Finance",
-        short_name: "Lacalle",
+        name: "LaCalle Finance",
+        short_name: "LaCalle",
         description:
           "Controle financeiro pessoal: saldos, projeções, previstos e metas.",
         lang: "pt-BR",
-        theme_color: "#071421",
-        background_color: "#071421",
+        theme_color: "#0B0D0F",
+        background_color: "#0B0D0F",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
