@@ -2568,8 +2568,8 @@ function MainApp({user,setUser}){
                       <div style={{fontSize:15,fontWeight:700,color:TX}}>{w.name}</div>
                       <div style={{fontSize:13,fontWeight:700,color:accent}}>{w.pct}%</div>
                     </div>
-                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:20,height:8,overflow:"hidden",marginBottom:16}}>
-                      <div style={{width:`${w.pct}%`,height:"100%",background:accent,borderRadius:20,transition:"width .5s"}}/>
+                    <div style={{background:"rgba(255,255,255,0.06)",borderRadius:R_CHIP,height:8,overflow:"hidden",marginBottom:16}}>
+                      <div style={{width:`${w.pct}%`,height:"100%",background:accent,borderRadius:R_CHIP,transition:`width .5s ${EASE_OUT}`}}/>
                     </div>
                     <div className="bento">
                       <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor atual</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.saved)}</div></div>
@@ -3071,8 +3071,8 @@ function MainApp({user,setUser}){
                       <button onClick={()=>setConfirmDelete({type:"wish",id:w.id,label:w.name})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4}}><Trash2 size={14}/></button>
                     </div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.06)",borderRadius:20,height:7,overflow:"hidden"}}>
-                    <div style={{width:`${pct2}%`,height:"100%",background:accent,borderRadius:20,transition:"width .5s"}}/>
+                  <div style={{background:"rgba(255,255,255,0.06)",borderRadius:R_CHIP,height:7,overflow:"hidden"}}>
+                    <div style={{width:`${pct2}%`,height:"100%",background:accent,borderRadius:R_CHIP,transition:`width .5s ${EASE_OUT}`}}/>
                   </div>
                   <div style={{fontSize:11,color:TX2,marginTop:8}}>{pct2}% conquistado</div>
                   {w.notes&&(
