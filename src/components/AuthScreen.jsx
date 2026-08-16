@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Wallet, Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { BG, CARD, BD, BD2, TX, TX2, TEAL, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, EASE_OUT, SUCCESS, ERROR } from "../lib/theme";
+import LogoSymbol from "./LogoSymbol";
 
 const inputStyle = {
   background: "rgba(255,255,255,0.03)",
@@ -87,8 +88,8 @@ export default function AuthScreen({ onLogin }) {
       `}</style>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ background: `linear-gradient(135deg, ${TEAL}22, ${TEAL}0A)`, border: `1px solid ${TEAL}40`, borderRadius: R_MODAL, width: 54, height: 54, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: `0 8px 24px -8px ${TEAL}45` }}>
-            <Wallet size={23} color={TEAL} strokeWidth={2} />
+          <div style={{ background: "#111111", borderRadius: R_MODAL, width: 54, height: 54, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: `0 8px 24px -8px ${TEAL}45` }}>
+            <LogoSymbol size={25} color="#FFFFFF" />
           </div>
           <div style={{ fontWeight: 700, fontSize: 27, color: TX, letterSpacing: "-0.025em" }}>LaCalle <span style={{ color: TEAL }}>Finance</span></div>
           <div style={{ fontSize: 13, color: TX2, marginTop: 8 }}>Sincronizado em todos os dispositivos</div>
