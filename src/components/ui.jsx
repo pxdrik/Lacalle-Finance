@@ -153,27 +153,33 @@ export function ProgressBar({pct,color,trackColor,height=8,radius=R_CHIP,duratio
 // navegação comum, só em splash, login e abertura do dashboard após
 // autenticação (no máximo 1x por sessão). Cor do acento porque quem decide
 // o acento é a pessoa, na aba Minha Conta — a marca-mãe não fixa uma cor.
-export function LaCalleReveal({accent,duration=350,onDone}){
-  const [phase,setPhase]=useState("start"); // start -> in -> out
+export function LaCalleReveal({accent,duration=1000,hold=250,onDone}){
+  const [phase,setPhase]=useState("start"); // start -> in -> hold -> out
   useEffect(()=>{
     if(prefersReducedMotion()){
       const t0=setTimeout(()=>setPhase("out"),10);
       const t1=setTimeout(()=>onDone?.(),130);
       return()=>{clearTimeout(t0);clearTimeout(t1);};
     }
+    const outDuration=Math.round(duration*0.7);
     let raf1,raf2;
     raf1=requestAnimationFrame(()=>{raf2=requestAnimationFrame(()=>setPhase("in"));});
-    const t1=setTimeout(()=>setPhase("out"),duration*0.55);
-    const t2=setTimeout(()=>onDone?.(),duration*0.55+duration*0.6+40);
+    // A expansão termina de verdade (cobre a tela por completo) antes de
+    // começar a recuar — interromper no meio, como fazia antes, deixava o
+    // círculo mal terminar de crescer e já ir embora, o que no celular (tela
+    // menor, então a mesma % de clip-path cobre tudo mais rápido) passava
+    // rápido demais pra dar tempo do olho perceber.
+    const t1=setTimeout(()=>setPhase("out"),duration+hold);
+    const t2=setTimeout(()=>onDone?.(),duration+hold+outDuration+40);
     return()=>{cancelAnimationFrame(raf1);cancelAnimationFrame(raf2);clearTimeout(t1);clearTimeout(t2);};
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[duration]);
+  },[duration,hold]);
 
   if(prefersReducedMotion()){
     return <div aria-hidden style={{position:"fixed",inset:0,zIndex:600,background:accent,opacity:phase==="out"?0:1,transition:"opacity 120ms linear",pointerEvents:"none"}}/>;
   }
-  const clip=phase==="in"?"circle(75% at 50% 50%)":"circle(0% at 50% 50%)";
-  const clipDuration=phase==="out"?Math.round(duration*0.6):duration;
+  const clip=phase==="out"?"circle(0% at 50% 50%)":"circle(75% at 50% 50%)";
+  const clipDuration=phase==="out"?Math.round(duration*0.7):duration;
   return(
     <div aria-hidden style={{position:"fixed",inset:0,zIndex:600,background:accent,clipPath:clip,transition:phase==="start"?"none":`clip-path ${clipDuration}ms ${EASE_OUT}`,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
       <div style={{opacity:phase==="out"?0:1,transform:phase==="out"?"scale(0.85)":"scale(1)",transition:`opacity 200ms ${EASE_OUT}, transform 200ms ${EASE_OUT}`}}>
