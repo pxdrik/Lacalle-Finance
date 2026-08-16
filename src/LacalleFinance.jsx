@@ -112,8 +112,8 @@ import {
   Car, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, Repeat, Undo2, Gift, Tag,
   Settings, LogOut, Search, X, Plus, Pencil, Trash2, Check, ChevronLeft, ChevronRight, ChevronDown,
   ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard,
-  Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Landmark, Rocket,
-  Gem, Star, Trophy, Lightbulb, ShieldCheck, Target, CalendarDays, Bell, Flag, Hourglass, Clock,
+  Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Rocket,
+  Trophy, Lightbulb, ShieldCheck, Target, CalendarDays, Bell, Flag, Hourglass, Clock,
   ArrowRightLeft, EyeOff, Eye
 } from "lucide-react";
 
@@ -142,7 +142,6 @@ const PALETTES={
   orange:{name:"Laranja",base:"#FBBF24",dark:"#FBBF24"},
   green:{name:"Verde",base:"#34D399",dark:"#16A34A"},
 };
-const AVATAR_ICONS={wallet:Wallet,piggy:PiggyBank,trending:TrendingUp,credit:CreditCard,landmark:Landmark,rocket:Rocket,gem:Gem,star:Star};
 // parseNum/DATE_MIN/DATE_MAX agora vêm de lib/validation.js (fonte única,
 // compartilhada com as validações de formulário e coberta por testes).
 // Gerador de ID: Date.now() sozinho pode colidir se dois itens forem criados
@@ -338,11 +337,9 @@ function MainApp({user,setUser}){
 
   const [accentKey,setAccentKey]=useState("blue");
   const [walletName,setWalletName]=useState("LaCalle Finance");
-  const [avatarIcon,setAvatarIcon]=useState("wallet");
   const [onboardingDismissed,setOnboardingDismissed]=useState(false);
   const accent=(PALETTES[accentKey]||PALETTES.blue).base;
   const accentDark=(PALETTES[accentKey]||PALETTES.blue).dark;
-  const AvatarIconComp=AVATAR_ICONS[avatarIcon]||Wallet;
 
   // ---- Planejamento (estados) ----
   const [planTab,setPlanTab]=useState("geral");
@@ -410,7 +407,6 @@ function MainApp({user,setUser}){
     setCustomCats(d.customCats||[]);
     setAccentKey(d.accentKey||"blue");
     setWalletName(d.walletName||"LaCalle Finance");
-    setAvatarIcon(d.avatarIcon||"wallet");
     setOnboardingDismissed(!!d.onboardingDismissed);
     const cutoff=Date.now()-TRASH_RETENTION_DAYS*24*60*60*1000;
     setTrash((d.trash||[]).filter(t=>t.deletedAt>cutoff));
@@ -464,7 +460,7 @@ function MainApp({user,setUser}){
       }
     }catch{/* se a checagem falhar, segue com o salvamento normal — não trava por causa disso */}
     const newUpdatedAt=Date.now();
-    const payload=JSON.stringify({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,avatarIcon,trash,onboardingDismissed,updatedAt:newUpdatedAt});
+    const payload=JSON.stringify({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,onboardingDismissed,updatedAt:newUpdatedAt});
     try{
       const result=await storage.set(storageKey(user.email),payload,false);
       if(!result)throw new Error("Sem resposta do armazenamento");
@@ -497,7 +493,7 @@ function MainApp({user,setUser}){
       else if(status==="conflict")showToast("Esses dados foram atualizados em outra aba ou aparelho. Toque em \"Recarregar\" ao lado do status antes de continuar editando, pra não perder a versão mais recente.","error");
     },1200);
     return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};
-  },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,avatarIcon,trash,onboardingDismissed,isLoaded]);
+  },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,trash,onboardingDismissed,isLoaded]);
 
   const retrySave=async()=>{
     setSyncStatus("saving");
@@ -1304,7 +1300,7 @@ function MainApp({user,setUser}){
   };
   const exportAllBackup=()=>{
     try{
-      const data={tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,avatarIcon,trash,exportedAt:new Date().toISOString()};
+      const data={tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,exportedAt:new Date().toISOString()};
       const json=JSON.stringify(data,null,2);
       const blob=new Blob([json],{type:"application/json"});
       const url=URL.createObjectURL(blob);const a=document.createElement("a");
@@ -1340,7 +1336,6 @@ function MainApp({user,setUser}){
     const newCustomCats=d.customCats||[];
     const newAccentKey=d.accentKey||accentKey;
     const newWalletName=d.walletName||walletName;
-    const newAvatarIcon=d.avatarIcon||avatarIcon;
     const newUserName=d.name||user.name;
     const newTrash=d.trash||[];
     setTransactions(newTx);
@@ -1350,7 +1345,6 @@ function MainApp({user,setUser}){
     setCustomCats(newCustomCats);
     setAccentKey(newAccentKey);
     setWalletName(newWalletName);
-    setAvatarIcon(newAvatarIcon);
     setUser(u=>({...u,name:newUserName}));
     setTrash(newTrash);
     setPendingImport(null);
@@ -1359,7 +1353,7 @@ function MainApp({user,setUser}){
       setSyncStatus("saving");
       try{
         const newUpdatedAt=Date.now();
-        const payload=JSON.stringify({tx:newTx,wishes:newWishes,inst:newInst,planned:newPlanned,customCats:newCustomCats,name:newUserName,accentKey:newAccentKey,walletName:newWalletName,avatarIcon:newAvatarIcon,trash:newTrash,updatedAt:newUpdatedAt});
+        const payload=JSON.stringify({tx:newTx,wishes:newWishes,inst:newInst,planned:newPlanned,customCats:newCustomCats,name:newUserName,accentKey:newAccentKey,walletName:newWalletName,trash:newTrash,updatedAt:newUpdatedAt});
         const result=await storage.set(storageKey(user.email),payload,false);
         if(!result)throw new Error("Sem resposta do armazenamento");
         remoteVersionRef.current=newUpdatedAt;
@@ -1638,8 +1632,8 @@ function MainApp({user,setUser}){
       </div>
 
       <div className="app-header" style={{background:HDR,padding:"14px 24px",borderBottom:`1px solid ${BD}`}}>
-        <div style={{background:`linear-gradient(135deg, ${accent}26, ${accent}0C)`,border:`1px solid ${accent}38`,borderRadius:12,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <AvatarIconComp size={16} color={accent} strokeWidth={2}/>
+        <div style={{background:"#111111",borderRadius:R_BTN,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <LogoSymbol size={16} color="#FFFFFF"/>
         </div>
         <div className="hdr-info">
           <div style={{fontWeight:700,fontSize:14.5,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:"-0.01em"}}>{walletName}</div>
@@ -2000,13 +1994,6 @@ function MainApp({user,setUser}){
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Nome da sua conta (aparece no topo do app)</div>
             <input value={walletName} onChange={e=>setWalletName(e.target.value)} style={{...SI,marginBottom:20}}/>
-
-            <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Avatar</div>
-            <div style={{display:"flex",gap:8,marginBottom:22,flexWrap:"wrap"}}>
-              {Object.entries(AVATAR_ICONS).map(([key,Ic])=>(
-                <button key={key} onClick={()=>setAvatarIcon(key)} style={{width:38,height:38,borderRadius:12,border:avatarIcon===key?`1px solid ${accent}55`:`1px solid ${BD}`,background:avatarIcon===key?`${accent}22`:"rgba(255,255,255,0.03)",color:avatarIcon===key?accent:TX2,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ic size={17}/></button>
-              ))}
-            </div>
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Cor de destaque</div>
             <div style={{display:"flex",gap:10,marginBottom:22,flexWrap:"wrap"}}>
