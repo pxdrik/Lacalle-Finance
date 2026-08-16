@@ -77,6 +77,12 @@ export const SUCCESS = "#34D399";
 export const WARNING = "#FBBF24";
 export const ERROR = "#F87171";
 export const INFO = TX2;
+// Fundos sólidos que carregam texto/ícone branco por cima precisam de um tom
+// mais escuro do que o token de texto/ícone acima (que já foi clareado um
+// passo para dark mode e não sustenta branco a 4,5:1 — mesma divergência
+// documentada e testada no LaCalle Life, pág. 25/48 do Brand System).
+export const ERROR_BG = "#DC2626";   // botão destrutivo — branco mede ~4,83:1
+export const SUCCESS_FILL = "#059669"; // indicador "concluído" — ícone branco mede ~3,77:1
 export const DATA_POSITIVE = "#34D399";
 export const DATA_NEGATIVE = "#F87171";
 export const DATA_NEUTRAL = TX2;

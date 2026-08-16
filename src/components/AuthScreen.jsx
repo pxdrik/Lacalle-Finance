@@ -96,8 +96,8 @@ export default function AuthScreen({ onLogin }) {
 
         <div style={{ background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD, padding: 32, boxShadow: SH_MD }}>
           <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", border: `1px solid ${BD}`, borderRadius: R_INPUT, padding: 4, marginBottom: 22 }}>
-            <button onClick={() => { setMode("login"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "login" ? TEAL : "transparent", color: mode === "login" ? "#FFFFFF" : TX2 }}>Entrar</button>
-            <button onClick={() => { setMode("signup"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "signup" ? TEAL : "transparent", color: mode === "signup" ? "#FFFFFF" : TX2 }}>Criar conta</button>
+            <button onClick={() => { setMode("login"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "login" ? TEAL : "transparent", color: mode === "login" ? BG : TX2 }}>Entrar</button>
+            <button onClick={() => { setMode("signup"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "signup" ? TEAL : "transparent", color: mode === "signup" ? BG : TX2 }}>Criar conta</button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -121,7 +121,7 @@ export default function AuthScreen({ onLogin }) {
             {err && <div style={{ background: `${ERROR}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: ERROR, display: "flex", alignItems: "center", gap: 8 }}><AlertCircle size={14} />{err}</div>}
             {info && <div style={{ background: `${SUCCESS}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: SUCCESS, display: "flex", alignItems: "center", gap: 8 }}><CheckCircle2 size={14} />{info}</div>}
 
-            <button className="wl-btn" disabled={loading} onClick={submit} style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: TEAL, color: "#FFFFFF", boxShadow: `0 2px 8px ${TEAL}45` }}>
+            <button className="wl-btn" disabled={loading} onClick={submit} style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: TEAL, color: BG, boxShadow: `0 2px 8px ${TEAL}45` }}>
               {loading ? "Um momento..." : mode === "signup" ? "Criar conta" : mode === "forgot" ? "Enviar link de recuperação" : "Entrar"}
             </button>
 

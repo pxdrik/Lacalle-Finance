@@ -382,8 +382,13 @@ export const MoneyInput=forwardRef(({value,onChange,style,...rest},ref)=>(
 ));
 MoneyInput.displayName="MoneyInput";
 
+// Ink (BG) e não branco: os seis acentos do app (pág. 19/49 do Brand System)
+// são todos tons médios/claros — branco sobre eles mede entre ~2,8:1 e ~3,7:1,
+// abaixo dos 4,5:1 que a pág. 48 exige de texto abaixo de 18px. Ink passa em
+// todos com folga. Mesma divergência já documentada e testada no LaCalle Life
+// (pág. 25 do Brand System, "tinta sobre o acento").
 export const Btn=(props)=>{
   const accent=useAccent();
-  return <button {...props} className={`btn-primary ${props.className||""}`} style={{background:accent,border:"none",color:"white",borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,boxShadow:`0 2px 10px ${accent}40`,transition:`filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT}`,...props.style}}/>;
+  return <button {...props} className={`btn-primary ${props.className||""}`} style={{background:accent,border:"none",color:BG,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,boxShadow:`0 2px 10px ${accent}40`,transition:`filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT}`,...props.style}}/>;
 };
 export const BtnGhost=(props)=><button {...props} className={`btn-ghost ${props.className||""}`} style={{background:"transparent",border:`1px solid ${BD2}`,color:TX2,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,transition:`border-color .15s ${EASE_OUT}, color .15s ${EASE_OUT}, background .15s ${EASE_OUT}`,...props.style}}/>;

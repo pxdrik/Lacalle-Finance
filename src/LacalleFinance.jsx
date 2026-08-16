@@ -102,7 +102,7 @@ import { storage } from "./lib/storage";
 import AuthScreen from "./components/AuthScreen";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "./lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, TEAL2, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
@@ -1689,7 +1689,7 @@ function MainApp({user,setUser}){
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Todas as transações serão removidas permanentemente.</div>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setShowClearConfirm(false)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
-            <button onClick={()=>{pushHistory();setTransactions([]);setShowClearConfirm(false);showToast("Tudo apagado.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#F87171",color:"white"}}>Apagar tudo</button>
+            <button onClick={()=>{pushHistory();setTransactions([]);setShowClearConfirm(false);showToast("Tudo apagado.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo</button>
           </div>
         </Modal>
       )}
@@ -1716,7 +1716,7 @@ function MainApp({user,setUser}){
               else if(confirmDiscard==="planned"){setShowPlannedForm(false);setEditingPlanned(null);}
               else if(confirmDiscard==="tx")cancelEditTx();
               setConfirmDiscard(null);
-            }} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#F87171",color:"white"}}>Descartar</button>
+            }} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Descartar</button>
           </div>
         </Modal>
       )}
@@ -1748,7 +1748,7 @@ function MainApp({user,setUser}){
             <button
               onClick={deleteAccount}
               disabled={!phraseOk||deleteAccountBusy}
-              style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:(!phraseOk||deleteAccountBusy)?"not-allowed":"pointer",fontSize:13,fontWeight:700,background:(!phraseOk||deleteAccountBusy)?"rgba(239,68,68,0.25)":"#F87171",color:"white"}}
+              style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:(!phraseOk||deleteAccountBusy)?"not-allowed":"pointer",fontSize:13,fontWeight:700,background:(!phraseOk||deleteAccountBusy)?`${ERROR_BG}40`:ERROR_BG,color:"white"}}
             >{deleteAccountBusy?"Apagando...":"Apagar para sempre"}</button>
           </div>
         </Modal>
@@ -1769,7 +1769,7 @@ function MainApp({user,setUser}){
               else if(confirmDelete.type==="planned")deletePlannedItem(confirmDelete.id);
               else if(confirmDelete.type==="tx")deleteTx(confirmDelete.id);
               setConfirmDelete(null);
-            }} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#F87171",color:"white"}}>Excluir</button>
+            }} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Excluir</button>
           </div>
         </Modal>
       )}
@@ -1982,7 +1982,7 @@ function MainApp({user,setUser}){
           <div style={{fontSize:13,color:TX2,marginBottom:22}}>{instTxCount} transações vinculadas.</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <BtnGhost onClick={()=>deleteInstallment(delInstId,false)} style={{width:"100%",padding:"12px"}}>Apagar só o parcelamento</BtnGhost>
-            <button onClick={()=>deleteInstallment(delInstId,true)} style={{width:"100%",padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#F87171",color:"white"}}>Apagar tudo + {instTxCount} transações</button>
+            <button onClick={()=>deleteInstallment(delInstId,true)} style={{width:"100%",padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo + {instTxCount} transações</button>
             <button onClick={()=>setDelInstId(null)} style={{width:"100%",padding:"9px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,background:"transparent",color:TX3}}>Cancelar</button>
           </div>
         </Modal>
@@ -2890,7 +2890,7 @@ function MainApp({user,setUser}){
                 return(
                   <div key={item.id} style={{background:isPaid?"#34D39912":isIgnored?"#FBBF2412":CARD,border:`1px solid ${isPaid?"#34D39930":isIgnored?"#FBBF2430":BD}`,borderRadius:R_INPUT,padding:"14px 16px",boxShadow:SH_SM,opacity:isIgnored?0.75:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:12}}>
-                      <button onClick={()=>togglePlannedPaid(item)} title={isPaid?"Marcar como não pago":"Marcar como pago"} style={{width:24,height:24,borderRadius:8,border:isPaid?"none":`1.5px solid ${BD2}`,background:isPaid?"#34D399":"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{isPaid&&<Check size={13}/>}</button>
+                      <button onClick={()=>togglePlannedPaid(item)} title={isPaid?"Marcar como não pago":"Marcar como pago"} style={{width:24,height:24,borderRadius:8,border:isPaid?"none":`1.5px solid ${BD2}`,background:isPaid?SUCCESS_FILL:"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{isPaid&&<Check size={13}/>}</button>
                       <div style={{width:34,height:34,borderRadius:8,background:itemColor+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><CategoryIcon cat={item.cat} size={15} color={itemColor}/></div>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,fontWeight:600,color:isPaid?TX2:TX,textDecoration:isPaid||isIgnored?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.desc}</div>
@@ -3057,7 +3057,7 @@ function MainApp({user,setUser}){
                 <Card key={w.id} style={{padding:22,opacity:w.done?0.7:1}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:8}}>
                     <div style={{display:"flex",alignItems:"flex-start",gap:12,minWidth:0}}>
-                      <button onClick={()=>toggleWishDone(w.id)} title={w.done?"Marcar como não conquistado":"Marcar como conquistado"} style={{width:24,height:24,borderRadius:8,border:w.done?"none":`1.5px solid ${BD2}`,background:w.done?"#34D399":"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",marginTop:2}}>{w.done&&<Check size={13}/>}</button>
+                      <button onClick={()=>toggleWishDone(w.id)} title={w.done?"Marcar como não conquistado":"Marcar como conquistado"} style={{width:24,height:24,borderRadius:8,border:w.done?"none":`1.5px solid ${BD2}`,background:w.done?SUCCESS_FILL:"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",marginTop:2}}>{w.done&&<Check size={13}/>}</button>
                       <div style={{minWidth:0}}>
                         <div style={{fontSize:14.5,fontWeight:700,color:w.done?TX2:TX,textDecoration:w.done?"line-through":"none",letterSpacing:"-0.01em"}}>{w.name}</div>
                         <div style={{fontSize:11,color:TX2,marginTop:5}}>{fmt(w.saved)} de {fmt(w.price)} · faltam {fmt(remaining)}</div>
