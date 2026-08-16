@@ -235,14 +235,12 @@ const todayFn=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMo
 
 function MainApp({user,setUser}){
   const [isLoaded,setIsLoaded]=useState(false);
-  // LaCalle Reveal (pág. 35): toca na abertura do dashboard logo depois da
-  // autenticação, e de novo a cada troca de aba (a pedido — o brandbook
-  // reserva o Reveal só pra abertura/splash, mas aqui vira a assinatura de
-  // toda navegação entre abas).
+  // LaCalle Reveal (pág. 35): toca uma única vez, na abertura do site logo
+  // depois da autenticação — nunca de novo na mesma sessão (voltou a ser
+  // assim depois de testar disparando em toda troca de aba, que incomodou).
   const [revealActive,setRevealActive]=useState(true);
   const [syncStatus,setSyncStatus]=useState("loading");
   const [tab,setTab]=useState("dashboard");
-  useEffect(()=>{if(isLoaded)setRevealActive(true);},[tab]);
   const [transactions,setTransactions]=useState([]);
   const [wishes,setWishes]=useState([]);
   const [installments,setInstallments]=useState([]);
@@ -1507,7 +1505,7 @@ function MainApp({user,setUser}){
 
   return(
     <AccentContext.Provider value={accent}>
-    {revealActive&&<LaCalleReveal key={tab} accent={accent} duration={700} onDone={()=>setRevealActive(false)}/>}
+    {revealActive&&<LaCalleReveal accent={accent} duration={1000} onDone={()=>setRevealActive(false)}/>}
     <div style={{background:BG,minHeight:"100vh",color:TX,fontFamily:"'Inter Variable','Inter',system-ui,sans-serif",overflowX:"hidden"}}>
       <style>{`
         *{box-sizing:border-box;}
