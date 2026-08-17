@@ -1505,7 +1505,7 @@ function MainApp({user,setUser}){
 
   return(
     <AccentContext.Provider value={accent}>
-    {revealActive&&<LaCalleReveal accent={accent} duration={1000} onDone={()=>setRevealActive(false)}/>}
+    {revealActive&&<LaCalleReveal duration={1000} onDone={()=>setRevealActive(false)}/>}
     <div style={{background:BG,minHeight:"100vh",color:TX,fontFamily:"'Inter Variable','Inter',system-ui,sans-serif",overflowX:"hidden"}}>
       <style>{`
         *{box-sizing:border-box;}

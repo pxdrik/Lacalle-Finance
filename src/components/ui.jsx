@@ -151,9 +151,10 @@ export function ProgressBar({pct,color,trackColor,height=8,radius=R_CHIP,duratio
 // A transição de identidade da marca: o símbolo expande em círculo até
 // cobrir a tela e recua revelando o conteúdo por baixo — nunca em
 // navegação comum, só em splash, login e abertura do dashboard após
-// autenticação (no máximo 1x por sessão). Cor do acento porque quem decide
-// o acento é a pessoa, na aba Minha Conta — a marca-mãe não fixa uma cor.
-export function LaCalleReveal({accent,duration=1000,hold=250,onDone}){
+// autenticação (no máximo 1x por sessão). Preto com símbolo branco, fixo
+// pela marca-mãe — não segue o acento escolhido pela pessoa.
+export function LaCalleReveal({duration=1000,hold=250,onDone}){
+  const accent="#000000";
   const [phase,setPhase]=useState("start"); // start -> in -> hold -> out
   useEffect(()=>{
     if(prefersReducedMotion()){
