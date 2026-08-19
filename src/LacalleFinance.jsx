@@ -2880,7 +2880,7 @@ function MainApp({user,setUser}){
                 const notesKey=`planned-${item.id}`;
                 return(
                   <div key={item.id} style={{background:isPaid?"#34D39912":isIgnored?"#FBBF2412":CARD,border:`1px solid ${isPaid?"#34D39930":isIgnored?"#FBBF2430":BD}`,borderRadius:R_INPUT,padding:"14px 16px",boxShadow:SH_SM,opacity:isIgnored?0.75:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
                       <button onClick={()=>togglePlannedPaid(item)} title={isPaid?"Marcar como não pago":"Marcar como pago"} style={{width:24,height:24,borderRadius:8,border:isPaid?"none":`1.5px solid ${BD2}`,background:isPaid?SUCCESS_FILL:"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{isPaid&&<Check size={13}/>}</button>
                       <div style={{width:34,height:34,borderRadius:8,background:itemColor+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><CategoryIcon cat={item.cat} size={15} color={itemColor}/></div>
                       <div style={{flex:1,minWidth:0}}>
