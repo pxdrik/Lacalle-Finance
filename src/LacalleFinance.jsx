@@ -2880,11 +2880,11 @@ function MainApp({user,setUser}){
                 const notesKey=`planned-${item.id}`;
                 return(
                   <div key={item.id} style={{background:isPaid?"#34D39912":isIgnored?"#FBBF2412":CARD,border:`1px solid ${isPaid?"#34D39930":isIgnored?"#FBBF2430":BD}`,borderRadius:R_INPUT,padding:"14px 16px",boxShadow:SH_SM,opacity:isIgnored?0.75:1}}>
-                    <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                       <button onClick={()=>togglePlannedPaid(item)} title={isPaid?"Marcar como não pago":"Marcar como pago"} style={{width:24,height:24,borderRadius:8,border:isPaid?"none":`1.5px solid ${BD2}`,background:isPaid?SUCCESS_FILL:"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{isPaid&&<Check size={13}/>}</button>
                       <div style={{width:34,height:34,borderRadius:8,background:itemColor+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><CategoryIcon cat={item.cat} size={15} color={itemColor}/></div>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,color:isPaid?TX2:TX,textDecoration:isPaid||isIgnored?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.desc}</div>
+                        <div style={{fontSize:13,fontWeight:600,color:isPaid?TX2:TX,textDecoration:isPaid||isIgnored?"line-through":"none",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",wordBreak:"break-word",lineHeight:1.3}}>{item.desc}</div>
                         <div style={{fontSize:11,color:TX2,marginTop:3,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
                           <span style={{color:itemColor,fontWeight:600}}>{item.cat}</span>
                           {item.recurring&&<span style={{display:"flex",alignItems:"center",gap:3,color:accent}}>· <Repeat size={10}/>mensal</span>}
@@ -2893,11 +2893,13 @@ function MainApp({user,setUser}){
                         </div>
                       </div>
                       <div className="num" style={{fontSize:14,fontWeight:700,color:isPaid?"#34D399":TX,flexShrink:0}}>{fmt(item.val)}</div>
-                      {item.notes&&<button onClick={()=>toggleNotes(notesKey)} title="Ver notas" style={{background:"none",border:"none",color:expandedNotes[notesKey]?accent:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Info size={14}/></button>}
-                      {item.recurring&&<button onClick={()=>togglePlannedIgnoredForMonth(item,plannedMonth)} title={isIgnored?"Reativar este mês":"Ignorar apenas este mês"} style={{background:"none",border:"none",color:isIgnored?"#FBBF24":TX3,cursor:"pointer",flexShrink:0,padding:4}}>{isIgnored?<Eye size={14}/>:<EyeOff size={14}/>}</button>}
-                      <button onClick={()=>openTransferToWish(item)} title="Mover para Metas" aria-label="Mover para Metas" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><ArrowRightLeft size={14}/></button>
-                      <button onClick={()=>startEditPlanned(item)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
-                      <button onClick={()=>setConfirmDelete({type:"planned",id:item.id,label:item.desc})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
+                      <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
+                        {item.notes&&<button onClick={()=>toggleNotes(notesKey)} title="Ver notas" style={{background:"none",border:"none",color:expandedNotes[notesKey]?accent:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Info size={14}/></button>}
+                        {item.recurring&&<button onClick={()=>togglePlannedIgnoredForMonth(item,plannedMonth)} title={isIgnored?"Reativar este mês":"Ignorar apenas este mês"} style={{background:"none",border:"none",color:isIgnored?"#FBBF24":TX3,cursor:"pointer",flexShrink:0,padding:4}}>{isIgnored?<Eye size={14}/>:<EyeOff size={14}/>}</button>}
+                        <button onClick={()=>openTransferToWish(item)} title="Mover para Metas" aria-label="Mover para Metas" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><ArrowRightLeft size={14}/></button>
+                        <button onClick={()=>startEditPlanned(item)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
+                        <button onClick={()=>setConfirmDelete({type:"planned",id:item.id,label:item.desc})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
+                      </div>
                     </div>
                     {item.notes&&expandedNotes[notesKey]&&(
                       <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${BD}`,fontSize:12.5,color:TX2,lineHeight:1.6}}>
