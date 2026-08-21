@@ -135,6 +135,83 @@ Opção A com GitHub é melhor a longo prazo.)*
   erro sobre `VITE_SUPABASE_URL`, é sinal que as variáveis de ambiente não
   foram configuradas certinho no Netlify (Parte 3, passo 6).
 
+## Parte 4 — Checklist pós-auditoria (fazer antes de abrir pra mais gente)
+
+Estes passos vieram de uma auditoria de segurança e **não dá pra fazer só
+editando código** — são configurações que só você, logado no painel do
+Supabase/Netlify, consegue mudar. O código já está preparado para todos
+eles; falta só ligar.
+
+### 1. Rodar o SQL de hardening
+
+No **SQL Editor** do Supabase, cole e rode o conteúdo de
+`supabase-schema-v2-hardening.sql` (depois do `supabase-schema.sql` original,
+que já deve ter sido rodado). Isso adiciona duas validações mínimas no
+banco: `data` sempre tem que ser um objeto JSON, e tem um teto de tamanho —
+sem isso, hoje o banco aceita qualquer coisa gravada diretamente pela API
+(fora da UI), como valores absurdos ou payloads gigantes na própria conta.
+
+### 2. Ativar confirmação de e-mail
+
+**Authentication → Settings/Providers → Email**, ligue **"Confirm email"**.
+Hoje qualquer e-mail (inclusive de terceiros) vira conta ativa na hora,
+sem confirmar posse do e-mail — combinado com a criação de conta, isso
+facilita cadastro em massa e uso de e-mails alheios.
+
+### 3. Ativar CAPTCHA (bot/brute-force protection)
+
+1. Crie um site grátis em
+   [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) —
+   escolha o modo "Managed". Anote o **Site Key** e o **Secret Key**.
+2. No Supabase: **Authentication → Attack Protection → Enable CAPTCHA
+   protection**, cole o **Secret Key**, escolha provedor "Turnstile".
+3. No `.env` local e nas variáveis de ambiente do Netlify, adicione:
+   ```
+   VITE_TURNSTILE_SITE_KEY=seu-site-key-aqui
+   ```
+4. Faça um novo deploy (Netlify) / rode `npm run dev` de novo localmente.
+
+O widget só aparece na tela de login se essa variável estiver definida — sem
+ela, o app continua funcionando exatamente como antes.
+
+### 4. Implantar a Edge Function `delete-account` atualizada (CORS)
+
+A função foi corrigida para responder ao preflight CORS do navegador (antes,
+o botão "apagar conta" quebrava silenciosamente em produção). Pra valer,
+você precisa reimplantar a função e configurar a(s) origem(ns) permitida(s):
+
+```bash
+npx supabase login
+npx supabase link --project-ref mspkkvpmjruuxgggsxdr
+npx supabase secrets set ALLOWED_ORIGINS=https://SEU-SITE.netlify.app
+npx supabase functions deploy delete-account
+```
+
+Troque `https://SEU-SITE.netlify.app` pelo domínio real onde o site está
+publicado (pode listar mais de um separado por vírgula, ex.: incluindo um
+domínio próprio, se tiver). **Nunca use `*` aqui** — essa função aceita o
+token de login de quem chama.
+
+### 5. Headers de segurança e dependências
+
+Já feito no código (`netlify.toml` ganhou CSP/HSTS/X-Frame-Options, e o
+`vite` foi atualizado para a versão sem as CVEs conhecidas) — só publicar de
+novo (`git push` / novo deploy) já aplica.
+
+### 6. CI
+
+Já adicionado em `.github/workflows/ci.yml`: toda vez que alguém der push ou
+abrir PR contra `main`, os testes (`npm test`) e o build (`npm run build`)
+rodam automaticamente. Não precisa configurar nada — só empurrar pro GitHub.
+
+### 7. Teste de carga (só antes de abrir ao público em geral)
+
+Não incluído automaticamente por rodar contra o Supabase de produção — veja
+`load-test/README.md` antes de rodar, e rode primeiro com poucos usuários
+simulados.
+
+---
+
 ## Sobre o app de celular (próximo passo, quando quiser)
 
 Como agora os dados e o login vivem no Supabase (não mais presos a este

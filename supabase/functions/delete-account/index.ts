@@ -14,11 +14,51 @@
 // ============================================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+// Origem(ns) autorizada(s) a chamar esta função a partir do navegador. Ajuste
+// para o domínio real de produção (e, se quiser, o preview do Netlify) antes
+// de implantar — nunca use "*" aqui: essa função aceita credenciais
+// (Authorization), então uma origem coringa permitiria qualquer site chamar
+// a API em nome de quem estiver logado nele.
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+function corsHeaders(origin: string | null) {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+  // Só ecoa Access-Control-Allow-Origin quando a origem está na allowlist.
+  // Para origens não autorizadas, o header fica de fora de propósito — sem
+  // ele, o navegador bloqueia a resposta independente do que mais viermos a
+  // devolver. Nunca usar "*" aqui (a função aceita Authorization) nem cair
+  // de volta para ALLOWED_ORIGINS[0]: isso responderia a qualquer origem
+  // com a origem errada, em vez de simplesmente não autorizar.
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+  return headers;
+}
+
 Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const cors = corsHeaders(origin);
+
+  // Preflight do navegador — precisa responder aqui, sem exigir auth, senão
+  // o navegador nunca chega a enviar a requisição real (POST) com o token.
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autenticado." }), { status: 401 });
+      return new Response(JSON.stringify({ error: "Não autenticado." }), {
+        status: 401,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
     }
 
     // Cliente "normal" (com a mesma permissão da pessoa que chamou), só pra
@@ -30,7 +70,10 @@ Deno.serve(async (req) => {
     );
     const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Sessão inválida." }), { status: 401 });
+      return new Response(JSON.stringify({ error: "Sessão inválida." }), {
+        status: 401,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
     }
 
     // Cliente com privilégio total (service_role) — só usado aqui dentro,
@@ -48,9 +91,12 @@ Deno.serve(async (req) => {
     if (deleteError) throw deleteError;
 
     return new Response(JSON.stringify({ success: true }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message || "Erro ao apagar a conta." }), { status: 500 });
+    return new Response(JSON.stringify({ error: e.message || "Erro ao apagar a conta." }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
   }
 });

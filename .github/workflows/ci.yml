@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Testes (financialEngine + regressões)
+        run: npm test
+
+      - name: Build de produção
+        run: npm run build
+        env:
+          # Chaves de exemplo só para o build conseguir rodar em CI — o app
+          # real usa as variáveis configuradas no Netlify, não estas aqui.
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+
+      - name: Dependências vulneráveis (informativo)
+        run: npm audit --audit-level=high || true

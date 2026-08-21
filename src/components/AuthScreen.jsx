@@ -1,8 +1,61 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { BG, CARD, BD, BD2, TX, TX2, TEAL, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, EASE_OUT, SUCCESS, ERROR } from "../lib/theme";
 import LogoSymbol from "./LogoSymbol";
+
+// CAPTCHA (Cloudflare Turnstile) é OPCIONAL e fica totalmente desligado até
+// alguém configurar VITE_TURNSTILE_SITE_KEY — sem isso, o login/cadastro
+// funciona exatamente como antes, sem widget nenhum. Para ativar:
+//   1. Crie um site key gratuito em https://dash.cloudflare.com/?to=/:account/turnstile
+//   2. Cole o "Secret key" em Supabase → Authentication → Attack Protection
+//      → Enable CAPTCHA protection.
+//   3. Coloque o "Site key" em VITE_TURNSTILE_SITE_KEY no .env e nas
+//      variáveis de ambiente do Netlify, e faça um novo deploy.
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
+const TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+
+function useTurnstile(onToken) {
+  const containerRef = useRef(null);
+  const widgetIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return;
+    let cancelled = false;
+
+    const render = () => {
+      if (cancelled || !containerRef.current || !window.turnstile) return;
+      widgetIdRef.current = window.turnstile.render(containerRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: onToken,
+        "expired-callback": () => onToken(""),
+        "error-callback": () => onToken(""),
+      });
+    };
+
+    if (window.turnstile) {
+      render();
+    } else if (!document.querySelector(`script[src="${TURNSTILE_SCRIPT_SRC}"]`)) {
+      const script = document.createElement("script");
+      script.src = TURNSTILE_SCRIPT_SRC;
+      script.async = true;
+      script.defer = true;
+      script.onload = render;
+      document.head.appendChild(script);
+    } else {
+      document.querySelector(`script[src="${TURNSTILE_SCRIPT_SRC}"]`).addEventListener("load", render);
+    }
+
+    return () => {
+      cancelled = true;
+      if (window.turnstile && widgetIdRef.current !== null) {
+        try { window.turnstile.remove(widgetIdRef.current); } catch { /* já removido */ }
+      }
+    };
+  }, [onToken]);
+
+  return containerRef;
+}
 
 const inputStyle = {
   background: "rgba(255,255,255,0.03)",
@@ -26,12 +79,21 @@ export default function AuthScreen({ onLogin }) {
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const turnstileRef = useTurnstile(setCaptchaToken);
+
+  // Mensagem única, sempre igual, para o caminho de "cadastro" — não importa
+  // se o e-mail já tem conta ou não. Isso evita enumeração de usuários: um
+  // atacante que tentasse cadastrar e-mails-alvo em massa não consegue
+  // distinguir "e-mail livre" de "e-mail já cadastrado" pela resposta.
+  const SIGNUP_GENERIC_MESSAGE =
+    "Se esse e-mail ainda não tem conta, você vai poder entrar em instantes. Se já existir uma conta com ele, faça login em vez de criar outra.";
 
   const friendlyError = (message) => {
     if (message.includes("Invalid login credentials")) return "E-mail ou senha incorretos.";
-    if (message.includes("User already registered")) return "Já existe uma conta com esse e-mail. Tente entrar em vez de criar conta.";
     if (message.includes("Password should be at least")) return "A senha precisa ter pelo menos 6 caracteres.";
     if (message.includes("Email not confirmed")) return "Confirme seu e-mail antes de entrar (verifique sua caixa de entrada).";
+    if (message.includes("captcha")) return "Não foi possível confirmar que você não é um robô. Tente novamente.";
     return message;
   };
 
@@ -40,40 +102,53 @@ export default function AuthScreen({ onLogin }) {
     if (!email.trim() || !email.includes("@")) { setErr("Digite um e-mail válido."); return; }
     if (mode !== "forgot" && password.length < 6) { setErr("A senha precisa ter pelo menos 6 caracteres."); return; }
     if (mode === "signup" && !name.trim()) { setErr("Digite seu nome."); return; }
+    if (TURNSTILE_SITE_KEY && !captchaToken) { setErr("Confirme que você não é um robô antes de continuar."); return; }
 
     setLoading(true);
+    const captchaOptions = captchaToken ? { captchaToken } : undefined;
     try {
       if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
-          options: { data: { name: name.trim() } },
+          options: { data: { name: name.trim() }, ...captchaOptions },
         });
-        if (error) throw error;
+        if (error) {
+          // "User already registered" nunca vira uma mensagem diferente do
+          // caminho de sucesso — ver SIGNUP_GENERIC_MESSAGE acima.
+          if (error.message.includes("User already registered")) {
+            setInfo(SIGNUP_GENERIC_MESSAGE);
+            setMode("login");
+            return;
+          }
+          throw error;
+        }
         if (data.session) {
           // Confirmação de e-mail desligada no projeto -> já entra direto.
           onLogin(data.user.email, name.trim());
         } else {
-          setInfo("Conta criada! Verifique seu e-mail para confirmar antes de entrar.");
+          setInfo(SIGNUP_GENERIC_MESSAGE);
           setMode("login");
         }
       } else if (mode === "login") {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim().toLowerCase(),
           password,
+          options: captchaOptions,
         });
         if (error) throw error;
         const displayName = data.user.user_metadata?.name || data.user.email.split("@")[0];
         onLogin(data.user.email, displayName);
       } else if (mode === "forgot") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), captchaOptions);
         if (error) throw error;
-        setInfo("Enviamos um link de recuperação para o seu e-mail.");
+        setInfo("Se esse e-mail tiver uma conta, enviamos um link de recuperação para ele.");
       }
     } catch (e) {
       setErr(friendlyError(e.message || "Algo deu errado. Tente de novo."));
     } finally {
       setLoading(false);
+      if (window.turnstile) { try { window.turnstile.reset(); } catch { /* ok */ } setCaptchaToken(""); }
     }
   };
 
@@ -122,7 +197,9 @@ export default function AuthScreen({ onLogin }) {
             {err && <div style={{ background: `${ERROR}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: ERROR, display: "flex", alignItems: "center", gap: 8 }}><AlertCircle size={14} />{err}</div>}
             {info && <div style={{ background: `${SUCCESS}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: SUCCESS, display: "flex", alignItems: "center", gap: 8 }}><CheckCircle2 size={14} />{info}</div>}
 
-            <button className="wl-btn" disabled={loading} onClick={submit} style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: TEAL, color: BG, boxShadow: `0 2px 8px ${TEAL}45` }}>
+            {TURNSTILE_SITE_KEY && <div ref={turnstileRef} />}
+
+            <button className="wl-btn" disabled={loading || (!!TURNSTILE_SITE_KEY && !captchaToken)} onClick={submit} style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: TEAL, color: BG, boxShadow: `0 2px 8px ${TEAL}45` }}>
               {loading ? "Um momento..." : mode === "signup" ? "Criar conta" : mode === "forgot" ? "Enviar link de recuperação" : "Entrar"}
             </button>
 

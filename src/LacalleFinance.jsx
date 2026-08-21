@@ -400,7 +400,11 @@ function MainApp({user,setUser}){
   // sabemos estar salvos na nuvem; antes de sobrescrever, conferimos se
   // ninguém mudou isso por baixo do nosso pé (outra aba/outro aparelho). Se
   // mudou, avisamos em vez de sobrescrever silenciosamente.
-  const remoteVersionRef=useRef(0);
+  // `remoteVersionRef` guarda o `updated_at` que o BANCO controla (não o
+  // campo `updatedAt` de dentro do JSON, que é só um espelho pra exibição).
+  // É essa versão que o `storage.set` usa para detectar conflito de forma
+  // atômica — ver comentários em `src/lib/storage.js`.
+  const remoteVersionRef=useRef(null);
   const isReloadingRef=useRef(false);
 
   const applyRemoteData=d=>{
@@ -414,7 +418,6 @@ function MainApp({user,setUser}){
     setOnboardingDismissed(!!d.onboardingDismissed);
     const cutoff=Date.now()-TRASH_RETENTION_DAYS*24*60*60*1000;
     setTrash((d.trash||[]).filter(t=>t.deletedAt>cutoff));
-    remoteVersionRef.current=d.updatedAt||0;
   };
 
   useEffect(()=>{
@@ -427,6 +430,7 @@ function MainApp({user,setUser}){
           applyRemoteData(d);
           if(d.name&&d.name!==user.name)setUser(u=>({...u,name:d.name}));
         }
+        remoteVersionRef.current=r?.version??null;
         setSyncStatus("saved");
       }catch{
         setSyncStatus("idle");
@@ -445,6 +449,7 @@ function MainApp({user,setUser}){
       const r=await storage.get(storageKey(user.email));
       isReloadingRef.current=true;
       if(r?.value)applyRemoteData(JSON.parse(r.value));
+      remoteVersionRef.current=r?.version??null;
       setSyncStatus("saved");
       showToast("Dados atualizados com a versão mais recente da nuvem.","success");
     }catch{
@@ -454,21 +459,19 @@ function MainApp({user,setUser}){
 
   // Função de salvamento compartilhada entre o autosave (debounced) e o
   // botão manual de "salvar agora" — evita duplicar a lógica de conflito.
+  //
+  // A detecção de conflito acontece dentro do próprio `storage.set`, como
+  // uma escrita condicional atômica no banco (UPDATE ... WHERE updated_at =
+  // versão esperada). Não há mais uma janela entre "checar" e "escrever".
   const doSave=async()=>{
-    try{
-      const check=await storage.get(storageKey(user.email));
-      const remoteUpdatedAt=check?.value?(JSON.parse(check.value).updatedAt||0):0;
-      if(remoteUpdatedAt&&remoteVersionRef.current&&remoteUpdatedAt!==remoteVersionRef.current){
-        setSyncStatus("conflict");
-        return "conflict";
-      }
-    }catch{/* se a checagem falhar, segue com o salvamento normal — não trava por causa disso */}
     const newUpdatedAt=Date.now();
     const payload=JSON.stringify({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,onboardingDismissed,updatedAt:newUpdatedAt});
+    const trySave=async()=>storage.set(storageKey(user.email),payload,remoteVersionRef.current);
     try{
-      const result=await storage.set(storageKey(user.email),payload,false);
+      const result=await trySave();
       if(!result)throw new Error("Sem resposta do armazenamento");
-      remoteVersionRef.current=newUpdatedAt;
+      if(result.conflict){setSyncStatus("conflict");return "conflict";}
+      remoteVersionRef.current=result.version;
       setSyncStatus("saved");
       return "saved";
     }catch(e){
@@ -476,8 +479,9 @@ function MainApp({user,setUser}){
       // ---- Uma nova tentativa automática antes de avisar o usuário: cobre
       // falhas passageiras de rede/rate limit sem exigir ação manual. ----
       try{
-        const retryResult=await storage.set(storageKey(user.email),payload,false);
-        if(retryResult){remoteVersionRef.current=newUpdatedAt;setSyncStatus("saved");return "saved";}
+        const retryResult=await trySave();
+        if(retryResult?.conflict){setSyncStatus("conflict");return "conflict";}
+        if(retryResult){remoteVersionRef.current=retryResult.version;setSyncStatus("saved");return "saved";}
       }catch(e2){console.error("LaCalle Finance — nova tentativa de salvar também falhou:",e2);}
       setSyncStatus("error");
       return "error";
@@ -1358,9 +1362,12 @@ function MainApp({user,setUser}){
       try{
         const newUpdatedAt=Date.now();
         const payload=JSON.stringify({tx:newTx,wishes:newWishes,inst:newInst,planned:newPlanned,customCats:newCustomCats,name:newUserName,accentKey:newAccentKey,walletName:newWalletName,trash:newTrash,updatedAt:newUpdatedAt});
-        const result=await storage.set(storageKey(user.email),payload,false);
+        // Importar um backup é uma substituição explícita e intencional —
+        // não deve ser barrada por conflito de concorrência, então usa
+        // `forceSet` (sobrescreve de propósito) em vez de `set`.
+        const result=await storage.forceSet(storageKey(user.email),payload);
         if(!result)throw new Error("Sem resposta do armazenamento");
-        remoteVersionRef.current=newUpdatedAt;
+        remoteVersionRef.current=result.version;
         setSyncStatus("saved");
         showToast("Backup importado e salvo na nuvem!","success");
       }catch(err){
