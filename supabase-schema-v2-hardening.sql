@@ -42,9 +42,21 @@ alter table public.user_data
   add constraint user_data_size_limit
   check (pg_column_size(data) < 5 * 1024 * 1024);
 
+-- 3) Grants de tabela excessivos — toda tabela nova no Postgres/Supabase
+--    recebe, por padrão, DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/
+--    UPDATE para os papéis anon/authenticated, sem ninguém revogar nada. O
+--    RLS (as 4 policies já existentes) filtra linha a linha o que SELECT/
+--    INSERT/UPDATE/DELETE deixam fazer — mas TRUNCATE ignora RLS por
+--    completo (apaga a tabela inteira de uma vez, sem olhar policy nenhuma),
+--    e REFERENCES/TRIGGER não têm uso legítimo nenhum vindo do cliente.
+--    Revoga só esses três; select/insert/update/delete continuam de pé,
+--    protegidos pelas policies de sempre.
+revoke truncate, references, trigger on public.user_data from anon, authenticated;
+
 -- ============================================================================
 -- Pronto. Isso não substitui a validação do frontend (que continua sendo a
 -- primeira linha de defesa para a experiência normal de uso) — só garante
 -- que, mesmo contornando a UI, ninguém consegue gravar algo que não seja um
--- objeto JSON razoavelmente dimensionado na própria conta.
+-- objeto JSON razoavelmente dimensionado na própria conta, nem truncar a
+-- tabela inteira contornando o RLS.
 -- ============================================================================
