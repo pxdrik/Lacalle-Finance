@@ -1,6 +1,7 @@
 node_modules
 dist
 .env
+.env.loadtest
 .DS_Store
 
 # Supabase CLI local/temp files

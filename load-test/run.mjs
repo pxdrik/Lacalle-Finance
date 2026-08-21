@@ -31,7 +31,36 @@
 //   VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=... \
 //   SUPABASE_SERVICE_ROLE_KEY=... \
 //     node load-test/run.mjs --users=10 --duration=30
+//
+// Alternativa (recomendada no Windows/PowerShell): colar uma service_role
+// key longa direto no console costuma corromper caracteres por causa da
+// codificação do terminal. Em vez de `$env:SUPABASE_SERVICE_ROLE_KEY = "..."`,
+// crie um arquivo `load-test/.env.loadtest` (NUNCA versionado — ver
+// .gitignore) num editor de texto de verdade (Notepad, VS Code), com uma
+// linha `SUPABASE_SERVICE_ROLE_KEY=<valor colado aqui>`, salve como UTF-8, e
+// rode o script sem precisar setar a env var na mão — ele lê o arquivo
+// sozinho (só pra preencher o que não estiver já definido via env var).
 // ============================================================================
+import { readFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const LOCAL_ENV_FILE = join(dirname(fileURLToPath(import.meta.url)), ".env.loadtest");
+function loadLocalEnvFile() {
+  if (!existsSync(LOCAL_ENV_FILE)) return;
+  let raw = readFileSync(LOCAL_ENV_FILE, "utf8");
+  if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1); // BOM
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim();
+    if (key && !(key in process.env)) process.env[key] = value;
+  }
+}
+loadLocalEnvFile();
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -42,8 +71,9 @@ const args = Object.fromEntries(
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-// Só lida via variável de ambiente local — nunca um valor literal aqui, e
-// nunca impressa em nenhum console.log/erro abaixo.
+// Só lida via variável de ambiente local (direta ou via .env.loadtest) —
+// nunca um valor literal aqui, e nunca impressa em nenhum console.log/erro
+// abaixo.
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const NUM_USERS = parseInt(args.users || "10", 10);
 const DURATION_S = parseInt(args.duration || "30", 10);
@@ -74,21 +104,53 @@ const percentile = (arr, p) => {
 const createdAccounts = new Map(); // userId -> { email, accessToken }
 let cleanupInFlight = false;
 
-async function signup(email, password) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+// Domínio usado nos e-mails sintéticos de teste. example.com/net/org (e
+// outros reservados pela IANA pra documentação) são rejeitados pelo
+// validador de e-mail do Supabase — mailinator.com é um domínio real (tem
+// MX válido), então passa nessa checagem. Como a conta é criada já
+// confirmada via admin API (ver adminCreateUser), nenhum e-mail chega a ser
+// enviado de verdade — a caixa pública do mailinator nunca é tocada.
+const EMAIL_DOMAIN = process.env.LOADTEST_EMAIL_DOMAIN || "mailinator.com";
+
+// Cria a conta via admin API (service_role) já confirmada, pulando o fluxo
+// de confirmação por e-mail — sem precisar desligar "Confirm email" em
+// produção, que fica intocado. O CAPTCHA da tela de login pública ainda
+// entra no caminho no passo seguinte (loginUser); por isso o load test
+// continua exigindo o Attack Protection desligado durante a execução.
+async function adminCreateUser(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, password, email_confirm: true }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(`criação de conta (admin) falhou (${res.status}): ${JSON.stringify(body)}`);
+  return body; // { id, email, ... }
+}
+
+async function loginUser(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
   const body = await res.json();
-  if (!res.ok) throw new Error(`signup falhou (${res.status}): ${JSON.stringify(body)}`);
-  return body; // { access_token, user: { id, ... }, ... }
+  if (!res.ok) throw new Error(`login falhou (${res.status}): ${JSON.stringify(body)}`);
+  return body; // { access_token, ... }
 }
 
-async function deleteUserData(accessToken) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/user_data`, {
+// Usa service_role (não o token da própria conta) pra não depender do
+// login ter dado certo — se adminCreateUser funcionou mas loginUser falhou,
+// ainda precisamos conseguir limpar a linha de user_data (se alguma tiver
+// sido criada) sem um access_token válido em mãos.
+async function deleteUserData(userId) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/user_data?user_id=eq.${userId}`, {
     method: "DELETE",
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${accessToken}` },
+    headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
   });
   if (!res.ok) throw new Error(`delete user_data falhou (${res.status})`);
 }
@@ -103,10 +165,10 @@ async function deleteAuthAccount(userId) {
 
 // Apaga user_data + conta de Auth de uma conta criada por este script.
 // Devolve null em sucesso total, ou uma descrição do que falhou.
-async function cleanupOne(userId, { email, accessToken }) {
+async function cleanupOne(userId, { email }) {
   const failures = [];
   try {
-    await deleteUserData(accessToken);
+    await deleteUserData(userId);
   } catch (e) {
     failures.push(`user_data: ${e.message}`);
   }
@@ -159,20 +221,27 @@ async function handleInterruption(signal) {
   console.log(`\n${signal} recebido — interrompendo e limpando ${createdAccounts.size} conta(s) já criada(s)...`);
   const pending = await cleanupAll();
   reportPending(pending);
-  process.exit(pending.length ? 1 : 0);
+  // process.exitCode (não process.exit()) deixa o event loop drenar
+  // sozinho — chamar exit() logo depois de fetches ainda em voo crasha no
+  // Windows (Assertion failed ... UV_HANDLE_CLOSING, bug conhecido do
+  // libuv), mesmo com toda a saída já impressa corretamente antes disso.
+  process.exitCode = pending.length ? 1 : 0;
 }
 process.on("SIGINT", () => handleInterruption("SIGINT"));
 process.on("SIGTERM", () => handleInterruption("SIGTERM"));
 
 async function virtualUser(id, stopAt, stats) {
-  const email = `audit-loadtest-${rand()}@example.com`;
+  const email = `audit-loadtest-${rand()}@${EMAIL_DOMAIN}`;
   const password = `Lt-${rand()}Aa1!`;
   let accessToken, userId;
   try {
-    const signupRes = await signup(email, password);
-    accessToken = signupRes.access_token;
-    userId = signupRes.user?.id;
-    if (!userId) throw new Error("signup não devolveu user.id");
+    const created = await adminCreateUser(email, password);
+    userId = created.id;
+    if (!userId) throw new Error("criação de conta (admin) não devolveu id");
+    createdAccounts.set(userId, { email, accessToken: null });
+    const loginRes = await loginUser(email, password);
+    accessToken = loginRes.access_token;
+    if (!accessToken) throw new Error("login não devolveu access_token");
     createdAccounts.set(userId, { email, accessToken });
   } catch (e) {
     stats.errors.push(`signup: ${e.message}`);
@@ -207,7 +276,12 @@ async function virtualUser(id, stopAt, stats) {
           "Content-Type": "application/json",
           Prefer: "resolution=merge-duplicates",
         },
-        body: JSON.stringify({ data: JSON.parse(payload) }),
+        // user_id não tem default na coluna (é a PK, ver supabase-schema.sql)
+        // — sem mandar ele aqui, o INSERT tenta gravar NULL, e o RLS
+        // (auth.uid() = user_id) nunca bate com NULL, então bloqueia com
+        // 403 em todo write. O app de verdade (storage.js) sempre manda
+        // user_id explícito; o load test precisa fazer o mesmo.
+        body: JSON.stringify({ user_id: userId, data: JSON.parse(payload) }),
       });
       await r.text();
       stats.setMs.push(Date.now() - t0);
@@ -240,7 +314,7 @@ SET  p50=${percentile(stats.setMs, 50)}ms  p95=${percentile(stats.setMs, 95)}ms 
     console.log("Amostra de erros:", stats.errors.slice(0, 10));
   }
   reportPending(pending);
-  process.exit(pending.length ? 1 : 0);
+  process.exitCode = pending.length ? 1 : 0; // ver comentário em handleInterruption
 }
 
 main();
