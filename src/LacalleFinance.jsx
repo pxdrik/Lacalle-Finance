@@ -1278,19 +1278,25 @@ function MainApp({user,setUser}){
         // conta de autenticação de verdade — não é possível fazer isso com
         // segurança direto do navegador (exigiria expor uma chave que dá
         // acesso total ao banco).
+        //
+        // Só tratamos como concluído quando a function realmente confirma
+        // sucesso — nada de deslogar/fechar o modal "no otimismo". Se essa
+        // chamada falhar (rede, CORS, function fora do ar), a pessoa
+        // continua logada e vê um erro claro, podendo tentar de novo — em
+        // vez de sair da tela achando que a conta sumiu quando na verdade
+        // só a sessão local caiu e a conta real continua existindo.
         const{error}=await supabase.functions.invoke("delete-account");
         if(error)throw error;
+        deleteAccountBusyRef.current=false;
+        setDeleteAccountBusy(false);
+        closeDeleteAccount();
+        setUser(null);
       }catch(e){
         console.error("LaCalle Finance — erro ao apagar conta:",e);
-        // Mesmo se a Edge Function falhar (ex.: ainda não foi criada no
-        // painel do Supabase), ao menos apaga os dados locais/remotos como
-        // rede de segurança, pra não deixar a pessoa "presa".
-        try{await storage.delete(storageKey(user.email));}catch{}
+        deleteAccountBusyRef.current=false;
+        setDeleteAccountBusy(false);
+        showToast("Não consegui apagar sua conta agora (falha de conexão com o servidor). Nada foi apagado — tente de novo em instantes.","error");
       }
-      deleteAccountBusyRef.current=false;
-      setDeleteAccountBusy(false);
-      closeDeleteAccount();
-      setUser(null);
     })();
   };
   const addCustomCat=()=>{
