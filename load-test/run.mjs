@@ -77,6 +77,15 @@ const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const NUM_USERS = parseInt(args.users || "10", 10);
 const DURATION_S = parseInt(args.duration || "30", 10);
+// Login (grant_type=password) tem rate limit por IP no Supabase (visto na
+// revisão de Auth: 30 a cada 5 min) — como todo o load test roda de uma
+// única máquina/IP, disparar todos os logins de uma vez estoura essa cota
+// rápido e artificialmente (isso NÃO aconteceria com usuários reais, cada
+// um do seu próprio IP). Escalonar os starts ao longo de uma janela reduz
+// quantos caem na mesma fatia de tempo. Não elimina o limite pra N grande
+// numa janela curta — é físico, 1 IP só — mas deixa mais gente passar.
+// --ramp-ms controla o total; default cresce com o nº de usuários.
+const RAMP_MS = parseInt(args["ramp-ms"] || String(Math.min(NUM_USERS * 400, 60000)), 10);
 
 if (!SUPABASE_URL || !ANON_KEY) {
   console.error("Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY (env vars) antes de rodar.");
@@ -231,6 +240,12 @@ process.on("SIGINT", () => handleInterruption("SIGINT"));
 process.on("SIGTERM", () => handleInterruption("SIGTERM"));
 
 async function virtualUser(id, stopAt, stats) {
+  // Escalona o início de cada usuário simulado (ver comentário em RAMP_MS)
+  // pra não disparar todos os logins no mesmo instante.
+  const startDelay = NUM_USERS > 1 ? Math.floor((id / NUM_USERS) * RAMP_MS) : 0;
+  if (startDelay > 0) await new Promise((r) => setTimeout(r, startDelay));
+  if (interrupted) return;
+
   const email = `audit-loadtest-${rand()}@${EMAIL_DOMAIN}`;
   const password = `Lt-${rand()}Aa1!`;
   let accessToken, userId;
@@ -295,7 +310,7 @@ async function virtualUser(id, stopAt, stats) {
 }
 
 async function main() {
-  console.log(`Iniciando load test: ${NUM_USERS} usuários simulados por ${DURATION_S}s contra ${SUPABASE_URL}`);
+  console.log(`Iniciando load test: ${NUM_USERS} usuários simulados por ${DURATION_S}s contra ${SUPABASE_URL} (logins escalonados ao longo de ${(RAMP_MS / 1000).toFixed(1)}s)`);
   const stats = { getMs: [], setMs: [], errors: [] };
   const stopAt = Date.now() + DURATION_S * 1000;
 
