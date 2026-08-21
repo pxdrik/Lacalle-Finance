@@ -26,7 +26,12 @@ const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "")
 
 function corsHeaders(origin: string | null) {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "authorization, content-type",
+    // O SDK supabase-js sempre manda "apikey" e "x-client-info" em toda
+    // chamada (inclusive functions.invoke) — sem eles aqui, o preflight do
+    // navegador rejeita a requisição antes de sair (bloqueio client-side,
+    // nunca chega no servidor). "content-type" fica por segurança, embora
+    // o app hoje não mande body nessa chamada.
+    "Access-Control-Allow-Headers": "authorization, apikey, x-client-info, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
