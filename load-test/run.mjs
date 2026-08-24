@@ -1,11 +1,35 @@
 // ============================================================================
 // load-test/run.mjs — teste de carga controlado contra o Supabase real.
 //
-// O que faz: cria N contas descartáveis (audit-loadtest-<hex>@example.com),
+// O que faz: cria N contas descartáveis (audit-loadtest-<hex>@mailinator.com),
 // e cada uma delas faz um ciclo repetido de leitura+escrita em `user_data`
 // (o mesmo padrão do app: storage.get + storage.set) por um tempo definido,
 // medindo p50/p95/p99 de cada operação. No final, apaga TUDO que criou:
 // a linha em `user_data` e a própria conta de Auth.
+//
+// COMO AS CONTAS DE TESTE AUTENTICAM (importante, leia antes de mexer):
+// Desde que Confirm Email e o CAPTCHA (Turnstile) foram ativados em
+// produção, os endpoints públicos de signup/login (`/auth/v1/signup`,
+// `/auth/v1/token?grant_type=password`) passaram a exigir captcha_token —
+// que só existe resolvendo o widget num navegador de verdade, não dá pra
+// obter num script. Este arquivo NUNCA desativa o CAPTCHA pra contornar
+// isso. Em vez disso, cada conta de teste é provisionada e autenticada
+// assim:
+//   1. `adminCreateUser` — cria a conta via admin API (service_role),
+//      já confirmada (email_confirm: true).
+//   2. `adminGenerateMagicLink` — pede à admin API (service_role) um
+//      magic-link pra essa conta, sem enviar e-mail nenhum de verdade.
+//   3. `redeemMagicLink` — troca o token desse link por uma sessão real
+//      (access_token) via `/auth/v1/verify`, usando só a ANON_KEY — o
+//      mesmo endpoint que o navegador de qualquer usuário usa ao clicar
+//      num link de confirmação/magic-link. NÃO exige captcha (não é um
+//      endpoint de signup/login por senha) e NÃO usa service_role.
+// A partir daí, TODO GET/SET do ciclo de carga usa exclusivamente esse
+// access_token de sessão real + a ANON_KEY — exatamente como um usuário
+// comum autenticado no app faria. service_role NUNCA é usada pra ler ou
+// escrever em user_data durante a medição (só nos passos 1, 2, e no
+// cleanup) — isso é deliberado: o objetivo é medir o comportamento real
+// do RLS/autorização sob carga, não contorná-lo.
 //
 // ATENÇÃO — leia antes de rodar:
 //   - Isso gera tráfego REAL contra o seu projeto Supabase de produção.
@@ -13,19 +37,24 @@
 //   - Não rode isso sem antes checar os limites do seu plano Supabase
 //     (conexões simultâneas, rate limits de Auth) — números grandes podem
 //     esbarrar em limites da plataforma antes de qualquer limite do app.
-//   - Apagar a conta de Auth (não só a linha de dados) exige a
-//     "service_role key" — a mesma chave de privilégio total usada pela
-//     Edge Function `delete-account`. Ela SÓ deve existir como variável de
-//     ambiente local, na sua máquina, na hora de rodar este script — nunca
-//     hardcoded aqui, nunca commitada, nunca logada. Ver instruções no
-//     README (`load-test/README.md`).
+//   - service_role key é usada SOMENTE para: (a) criar as contas de teste,
+//     (b) gerar o magic-link de autenticação delas, (c) apagar essas
+//     mesmas contas (Auth) e seus dados (user_data) no cleanup. Nunca para
+//     as operações de leitura/escrita medidas — essas usam o token da
+//     própria conta de teste, igual um usuário real. Ela SÓ deve existir
+//     como variável de ambiente local, na sua máquina, na hora de rodar
+//     este script — nunca hardcoded aqui, nunca commitada, nunca logada.
+//     Ver instruções no README (`load-test/README.md`).
 //   - Se o script for interrompido no meio (Ctrl+C / SIGINT, ou SIGTERM de
 //     quem estiver orquestrando o processo), os handlers abaixo tentam
 //     limpar (user_data + conta de Auth) tudo que já foi criado até aquele
-//     momento antes de encerrar. Se alguma limpeza falhar — durante a
-//     interrupção ou ao final normal do script — o que ficou pendente é
-//     listado explicitamente no console, com o e-mail e o motivo, para você
-//     conferir/remover manualmente em Authentication → Users.
+//     momento antes de encerrar — inclusive uma conta cuja criação estava
+//     em voo bem no instante da interrupção (ver comentário em
+//     handleInterruption sobre a segunda passada de cleanup). Se alguma
+//     limpeza falhar — durante a interrupção ou ao final normal do script
+//     — o que ficou pendente é listado explicitamente no console, com o
+//     e-mail e o motivo, para você conferir/remover manualmente em
+//     Authentication → Users.
 //
 // Como usar:
 //   VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=... \
@@ -77,15 +106,36 @@ const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const NUM_USERS = parseInt(args.users || "10", 10);
 const DURATION_S = parseInt(args.duration || "30", 10);
-// Login (grant_type=password) tem rate limit por IP no Supabase (visto na
-// revisão de Auth: 30 a cada 5 min) — como todo o load test roda de uma
-// única máquina/IP, disparar todos os logins de uma vez estoura essa cota
-// rápido e artificialmente (isso NÃO aconteceria com usuários reais, cada
-// um do seu próprio IP). Escalonar os starts ao longo de uma janela reduz
-// quantos caem na mesma fatia de tempo. Não elimina o limite pra N grande
-// numa janela curta — é físico, 1 IP só — mas deixa mais gente passar.
-// --ramp-ms controla o total; default cresce com o nº de usuários.
-const RAMP_MS = parseInt(args["ramp-ms"] || String(Math.min(NUM_USERS * 400, 60000)), 10);
+// A verificação de magic-link (/auth/v1/verify, o passo que troca o token
+// pela sessão) tem rate limit por IP no Supabase: 30 a cada 5 min (visto na
+// revisão de Auth). Como todo o load test roda de uma única máquina/IP,
+// isso é um limite real que precisa ser respeitado pra não gerar 429
+// artificiais (usuários reais, cada um do seu IP, não bateriam nisso
+// juntos — mas o load test, rodando de 1 IP só, bate). As chamadas de
+// admin API (criar conta, gerar o link) usam service_role e não entram
+// nessa cota — só o passo final de troca por sessão.
+//
+// Matemática do escalonamento (rodada de 50 usuários on 2026-08-21 bateu
+// 19× 429 com o default antigo, que só ia até 60s independente de N — não
+// dava conta de N > ~25-30):
+//   - Pra N <= SAFE_PER_WINDOW (25, com margem de segurança abaixo do
+//     limite real de 30), qualquer janela pequena é segura: mesmo todo
+//     mundo verificando "ao mesmo tempo", o total nunca passa do limite.
+//   - Pra N > SAFE_PER_WINDOW, a única forma de garantir que nenhuma janela
+//     deslizante de 5 min veja mais que ~25 verificações é espalhar as N
+//     verificações numa janela total larga o bastante: TOTAL_MS >= N *
+//     (300_000ms / SAFE_PER_WINDOW). Isso NÃO é "quanto mais rápido
+//     melhor" — pra N=50 isso dá ~10 minutos de rampa. É lento de
+//     propósito: é o preço de testar sob um rate limit de autenticação
+//     real, de um IP só, sem contornar nada.
+// --ramp-ms sobrescreve esse cálculo manualmente, se precisar.
+const SAFE_VERIFICATIONS_PER_WINDOW = 25; // margem abaixo do limite real (30/5min)
+const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+const RAMP_MS_DEFAULT =
+  NUM_USERS <= SAFE_VERIFICATIONS_PER_WINDOW
+    ? Math.min(NUM_USERS * 400, 60000)
+    : Math.ceil(NUM_USERS * (RATE_LIMIT_WINDOW_MS / SAFE_VERIFICATIONS_PER_WINDOW));
+const RAMP_MS = parseInt(args["ramp-ms"] || String(RAMP_MS_DEFAULT), 10);
 
 if (!SUPABASE_URL || !ANON_KEY) {
   console.error("Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY (env vars) antes de rodar.");
@@ -107,6 +157,7 @@ const percentile = (arr, p) => {
   const s = [...arr].sort((a, b) => a - b);
   return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))];
 };
+const max = (arr) => (arr.length ? Math.max(...arr) : NaN);
 
 // Contas criadas nesta execução — é a partir daqui que o cleanup (normal ou
 // por interrupção) sabe o que precisa apagar.
@@ -121,12 +172,12 @@ let cleanupInFlight = false;
 // enviado de verdade — a caixa pública do mailinator nunca é tocada.
 const EMAIL_DOMAIN = process.env.LOADTEST_EMAIL_DOMAIN || "mailinator.com";
 
-// Cria a conta via admin API (service_role) já confirmada, pulando o fluxo
-// de confirmação por e-mail — sem precisar desligar "Confirm email" em
-// produção, que fica intocado. O CAPTCHA da tela de login pública ainda
-// entra no caminho no passo seguinte (loginUser); por isso o load test
-// continua exigindo o Attack Protection desligado durante a execução.
-async function adminCreateUser(email, password) {
+// Cria a conta via admin API (service_role) já confirmada — sem precisar
+// desligar "Confirm email" em produção, que fica intocado. Sem senha: como
+// a autenticação passa inteira pelo fluxo de magic-link (ver
+// adminGenerateMagicLink/redeemMagicLink), não existe motivo pra a conta
+// de teste ter senha nenhuma.
+async function adminCreateUser(email) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
     method: "POST",
     headers: {
@@ -134,28 +185,57 @@ async function adminCreateUser(email, password) {
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ email, password, email_confirm: true }),
+    body: JSON.stringify({ email, email_confirm: true }),
   });
   const body = await res.json();
   if (!res.ok) throw new Error(`criação de conta (admin) falhou (${res.status}): ${JSON.stringify(body)}`);
   return body; // { id, email, ... }
 }
 
-async function loginUser(email, password) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+// Pede à admin API (service_role) um magic-link pra essa conta. Não envia
+// e-mail de verdade pra ninguém — só devolve o token (hashed_token) que
+// normalmente iria dentro do link. Não é a chamada que autentica: só gera
+// o "ingresso" que o passo seguinte troca por uma sessão de verdade.
+async function adminGenerateMagicLink(email) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
     method: "POST",
-    headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ type: "magiclink", email }),
   });
   const body = await res.json();
-  if (!res.ok) throw new Error(`login falhou (${res.status}): ${JSON.stringify(body)}`);
+  if (!res.ok) throw new Error(`generate_link falhou (${res.status}): ${JSON.stringify(body)}`);
+  if (!body.hashed_token) throw new Error("generate_link não devolveu hashed_token");
+  return body.hashed_token;
+}
+
+// Troca o token do magic-link por uma sessão real (access_token), usando
+// só a ANON_KEY — o mesmo endpoint público que o navegador de um usuário
+// de verdade usa ao clicar num link de confirmação/magic-link. Não exige
+// captcha_token (não é o endpoint de signup/login por senha, que exigiria)
+// e não usa service_role — a partir daqui a conta de teste se autentica
+// exatamente como uma conta comum.
+async function redeemMagicLink(tokenHash) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+    method: "POST",
+    headers: { apikey: ANON_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "magiclink", token_hash: tokenHash }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(`verify (magiclink) falhou (${res.status}): ${JSON.stringify(body)}`);
   return body; // { access_token, ... }
 }
 
-// Usa service_role (não o token da própria conta) pra não depender do
-// login ter dado certo — se adminCreateUser funcionou mas loginUser falhou,
-// ainda precisamos conseguir limpar a linha de user_data (se alguma tiver
-// sido criada) sem um access_token válido em mãos.
+// Cleanup usa service_role (não o token da própria conta) pra não depender
+// da autenticação (generate_link/verify) ter dado certo — se
+// adminCreateUser funcionou mas um passo seguinte falhou, ainda precisamos
+// conseguir limpar a linha de user_data (se alguma tiver sido criada) sem
+// um access_token válido em mãos. Isso é permitido mesmo com a regra de
+// "nunca usar service_role pra ler/escrever user_data durante a medição" —
+// cleanup não é medição, é housekeeping.
 async function deleteUserData(userId) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/user_data?user_id=eq.${userId}`, {
     method: "DELETE",
@@ -228,6 +308,15 @@ async function handleInterruption(signal) {
   if (interrupted) return; // segundo Ctrl+C etc. — não trava esperando de novo
   interrupted = true;
   console.log(`\n${signal} recebido — interrompendo e limpando ${createdAccounts.size} conta(s) já criada(s)...`);
+  await cleanupAll(); // primeira passada: limpa o que já estava registrado
+  // Uma criação de conta pode estar em voo bem no instante da interrupção
+  // (entre adminCreateUser responder e createdAccounts.set() rodar) — sem
+  // uma segunda passada, essa conta nunca seria limpa (main() pula seu
+  // próprio cleanup final quando `interrupted` já é true). Uma espera curta
+  // dá tempo dela terminar de se registrar; a segunda chamada também tenta
+  // de novo qualquer falha da primeira passada (cleanupAll só remove do
+  // mapa quem já foi limpo com sucesso).
+  await new Promise((r) => setTimeout(r, 3000));
   const pending = await cleanupAll();
   reportPending(pending);
   // process.exitCode (não process.exit()) deixa o event loop drenar
@@ -241,25 +330,30 @@ process.on("SIGTERM", () => handleInterruption("SIGTERM"));
 
 async function virtualUser(id, stopAt, stats) {
   // Escalona o início de cada usuário simulado (ver comentário em RAMP_MS)
-  // pra não disparar todos os logins no mesmo instante.
+  // pra não disparar todas as verificações de magic-link no mesmo instante.
   const startDelay = NUM_USERS > 1 ? Math.floor((id / NUM_USERS) * RAMP_MS) : 0;
   if (startDelay > 0) await new Promise((r) => setTimeout(r, startDelay));
   if (interrupted) return;
 
   const email = `audit-loadtest-${rand()}@${EMAIL_DOMAIN}`;
-  const password = `Lt-${rand()}Aa1!`;
   let accessToken, userId;
   try {
-    const created = await adminCreateUser(email, password);
+    // Passo 1 — provisiona a conta (service_role).
+    const created = await adminCreateUser(email);
     userId = created.id;
     if (!userId) throw new Error("criação de conta (admin) não devolveu id");
-    createdAccounts.set(userId, { email, accessToken: null });
-    const loginRes = await loginUser(email, password);
-    accessToken = loginRes.access_token;
-    if (!accessToken) throw new Error("login não devolveu access_token");
-    createdAccounts.set(userId, { email, accessToken });
+    // Registra pro cleanup JÁ AQUI, antes dos próximos passos — se algo
+    // falhar depois (magic-link, verify), a conta ainda é apagada no final.
+    createdAccounts.set(userId, { email });
+    // Passo 2 — gera o "ingresso" de autenticação (service_role).
+    const tokenHash = await adminGenerateMagicLink(email);
+    // Passo 3 — troca por uma sessão real (só ANON_KEY, sem service_role,
+    // sem captcha) — a partir daqui a conta se autentica como uma comum.
+    const session = await redeemMagicLink(tokenHash);
+    accessToken = session.access_token;
+    if (!accessToken) throw new Error("verify (magiclink) não devolveu access_token");
   } catch (e) {
-    stats.errors.push(`signup: ${e.message}`);
+    stats.errors.push(`provisionamento/auth: ${e.message}`);
     return;
   }
 
@@ -310,7 +404,7 @@ async function virtualUser(id, stopAt, stats) {
 }
 
 async function main() {
-  console.log(`Iniciando load test: ${NUM_USERS} usuários simulados por ${DURATION_S}s contra ${SUPABASE_URL} (logins escalonados ao longo de ${(RAMP_MS / 1000).toFixed(1)}s)`);
+  console.log(`Iniciando load test: ${NUM_USERS} usuários simulados por ${DURATION_S}s contra ${SUPABASE_URL} (autenticação escalonada ao longo de ${(RAMP_MS / 1000).toFixed(1)}s)`);
   const stats = { getMs: [], setMs: [], errors: [] };
   const stopAt = Date.now() + DURATION_S * 1000;
 
@@ -322,8 +416,8 @@ async function main() {
 
   console.log(`
 Resultado (${stats.getMs.length} GETs, ${stats.setMs.length} SETs, ${stats.errors.length} erros)
-GET  p50=${percentile(stats.getMs, 50)}ms  p95=${percentile(stats.getMs, 95)}ms  p99=${percentile(stats.getMs, 99)}ms
-SET  p50=${percentile(stats.setMs, 50)}ms  p95=${percentile(stats.setMs, 95)}ms  p99=${percentile(stats.setMs, 99)}ms
+GET  p50=${percentile(stats.getMs, 50)}ms  p95=${percentile(stats.getMs, 95)}ms  p99=${percentile(stats.getMs, 99)}ms  max=${max(stats.getMs)}ms
+SET  p50=${percentile(stats.setMs, 50)}ms  p95=${percentile(stats.setMs, 95)}ms  p99=${percentile(stats.setMs, 99)}ms  max=${max(stats.setMs)}ms
 `);
   if (stats.errors.length) {
     console.log("Amostra de erros:", stats.errors.slice(0, 10));

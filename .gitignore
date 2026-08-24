@@ -4,6 +4,18 @@ dist
 .env.loadtest
 .DS_Store
 
+# Backups financeiros exportados pelo app (ex: lacalle-finance_backup_2026-08-21.json,
+# baixados por "Exportar backup" em LacalleFinance.jsx) — nunca devem entrar no
+# repositório por engano, mesmo que alguém solte um arquivo assim na raiz do
+# projeto pra testar import/export localmente. Padrões deliberadamente restritos
+# a nomes/extensões de backup (não ignora *.json em geral, que incluiria coisas
+# legítimas como package.json, manifestos, configs).
+*backup*
+*.bak
+*.backup
+*dump*.json
+*export*.json
+
 # Supabase CLI local/temp files
 supabase/.temp
 supabase/.branches
