@@ -23,6 +23,23 @@ const URL_TEST_REGEX=/^(?:https?:\/\/|www\.)/i;
 
 export const Card=(props)=><div {...props} className={`fc-card ${props.className||""}`} style={{...cardStyle,...props.style}}/>;
 
+// ==================== StatTile ====================
+// Rótulo + valor grande + legenda opcional, dentro de um cardStyle padrão.
+// Extraído de seis blocos quase idênticos nas seções "Fluxo de Caixa Futuro"
+// e "Compromissos Financeiros" (Planejamento) — cada um só variava rótulo,
+// valor, cor e legenda. `size` existe porque o saldo/projeções usam 17px e
+// os demais 16px; nenhum outro valor do bloco original mudava de instância
+// para instância.
+export function StatTile({label,value,color=TX,caption,size=16,textAlign}){
+  return (
+    <div className="bento-half" style={{...cardStyle,padding:18,...(textAlign?{textAlign}:{})}}>
+      <div style={{fontSize:11,color:TX2,marginBottom:6}}>{label}</div>
+      <div className="num" style={{fontSize:size,fontWeight:700,color}}>{value}</div>
+      {caption&&<div style={{fontSize:11,color:TX3,marginTop:4}}>{caption}</div>}
+    </div>
+  );
+}
+
 // ==================== Modal reutilizável ====================
 // Antes, cada popup (excluir, transferir, editar lançamento, busca, perfil,
 // dia do calendário...) repetia manualmente o mesmo par de <div> (overlay

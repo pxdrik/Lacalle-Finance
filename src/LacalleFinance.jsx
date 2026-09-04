@@ -104,7 +104,7 @@ import LogoSymbol from "./components/LogoSymbol";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal } from "./components/ui";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
 import {
@@ -2455,15 +2455,9 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:6,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={16} color={accent}/>Fluxo de Caixa Futuro</div>
                   <div style={{fontSize:12,color:TX2,marginBottom:16}}>Estimativa com base no saldo atual, lançamentos futuros e previstos ainda não pagos.</div>
                   <div className="bento">
-                    <div className="bento-half" style={{...cardStyle,padding:18,textAlign:"center"}}>
-                      <div style={{fontSize:11,color:TX2,marginBottom:6}}>Saldo atual</div>
-                      <div className="num" style={{fontSize:17,fontWeight:700,color:balance>=0?"#34D399":"#F87171"}}>{fmt(balance)}</div>
-                    </div>
+                    <StatTile label="Saldo atual" value={fmt(balance)} color={balance>=0?"#34D399":"#F87171"} size={17} textAlign="center"/>
                     {cashFlowProjections.map(cp=>(
-                      <div key={cp.days} className="bento-half" style={{...cardStyle,padding:18,textAlign:"center"}}>
-                        <div style={{fontSize:11,color:TX2,marginBottom:6}}>Em {cp.days} dias</div>
-                        <div className="num" style={{fontSize:17,fontWeight:700,color:cp.value>=0?"#34D399":"#F87171"}}>{fmt(cp.value)}</div>
-                      </div>
+                      <StatTile key={cp.days} label={`Em ${cp.days} dias`} value={fmt(cp.value)} color={cp.value>=0?"#34D399":"#F87171"} size={17} textAlign="center"/>
                     ))}
                   </div>
                 </Card>
@@ -2471,10 +2465,10 @@ function MainApp({user,setUser}){
                 <Card style={{padding:26}}>
                   <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><Briefcase size={16} color={accent}/>Compromissos Financeiros</div>
                   <div className="bento">
-                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Parcelas restantes</div><div className="num" style={{fontSize:16,fontWeight:700,color:"#FBBF24"}}>{fmt(instStats.remaining)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{pendingParcelasCount} parcela(s)</div></div>
-                    {subscriptions&&<div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Assinaturas</div><div className="num" style={{fontSize:16,fontWeight:700,color:"#A78BFA"}}>{fmt(subscriptions.total)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{subscriptions.count} ativa(s)</div></div>}
-                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Comprometido no próximo mês</div><div className="num" style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(committedNextMonth)}</div><div style={{fontSize:11,color:TX3,marginTop:4}}>{nextMonthKeyReal}</div></div>
-                    <div className="bento-half" style={{...cardStyle,padding:18}}><div style={{fontSize:11,color:TX2,marginBottom:6}}>Comprometido nos próximos 3 meses</div><div className="num" style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(committedNext3Months)}</div></div>
+                    <StatTile label="Parcelas restantes" value={fmt(instStats.remaining)} color="#FBBF24" caption={`${pendingParcelasCount} parcela(s)`}/>
+                    {subscriptions&&<StatTile label="Assinaturas" value={fmt(subscriptions.total)} color="#A78BFA" caption={`${subscriptions.count} ativa(s)`}/>}
+                    <StatTile label="Comprometido no próximo mês" value={fmt(committedNextMonth)} color={accent} caption={nextMonthKeyReal}/>
+                    <StatTile label="Comprometido nos próximos 3 meses" value={fmt(committedNext3Months)} color={accent}/>
                   </div>
                 </Card>
 
