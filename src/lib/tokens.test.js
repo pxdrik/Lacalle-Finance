@@ -19,7 +19,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  BG, CARD, C2, TX, TX2,
+  BG, CARD, C2, TX, TX2, TX3,
   TEAL,
   SUCCESS, WARNING, ERROR,
   ERROR_BG, SUCCESS_FILL,
@@ -58,6 +58,13 @@ const PAIRS = [
   [TX2, CARD, 4.5, "texto secundário num card"],
   [TX2, C2, 4.5, "texto secundário numa superfície elevada"],
 
+  // BUG-04: TX3 (texto terciário — labels, estados vazios, cabeçalhos de
+  // seção) precisa dos mesmos 4,5:1 nas três superfícies reais onde é usado
+  // como texto — antes tinha alfa e caía pra ~3,68–4,06:1 nelas.
+  [TX3, BG, 4.5, "texto terciário na página"],
+  [TX3, CARD, 4.5, "texto terciário num card"],
+  [TX3, C2, 4.5, "texto terciário numa superfície elevada"],
+
   // Botão primário: rótulo BG sobre o accent (Btn, em ui.jsx) — o comentário
   // de theme.js já assume esse par ao subir TEAL 500->dark. TEAL2 e HOVER
   // ficam de fora: nenhum dos dois pinta um fundo sólido com BG por cima na
@@ -86,6 +93,15 @@ describe("theme.js — contraste dos tokens", () => {
       );
     });
   }
+
+  // BUG-04: a correção de contraste não pode achatar a hierarquia visual —
+  // TX3 precisa continuar sendo o mais apagado dos três, mesmo agora opaco
+  // e acima do mínimo de AA.
+  test("hierarquia de texto preservada: TX (primário) > TX2 (secundário) > TX3 (terciário) em luminância", () => {
+    const lum = hex => luminance(hexToLinearSrgb(hex));
+    assert.ok(lum(TX) > lum(TX2), `TX (${lum(TX).toFixed(3)}) deveria ser mais claro que TX2 (${lum(TX2).toFixed(3)})`);
+    assert.ok(lum(TX2) > lum(TX3), `TX2 (${lum(TX2).toFixed(3)}) deveria ser mais claro que TX3 (${lum(TX3).toFixed(3)})`);
+  });
 });
 
 /**

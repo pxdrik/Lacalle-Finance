@@ -15,6 +15,9 @@ dist
 *.backup
 *dump*.json
 *export*.json
+# Exceção: código-fonte de validação de backup (BUG-03) — não é um arquivo
+# de backup exportado, é o módulo que VALIDA um backup antes de importar.
+!src/lib/backupValidation.*
 
 # Supabase CLI local/temp files
 supabase/.temp
