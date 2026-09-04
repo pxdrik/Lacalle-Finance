@@ -106,6 +106,10 @@ import ProjectionDrawer from "./components/ProjectionDrawer";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
+import { createSubmitGuard } from "./lib/submitGuard";
+import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
+import { validateBackup } from "./lib/backupValidation";
+import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
 import {
   Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Gamepad2, UtensilsCrossed,
@@ -316,7 +320,14 @@ function MainApp({user,setUser}){
     pushHistory();
     if(entry.type==="wish")setWishes(p=>[...p,entry.item]);
     else if(entry.type==="planned")setPlannedExpenses(p=>[...p,entry.item]);
-    else if(entry.type==="tx")setTransactions(p=>[entry.item,...p]);
+    else if(entry.type==="tx"){
+      setTransactions(p=>[entry.item,...p]);
+      // Espelha exatamente o desconto feito em deleteTx: se a parcela
+      // restaurada pertencia a um parcelamento que ainda existe, devolve a
+      // "vaga" nele — sem isso ela voltaria órfã (installmentId apontando
+      // pra um pai que não sabe mais dela).
+      if(entry.item.installmentId)setInstallments(p=>restoreTxToInstallments(p,entry.item));
+    }
     else if(entry.type==="installment"){
       const{_trashedTxs,...inst}=entry.item;
       setInstallments(p=>[...p,inst]);
@@ -463,7 +474,12 @@ function MainApp({user,setUser}){
   // A detecção de conflito acontece dentro do próprio `storage.set`, como
   // uma escrita condicional atômica no banco (UPDATE ... WHERE updated_at =
   // versão esperada). Não há mais uma janela entre "checar" e "escrever".
+  // BUG-02: marca quando uma escrita já está em voo, pra quem for fazer um
+  // flush de emergência (ao esconder a aba) saber que não precisa — e não
+  // deve — disparar uma segunda chamada por cima da que já está em curso.
+  const saveInFlightRef=useRef(false);
   const doSave=async()=>{
+    saveInFlightRef.current=true;
     const newUpdatedAt=Date.now();
     const payload=JSON.stringify({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,onboardingDismissed,updatedAt:newUpdatedAt});
     const trySave=async()=>storage.set(storageKey(user.email),payload,remoteVersionRef.current);
@@ -485,8 +501,17 @@ function MainApp({user,setUser}){
       }catch(e2){console.error("LaCalle Finance — nova tentativa de salvar também falhou:",e2);}
       setSyncStatus("error");
       return "error";
+    }finally{
+      saveInFlightRef.current=false;
     }
   };
+  // Espelha `doSave`/`syncStatus` em refs pra um listener registrado UMA vez
+  // (deps vazias, ver useEffect abaixo) sempre chamar a versão mais recente
+  // — sem precisar recriar/re-registrar o listener a cada render.
+  const doSaveRef=useRef(doSave);
+  doSaveRef.current=doSave;
+  const syncStatusRef=useRef(syncStatus);
+  syncStatusRef.current=syncStatus;
 
   useEffect(()=>{
     if(!isLoaded)return;
@@ -496,12 +521,55 @@ function MainApp({user,setUser}){
     setSyncStatus("saving");
     if(saveTimerRef.current)clearTimeout(saveTimerRef.current);
     saveTimerRef.current=setTimeout(async()=>{
+      saveTimerRef.current=null;
       const status=await doSave();
       if(status==="error")showToast("Falha ao salvar na nuvem. Toque no ícone de atualizar ao lado de \"Sincronizado\" para tentar de novo.","error");
       else if(status==="conflict")showToast("Esses dados foram atualizados em outra aba ou aparelho. Toque em \"Recarregar\" ao lado do status antes de continuar editando, pra não perder a versão mais recente.","error");
     },1200);
     return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};
   },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,trash,onboardingDismissed,isLoaded]);
+
+  // ---- BUG-02: elimina a janela em que uma edição pendente (ainda dentro
+  // do debounce de 1200ms) se perde silenciosamente se o usuário fechar ou
+  // trocar de aba antes do autosave disparar.
+  //
+  // Por que `visibilitychange`→hidden, e não confiar só em `beforeunload`:
+  // uma vez que a página começou a ser destruída (unload), o navegador pode
+  // matar uma requisição de rede em andamento antes dela terminar — não dá
+  // pra "esperar uma promise" nesse momento com garantia nenhuma.
+  // `visibilitychange` para "hidden", por outro lado, dispara de forma
+  // confiável ao trocar de aba, minimizar ou iniciar o fechamento, e nesse
+  // instante a página AINDA não está sendo destruída — uma requisição
+  // disparada aqui tem chance real de completar. Por isso fazemos o flush
+  // aqui (proativamente), e usamos `beforeunload` só para avisar o usuário
+  // (diálogo nativo do navegador), nunca para tentar salvar.
+  useEffect(()=>{
+    const flushIfPending=()=>{
+      if(!shouldFlushOnHide({visibilityState:document.visibilityState,syncStatus:syncStatusRef.current,saveInFlight:saveInFlightRef.current}))return;
+      if(saveTimerRef.current){clearTimeout(saveTimerRef.current);saveTimerRef.current=null;}
+      const status=doSaveRef.current();
+      if(status&&typeof status.catch==="function")status.catch(()=>{});
+    };
+    document.addEventListener("visibilitychange",flushIfPending);
+    // Fallback: em navegadores/mobile onde `visibilitychange` não cobre a
+    // navegação para fora do app (ex.: Safari iOS em alguns fluxos).
+    window.addEventListener("pagehide",flushIfPending);
+    // Só avisa — nunca tenta esperar uma promise durante o unload. O próprio
+    // diálogo nativo do navegador já dá tempo de sobra para o flush acima
+    // (disparado no `visibilitychange` que antecede este evento) terminar.
+    const warnIfDirty=e=>{
+      if(!shouldWarnBeforeUnload({syncStatus:syncStatusRef.current}))return;
+      e.preventDefault();
+      e.returnValue="";
+      return "";
+    };
+    window.addEventListener("beforeunload",warnIfDirty);
+    return()=>{
+      document.removeEventListener("visibilitychange",flushIfPending);
+      window.removeEventListener("pagehide",flushIfPending);
+      window.removeEventListener("beforeunload",warnIfDirty);
+    };
+  },[]);
 
   const retrySave=async()=>{
     setSyncStatus("saving");
@@ -896,19 +964,41 @@ function MainApp({user,setUser}){
   };
 
   const [pendingDuplicateTx,setPendingDuplicateTx]=useState(null);
+  // ---- BUG-01: trava de reentrância contra duplo clique/duplo submit ----
+  // Um clique duplo rápido chama commitQuickAdd() duas vezes ANTES do
+  // primeiro setState re-renderizar — nesse instante o componente ainda lê o
+  // `transactions` antigo, então a checagem de duplicidade em quickAdd() não
+  // pega o próprio clique duplo. O guard vive fora do ciclo de render (ref),
+  // por isso barra a segunda chamada mesmo sem um render de por meio.
+  const quickAddGuardRef=useRef(null);
+  if(!quickAddGuardRef.current)quickAddGuardRef.current=createSubmitGuard({cooldownMs:600});
+  const [isSubmittingTx,setIsSubmittingTx]=useState(false);
   const commitQuickAdd=()=>{
-    pushHistory();
-    const isInv=qaCat==="Investimento";
-    const derivedType=isInv?(qaInvTipo==="Aporte"?"Saída":"Entrada"):qaType;
-    const base={date:qaDate,type:derivedType,fixed:qaFixed,cat:qaCat,desc:qaDesc.trim(),val:roundMoney(parseNum(qaVal)),form:qaForm,invTipo:isInv?qaInvTipo:null};
-    if(editingTx!==null){setTransactions(p=>p.map(t=>t.id===editingTx?{...t,...base}:t));setEditingTx(null);}
-    else{
-      const id=genId();const newTxs=[{id,...base}];
-      if(qaRepeat!=="none"){const cnt=qaRepeat==="3m"?2:qaRepeat==="6m"?5:11;for(let i=1;i<=cnt;i++){newTxs.push({id:id+i,...base,date:addMonthsStr(qaDate,i)});}}
-      setTransactions(p=>[...newTxs,...p]);
+    const guard=quickAddGuardRef.current;
+    if(!guard.tryEnter())return;
+    setIsSubmittingTx(true);
+    try{
+      pushHistory();
+      const isInv=qaCat==="Investimento";
+      const derivedType=isInv?(qaInvTipo==="Aporte"?"Saída":"Entrada"):qaType;
+      const base={date:qaDate,type:derivedType,fixed:qaFixed,cat:qaCat,desc:qaDesc.trim(),val:roundMoney(parseNum(qaVal)),form:qaForm,invTipo:isInv?qaInvTipo:null};
+      if(editingTx!==null){setTransactions(p=>p.map(t=>t.id===editingTx?{...t,...base}:t));setEditingTx(null);}
+      else{
+        const id=genId();const newTxs=[{id,...base}];
+        if(qaRepeat!=="none"){const cnt=qaRepeat==="3m"?2:qaRepeat==="6m"?5:11;for(let i=1;i<=cnt;i++){newTxs.push({id:id+i,...base,date:addMonthsStr(qaDate,i)});}}
+        setTransactions(p=>[...newTxs,...p]);
+      }
+      resetQuickAddForm();
+      showToast(editingTx!==null?"Lançamento atualizado!":"Lançamento adicionado!","success");
+    }catch(e){
+      // Falha inesperada durante o commit: libera o lock na hora em vez de
+      // deixar o botão travado até o fim do cooldown sem nenhuma transação
+      // criada, e deixa o erro seguir visível (mesmo comportamento de antes).
+      guard.releaseNow();
+      setIsSubmittingTx(false);
+      throw e;
     }
-    resetQuickAddForm();
-    showToast(editingTx!==null?"Lançamento atualizado!":"Lançamento adicionado!","success");
+    setTimeout(()=>setIsSubmittingTx(false),600);
   };
   const quickAdd=()=>{
     const err=firstError([
@@ -945,6 +1035,11 @@ function MainApp({user,setUser}){
     pushHistory();
     setTransactions(p=>p.filter(x=>x.id!==id));
     if(item)moveToTrash("tx",item);
+    // BUG-05: se a transação excluída era uma parcela, mantém o
+    // parcelamento pai consistente (txIds/numParcelas/totalVal) em vez de
+    // deixá-lo com um número de parcelas que não existem mais — antes disso
+    // o card do parcelamento mentia permanentemente sobre quanto ainda falta.
+    if(item?.installmentId)setInstallments(p=>removeTxFromInstallments(p,item));
     showToast("Transação removida.","info");
   };
 
@@ -1327,16 +1422,28 @@ function MainApp({user,setUser}){
     const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
     reader.onload=ev=>{
+      let d;
       try{
-        const d=JSON.parse(ev.target.result);
-        if(!d||typeof d!=="object"||(!d.tx&&!d.planned&&!d.inst&&!d.wishes)){
-          showToast("Esse arquivo não parece ser um backup válido do LaCalle Finance.","error");
-          return;
-        }
-        setPendingImport(d);
+        d=JSON.parse(ev.target.result);
       }catch(err){
         showToast("Arquivo inválido ou corrompido.","error");
+        return;
       }
+      // ---- BUG-03: fronteira de validação do backup ----
+      // Antes só conferíamos a presença das chaves (`tx`/`planned`/...);
+      // agora cada registro passa pelos mesmos limites usados nos
+      // formulários (valor, data, tipo, categoria). Tudo-ou-nada: se
+      // qualquer registro for inválido, nada é aceito — nem parcialmente —
+      // e o usuário recebe um motivo concreto em vez de um dado corrompido
+      // silenciosamente salvo na nuvem.
+      const {ok,errors}=validateBackup(d);
+      if(!ok){
+        console.error("LaCalle Finance — backup rejeitado na validação:",errors);
+        const first=errors[0];
+        showToast(`Backup inválido (${errors.length} problema${errors.length>1?"s":""}): ${first.path} — ${first.reason}.`,"error");
+        return;
+      }
+      setPendingImport(d);
     };
     reader.readAsText(file,"UTF-8");e.target.value="";
   };
@@ -1490,8 +1597,11 @@ function MainApp({user,setUser}){
           mas NÃO usa `disabled`: um botão desabilitado engole o clique sem
           explicar nada — quem chegava aqui achava que estava quebrado. Assim o
           clique sempre roda a validação, que diz exatamente o que falta. */}
-      <button onClick={quickAdd} aria-disabled={!canAdd} style={{width:"100%",padding:"14px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:14,fontWeight:700,background:!canAdd?"rgba(255,255,255,0.04)":isEditing?"#FBBF24":accent,color:!canAdd?TX3:"white",boxShadow:canAdd?`0 2px 10px ${isEditing?"#FBBF24":accent}40`:"none",transition:"filter .15s ease, box-shadow .15s ease"}}>
-        {isEditing?"Salvar alterações":qaCat==="Investimento"?`+ ${qaInvTipo}`:`+ Adicionar ${qaType}`}
+      {/* `disabled` real aqui é só o lock de duplo clique (isSubmittingTx) —
+          continua sem `disabled` para o caso "faltou preencher algo"
+          (aria-disabled), que é intencional (ver comentário acima). */}
+      <button onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",padding:"14px",borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:700,background:!canAdd?"rgba(255,255,255,0.04)":isEditing?"#FBBF24":accent,color:!canAdd?TX3:"white",boxShadow:canAdd&&!isSubmittingTx?`0 2px 10px ${isEditing?"#FBBF24":accent}40`:"none",opacity:isSubmittingTx?0.7:1,transition:"filter .15s ease, box-shadow .15s ease, opacity .15s ease"}}>
+        {isSubmittingTx?"Adicionando...":isEditing?"Salvar alterações":qaCat==="Investimento"?`+ ${qaInvTipo}`:`+ Adicionar ${qaType}`}
       </button>
     </>
   );
@@ -1615,7 +1725,12 @@ function MainApp({user,setUser}){
 
         /* ---- Navegação inferior (bottom nav) no celular ---- */
         .bottom-nav{display:none;}
-        .bottom-nav-btn{background:none;border:none;cursor:pointer;flex:1 1 0;min-width:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 1px 4px;transition:color .15s ease;}
+        /* BUG-08: min-height garante os ~44px de alvo de toque (WCAG 2.5.5 /
+           Apple HIG) na navegação principal do celular, sem depender de
+           padding+ícone+rótulo somarem isso "por acaso" em toda fonte/zoom —
+           o botão inteiro (ícone + rótulo) já é clicável, isto só torna o
+           mínimo explícito em vez de implícito. */
+        .bottom-nav-btn{background:none;border:none;cursor:pointer;flex:1 1 0;min-width:0;min-height:44px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 1px 4px;transition:color .15s ease;}
         .bottom-nav-ico{display:flex;align-items:center;justify-content:center;width:40px;height:26px;border-radius:13px;transition:background .18s ease;flex-shrink:0;}
         .bottom-nav-lbl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
         @media(max-width:760px){

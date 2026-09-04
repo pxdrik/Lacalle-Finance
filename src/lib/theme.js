@@ -26,7 +26,14 @@ export const BD = "#262B31";   // Border
 export const BD2 = "#31363D";  // Border em destaque (hover, foco, divisores fortes)
 export const TX = "#F3F4F6";   // Text primary
 export const TX2 = "#9AA3AE";  // Text secondary
-export const TX3 = "rgba(154,163,174,0.68)"; // Text terciário (derivado de TX2)
+// Text terciário. Era `rgba(154,163,174,0.68)` (TX2 com alfa 0.68) — a
+// diluição derrubava o contraste real para ~3.68–4.06:1 contra CARD/C2/BG,
+// abaixo do mínimo de 4.5:1 pra texto normal (WCAG 1.4.3), mesmo aparecendo
+// como label/estado-vazio em dezenas de telas. `#848C96` é um cinza OPACO
+// (sem alfa) calibrado pra ficar visivelmente mais apagado que TX2 — mantém
+// a hierarquia TX > TX2 > TX3 — e ainda assim medir acima de 4.5:1 nas três
+// superfícies reais onde aparece (ver tokens.test.js).
+export const TX3 = "#848C96";
 export const HDR = "#0B0D0F";  // Header/sidebar usam o Background, separados por borda de 1px
 
 // LaCalle Finance accent — dark mode sobe um passo de luminosidade (pág. 33):

@@ -177,25 +177,30 @@ export default function AuthScreen({ onLogin }) {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* BUG-09: <label htmlFor> associado ao input por id — antes só
+                havia um <div> visual acima do campo, sem ligação semântica
+                nenhuma, então leitor de tela caía pro `placeholder` como
+                nome acessível (e ele some ao digitar/focar). O texto visível
+                continua exatamente igual; só ganhou a marcação certa. */}
             {mode === "signup" && (
               <div>
-                <div style={{ fontSize: 12, color: TX2, marginBottom: 8, fontWeight: 600, letterSpacing: "0.02em" }}>Seu nome</div>
-                <input className="wl-input" type="text" placeholder="Como podemos te chamar" value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
+                <label htmlFor="auth-name" style={{ display: "block", fontSize: 12, color: TX2, marginBottom: 8, fontWeight: 600, letterSpacing: "0.02em" }}>Seu nome</label>
+                <input id="auth-name" className="wl-input" type="text" autoComplete="name" placeholder="Como podemos te chamar" value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
               </div>
             )}
             <div>
-              <div style={{ fontSize: 12, color: TX2, marginBottom: 8, fontWeight: 600, letterSpacing: "0.02em" }}>Seu e-mail</div>
-              <input className="wl-input" type="email" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} style={inputStyle} />
+              <label htmlFor="auth-email" style={{ display: "block", fontSize: 12, color: TX2, marginBottom: 8, fontWeight: 600, letterSpacing: "0.02em" }}>Seu e-mail</label>
+              <input id="auth-email" className="wl-input" type="email" inputMode="email" autoComplete="email" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} style={inputStyle} />
             </div>
             {mode !== "forgot" && (
               <div>
-                <div style={{ fontSize: 12, color: TX2, marginBottom: 8, fontWeight: 600, letterSpacing: "0.02em" }}>Senha</div>
-                <input className="wl-input" type="password" placeholder="Pelo menos 6 caracteres" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} style={inputStyle} />
+                <label htmlFor="auth-password" style={{ display: "block", fontSize: 12, color: TX2, marginBottom: 8, fontWeight: 600, letterSpacing: "0.02em" }}>Senha</label>
+                <input id="auth-password" className="wl-input" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} placeholder="Pelo menos 6 caracteres" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} style={inputStyle} />
               </div>
             )}
 
-            {err && <div style={{ background: `${ERROR}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: ERROR, display: "flex", alignItems: "center", gap: 8 }}><AlertCircle size={14} />{err}</div>}
-            {info && <div style={{ background: `${SUCCESS}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: SUCCESS, display: "flex", alignItems: "center", gap: 8 }}><CheckCircle2 size={14} />{info}</div>}
+            {err && <div role="alert" style={{ background: `${ERROR}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: ERROR, display: "flex", alignItems: "center", gap: 8 }}><AlertCircle size={14} />{err}</div>}
+            {info && <div role="status" style={{ background: `${SUCCESS}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: SUCCESS, display: "flex", alignItems: "center", gap: 8 }}><CheckCircle2 size={14} />{info}</div>}
 
             {TURNSTILE_SITE_KEY && <div ref={turnstileRef} />}
 
