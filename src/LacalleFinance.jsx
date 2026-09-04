@@ -105,6 +105,7 @@ import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr
 import ProjectionDrawer from "./components/ProjectionDrawer";
 import InstallmentsTab from "./components/InstallmentsTab";
 import WishesTab from "./components/WishesTab";
+import TransactionsTab from "./components/TransactionsTab";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
@@ -2808,88 +2809,14 @@ function MainApp({user,setUser}){
         )}
 
         {tab==="transactions"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:20}}>
-            <Card style={{padding:26}}>
-              <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:18,letterSpacing:"-0.01em"}}>Adicionar lançamento</div>
-              {renderTxForm()}
-            </Card>
-            <div style={{display:"flex",gap:10}}>
-              <label style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:CARD,border:`1px solid ${BD}`,color:accent,padding:"12px",borderRadius:R_BTN,cursor:"pointer",fontSize:13,fontWeight:700,boxShadow:SH_SM}}>
-                <Upload size={15}/>Importar CSV<input type="file" accept=".csv" style={{display:"none"}} onChange={importCSV}/>
-              </label>
-              <button onClick={exportCSV} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:CARD,border:`1px solid ${BD}`,color:TX2,padding:"12px",borderRadius:R_BTN,cursor:"pointer",fontSize:13,fontWeight:700,boxShadow:SH_SM}}><Download size={15}/>Exportar</button>
-              <button onClick={()=>setShowClearConfirm(true)} title="Apagar todas as transações" style={{display:"flex",alignItems:"center",justifyContent:"center",background:CARD,border:`1px solid ${BD}`,color:"#F87171",padding:"12px 17px",borderRadius:R_BTN,cursor:"pointer",boxShadow:SH_SM}}><Trash2 size={15}/></button>
-            </div>
-            <div style={{display:"flex",borderRadius:R_INPUT,overflow:"hidden",background:CARD,border:`1px solid ${BD}`,width:"fit-content"}}>
-              {[["","Todos"],["Entrada","Entrada"],["Saída","Saída"]].map(([val,label])=>(
-                <button key={val||"all"} onClick={()=>setFilterType(val)} style={{padding:"8px 16px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap",background:filterType===val?(val==="Entrada"?"#34D399":val==="Saída"?"#F87171":accent):"transparent",color:filterType===val?"white":TX2}}>{label}</button>
-              ))}
-            </div>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <div style={{position:"relative",flex:1,minWidth:160}}>
-                <Search size={14} color={TX3} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
-                <input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{...SI,paddingLeft:34}}/>
-              </div>
-              <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{...SI,width:"auto"}}>
-                <option value="">Todos os meses</option>
-                {months.map(m=><option key={m} value={m}>{m}</option>)}
-              </select>
-              <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{...SI,width:"auto"}}>
-                <option value="">Todas as categorias</option>
-                {fullCats.map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
-              {(filterMonth||filterCat||filterType||search)&&<button onClick={()=>{setFilterMonth("");setFilterCat("");setFilterType("");setSearch("");}} style={{background:CARD,border:`1px solid ${BD}`,color:TX2,padding:"8px 13px",borderRadius:R_INPUT,cursor:"pointer"}}><X size={13}/></button>}
-            </div>
-            <div className="stat3" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-              {[{l:"Entradas",v:viewTotals.totalIn,c:"#34D399"},{l:"Saídas",v:viewTotals.totalOut,c:"#F87171"},{l:"Saldo",v:viewTotals.balance,c:viewTotals.balance>=0?"#34D399":"#F87171"}].map(c=>(
-                <Card key={c.l} className="stat-card" style={{padding:18,textAlign:"center",overflow:"hidden"}}>
-                  <div className="stat-label" style={{fontSize:11,color:TX2}}>{c.l}</div>
-                  <div className="stat-val" style={{fontSize:18,fontWeight:700,color:c.c,marginTop:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><AnimatedValue value={c.v}/></div>
-                </Card>
-              ))}
-            </div>
-            {filtered.length===0&&(()=>{
-              const hasActiveFilter=!!(filterMonth||filterCat||filterType||search.trim());
-              return hasActiveFilter?(
-                <div style={{textAlign:"center",color:TX2,padding:40,fontSize:14}}>
-                  <div style={{marginBottom:12}}>Nenhuma transação encontrada com esse filtro.</div>
-                  <BtnGhost onClick={()=>{setFilterMonth("");setFilterCat("");setFilterType("");setSearch("");}} style={{padding:"9px 16px",fontSize:12.5}}>Limpar filtros</BtnGhost>
-                </div>
-              ):(
-                <div style={{textAlign:"center",color:TX2,padding:40,fontSize:14}}>Você ainda não tem nenhuma transação. Use o formulário acima para lançar a primeira.</div>
-              );
-            })()}
-            {groupedByDate.map(([date,txs])=>(
-              <div key={date}>
-                <div style={{fontSize:11,color:TX3,fontWeight:700,marginBottom:10,paddingLeft:2}}>{date}</div>
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {[...txs].reverse().map(t=>{
-                    const isIn=t.type==="Entrada";const bEdited=editingTx===t.id;
-                    const rowColor=catColor(t.cat);
-                    const invLabel=t.invTipo&&INV_TIPOS.includes(t.invTipo)?t.invTipo:null;
-                    return(
-                      <div key={t.id} style={{background:bEdited?`${accent}14`:CARD,border:`1px solid ${bEdited?accent+"45":BD}`,borderRadius:R_INPUT,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:SH_SM,transition:"background .15s, border-color .15s"}}>
-                        <div style={{width:34,height:34,borderRadius:8,background:rowColor+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><CategoryIcon cat={t.cat} size={15} color={rowColor}/></div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
-                          <div style={{fontSize:11,color:TX2,marginTop:3,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                            <span style={{color:rowColor,fontWeight:600}}>{t.cat}</span>
-                            {invLabel&&<span style={{color:INV_TIPO_COLORS[invLabel]}}>· {invLabel}</span>}
-                            {t.installmentId&&<span style={{display:"flex",alignItems:"center",gap:3,color:accent}}>· <CreditCard size={10}/>parcelado</span>}
-                            {t.plannedId&&<span style={{display:"flex",alignItems:"center",gap:3,color:accent}}>· <Calendar size={10}/>previsto</span>}
-                            <span>· {t.form}</span>
-                          </div>
-                        </div>
-                        <div className="num" style={{fontSize:14,fontWeight:700,color:isIn?"#34D399":"#F87171",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{isIn?"+":"-"}{fmt(t.val)}</div>
-                        <button onClick={()=>startEditTx(t)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
-                        <button onClick={()=>setConfirmDelete({type:"tx",id:t.id,label:t.desc})} title="Excluir" aria-label={`Excluir ${t.desc}`} style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+          <TransactionsTab
+            renderTxForm={renderTxForm} accent={accent} catColor={catColor}
+            filterType={filterType} search={search} filterMonth={filterMonth} months={months} filterCat={filterCat}
+            fullCats={fullCats} viewTotals={viewTotals} filtered={filtered} groupedByDate={groupedByDate} editingTx={editingTx}
+            setFilterType={setFilterType} setSearch={setSearch} setFilterMonth={setFilterMonth} setFilterCat={setFilterCat}
+            onImportCSV={importCSV} onExportCSV={exportCSV} onClearAll={()=>setShowClearConfirm(true)}
+            onStartEditTx={startEditTx} onRequestDelete={setConfirmDelete}
+          />
         )}
 
         {tab==="planned"&&(
