@@ -103,6 +103,11 @@ import AuthScreen from "./components/AuthScreen";
 import LogoSymbol from "./components/LogoSymbol";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
+import InstallmentsTab from "./components/InstallmentsTab";
+import WishesTab from "./components/WishesTab";
+import TransactionsTab from "./components/TransactionsTab";
+import PlannedTab from "./components/PlannedTab";
+import PlanningTab from "./components/PlanningTab";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
@@ -110,6 +115,7 @@ import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
 import { validateBackup } from "./lib/backupValidation";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
+import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
 import {
   Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Gamepad2, UtensilsCrossed,
@@ -167,49 +173,8 @@ const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounte
 // no destino são preservados como uma linha extra em `notes`, para nunca
 // perder informação mesmo quando o modelo de dado não bate 1:1.
 //
-// Se um item for transferido de um lado para o outro várias vezes (ex.:
-// Desejo -> Previsto -> Desejo -> Previsto...), só o bloco da transferência
-// MAIS RECENTE é mantido nas notas — sem isso, um item transferido repetidas
-// vezes acumularia um histórico infinito de blocos de texto nas notas.
-// "Desejos" continua na expressão por compatibilidade: notas gravadas antes da
-// padronização do nome da aba (Desejos -> Metas) precisam continuar sendo
-// reconhecidas e substituídas, senão o histórico volta a acumular blocos.
-const TRANSFER_NOTE_RE=/\n*— Transferido de (?:Desejos|Metas|Previstos) —\n[^\n]*$/;
-const stripTransferNote=notes=>(notes||"").replace(TRANSFER_NOTE_RE,"").trim();
-const wishToPlannedPayload=(wish,extra)=>{
-  const kept=[];
-  if(wish.priority)kept.push(`Prioridade original: ${wish.priority}`);
-  if(wish.saved)kept.push(`Já guardado: ${fmt(wish.saved)}`);
-  if(wish.monthsTarget)kept.push(`Meta original: ${wish.monthsTarget} meses`);
-  const notes=[stripTransferNote(wish.notes),kept.length?`— Transferido de Metas —\n${kept.join(" · ")}`:""].filter(Boolean).join("\n\n");
-  return{
-    desc:wish.name,
-    val:wish.price,
-    cat:extra.cat,
-    form:extra.form,
-    recurring:extra.recurring,
-    month:extra.recurring?null:extra.month,
-    notes,
-    paid:{},
-  };
-};
-const plannedToWishPayload=planned=>{
-  const kept=[
-    `Categoria original: ${planned.cat}`,
-    `Forma de pagamento: ${planned.form}`,
-    planned.recurring?"Era um gasto recorrente (assinatura)":`Mês previsto: ${planned.month||"—"}`,
-  ];
-  const notes=[stripTransferNote(planned.notes),`— Transferido de Previstos —\n${kept.join(" · ")}`].filter(Boolean).join("\n\n");
-  return{
-    name:planned.desc,
-    price:planned.val,
-    saved:0,
-    priority:"Média",
-    monthsTarget:0,
-    notes,
-    done:false,
-  };
-};
+// Conversão de payload entre Metas <-> Previstos ao transferir um item de
+// um lado para o outro — extraído para src/lib/wishPlannedTransfer.js (Fase 2).
 
 // ==================== SERVICES: StorageService ====================
 const storageKey=email=>`ff6:${email.replace(/[^a-zA-Z0-9]/g,"_")}:v1`;
@@ -2528,676 +2493,69 @@ function MainApp({user,setUser}){
         })()}
 
         {tab==="planning"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:24}}>
-            <div>
-              <div style={{fontSize:17,fontWeight:700,color:TX,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:8}}><CalendarDays size={18} color={accent}/>Planejamento</div>
-              <div style={{fontSize:12.5,color:TX2,marginTop:4}}>Veja o futuro do seu dinheiro com base no que você já cadastrou.</div>
-            </div>
-
-            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2}}>
-              {[["geral","Visão Geral"],["calendario","Calendário"],["timeline","Timeline"],["metas","Metas"],["decisoes","Decisões"],["ano","Visão Anual"]].map(([id,label])=>(
-                <button key={id} onClick={()=>setPlanTab(id)} style={{padding:"9px 15px",borderRadius:R_CHIP,border:"none",cursor:"pointer",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap",background:planTab===id?accent:"rgba(255,255,255,0.03)",color:planTab===id?"white":TX2}}>{label}</button>
-              ))}
-            </div>
-
-            {planTab==="geral"&&(
-              <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                <Card style={{padding:26}}>
-                  <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><Flag size={16} color={accent}/>Próximos Eventos</div>
-                  <div className="bento">
-                    {[
-                      {l:"Próxima conta",ev:nextEvents.proximaConta,c:"#F87171"},
-                      {l:"Próxima receita",ev:nextEvents.proximaReceita,c:"#34D399"},
-                      {l:"Próxima parcela",ev:nextEvents.proximaParcela,c:"#FBBF24"},
-                      {l:"Maior pagamento futuro",ev:nextEvents.maiorPagamento,c:"#F87171"},
-                      {l:"Maior entrada prevista",ev:nextEvents.maiorEntrada,c:"#34D399"},
-                    ].map(item=>(
-                      <div key={item.l} className="bento-half" style={{...cardStyle,padding:18}}>
-                        <div style={{fontSize:11,color:TX2,marginBottom:8}}>{item.l}</div>
-                        {item.ev?(
-                          <>
-                            <div style={{fontSize:13,fontWeight:700,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.ev.desc}</div>
-                            <div className="num" style={{fontSize:12,color:item.c,fontWeight:700,marginTop:4}}>{fmt(item.ev.val)}</div>
-                            <div style={{fontSize:11,color:TX3,marginTop:2}}>{item.ev.date}</div>
-                          </>
-                        ):<div style={{fontSize:12,color:TX3}}>Nada agendado</div>}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                <Card style={{padding:26}}>
-                  <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:6,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={16} color={accent}/>Fluxo de Caixa Futuro</div>
-                  <div style={{fontSize:12,color:TX2,marginBottom:16}}>Estimativa com base no saldo atual, lançamentos futuros e previstos ainda não pagos.</div>
-                  <div className="bento">
-                    <StatTile label="Saldo atual" value={fmt(balance)} color={balance>=0?"#34D399":"#F87171"} size={17} textAlign="center"/>
-                    {cashFlowProjections.map(cp=>(
-                      <StatTile key={cp.days} label={`Em ${cp.days} dias`} value={fmt(cp.value)} color={cp.value>=0?"#34D399":"#F87171"} size={17} textAlign="center"/>
-                    ))}
-                  </div>
-                </Card>
-
-                <Card style={{padding:26}}>
-                  <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><Briefcase size={16} color={accent}/>Compromissos Financeiros</div>
-                  <div className="bento">
-                    <StatTile label="Parcelas restantes" value={fmt(instStats.remaining)} color="#FBBF24" caption={`${pendingParcelasCount} parcela(s)`}/>
-                    {subscriptions&&<StatTile label="Assinaturas" value={fmt(subscriptions.total)} color="#A78BFA" caption={`${subscriptions.count} ativa(s)`}/>}
-                    <StatTile label="Comprometido no próximo mês" value={fmt(committedNextMonth)} color={accent} caption={nextMonthKeyReal}/>
-                    <StatTile label="Comprometido nos próximos 3 meses" value={fmt(committedNext3Months)} color={accent}/>
-                  </div>
-                </Card>
-
-                <Card style={{padding:26}}>
-                  <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><Bell size={16} color={accent}/>Lembretes</div>
-                  {reminders.length===0?(
-                    <div style={{fontSize:13,color:TX3,textAlign:"center",padding:16}}>Nenhum lembrete no momento.</div>
-                  ):(
-                    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                      {reminders.map((r,i)=>{const{Ic,c}=reminderVisual(r.type);return(
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
-                          <div style={{width:28,height:28,borderRadius:8,background:c+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ic size={13} color={c}/></div>
-                          <div style={{fontSize:13,color:TX,fontWeight:600}}>{r.text}</div>
-                        </div>
-                      );})}
-                    </div>
-                  )}
-                </Card>
-              </div>
-            )}
-
-            {planTab==="calendario"&&(
-              <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                <Card style={{padding:22}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:14,marginBottom:18}}>
-                    <button onClick={()=>shiftCalMonth(-1)} style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,width:30,height:30,color:TX2,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><ChevronLeft size={16}/></button>
-                    <div style={{fontSize:14.5,fontWeight:700,color:TX,minWidth:150,textAlign:"center"}}>{calMonthLabel}</div>
-                    <button onClick={()=>shiftCalMonth(1)} style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,width:30,height:30,color:TX2,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><ChevronRight size={16}/></button>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:6}}>
-                    {WEEKDAYS_PT.map((w,i)=><div key={i} style={{textAlign:"center",fontSize:11,color:TX3,fontWeight:700,padding:"4px 0"}}>{w}</div>)}
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
-                    {calGrid.map((cell,i)=>{
-                      if(!cell)return <div key={i}/>;
-                      const isToday=cell.dateStr===todayISO;
-                      const uniqueColors=[...new Set(cell.events.map(e=>e.color))].slice(0,4);
-                      return(
-                        <button key={i} onClick={()=>cell.events.length&&setSelectedCalDay(cell.dateStr)} style={{aspectRatio:"1",borderRadius:12,border:isToday?`1.5px solid ${accent}`:`1px solid ${BD}`,background:isToday?`${accent}14`:"rgba(255,255,255,0.02)",cursor:cell.events.length?"pointer":"default",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:4,gap:3}}>
-                          <span style={{fontSize:12,fontWeight:isToday?800:600,color:isToday?accent:TX2}}>{cell.day}</span>
-                          {uniqueColors.length>0&&(
-                            <div style={{display:"flex",gap:2}}>
-                              {uniqueColors.map((c,j)=><span key={j} style={{width:5,height:5,borderRadius:"50%",background:c}}/>)}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </Card>
-                <Card style={{padding:20}}>
-                  <div style={{fontSize:11,fontWeight:700,color:TX2,marginBottom:12,letterSpacing:"0.04em",textTransform:"uppercase"}}>Legenda</div>
-                  <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-                    {[["Receitas","#34D399"],["Despesas","#F87171"],["Investimentos","#3B82F6"],["Parcelas","#FBBF24"],["Assinaturas","#A78BFA"]].map(([l,c])=>(
-                      <div key={l} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:TX2}}><span style={{width:8,height:8,borderRadius:"50%",background:c}}/>{l}</div>
-                    ))}
-                  </div>
-                </Card>
-              </div>
-            )}
-
-            {planTab==="timeline"&&(
-              <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                {[["hoje","Hoje",Clock],["amanha","Amanhã",Calendar],["semana","Esta semana",CalendarDays],["prox_semana","Próxima semana",CalendarDays],["mes","Este mês",Calendar],["prox_mes","Próximo mês",Calendar]].map(([id,label,Ic])=>{
-                  const items=timelineBuckets[id]||[];
-                  if(items.length===0)return null;
-                  return(
-                    <Card key={id} style={{padding:22}}>
-                      <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:14,display:"flex",alignItems:"center",gap:7}}><Ic size={15} color={accent}/>{label}</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                        {items.map((it,i)=>(
-                          <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
-                            <span style={{width:8,height:8,borderRadius:"50%",background:it.color,flexShrink:0}}/>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:13,color:TX,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.data.desc}</div>
-                              <div style={{fontSize:11,color:TX3}}>{it.label}{it.kind==="tx"?` · ${it.data.date}`:` · ${it.month} (sem dia definido)`}</div>
-                            </div>
-                            <div className="num" style={{fontSize:13,fontWeight:700,color:it.color,flexShrink:0}}>{fmt(it.data.val)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  );
-                })}
-                {Object.values(timelineBuckets).every(a=>a.length===0)&&(
-                  <div style={{textAlign:"center",color:TX3,padding:40,fontSize:13,background:CARD,border:`1px solid ${BD}`,borderRadius:R_CARD}}>Nada agendado para os próximos dias.</div>
-                )}
-              </div>
-            )}
-
-            {planTab==="metas"&&(
-              <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                {enhancedWishes.length===0&&<div style={{textAlign:"center",color:TX3,padding:40,fontSize:13,background:CARD,border:`1px solid ${BD}`,borderRadius:R_CARD}}>Nenhuma meta cadastrada ainda. Adicione na aba "Metas".</div>}
-                {enhancedWishes.map(w=>(
-                  <Card key={w.id} style={{padding:24}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                      <div style={{fontSize:15,fontWeight:700,color:TX}}>{w.name}</div>
-                      <div style={{fontSize:13,fontWeight:700,color:accent}}>{w.pct}%</div>
-                    </div>
-                    <ProgressBar pct={w.pct} color={accent} style={{marginBottom:16}}/>
-                    <div className="bento">
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor atual</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.saved)}</div></div>
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Valor restante</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{fmt(w.remaining)}</div></div>
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Tempo estimado</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{formatMonths(w.estMonths,w.estMonthsExact)}</div></div>
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Previsão de conclusão</div><div style={{fontSize:14,fontWeight:700,color:TX}}>{w.etaDate||"—"}</div></div>
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4}}>Guardar por mês (na sua meta)</div><div className="num" style={{fontSize:14,fontWeight:700,color:TX}}>{w.monthlyByTarget?fmt(w.monthlyByTarget):"defina um prazo em meses"}</div></div>
-                      <div className="bento-half"><div style={{fontSize:11,color:TX2,marginBottom:4,display:"flex",alignItems:"center",gap:5}}><Hourglass size={11}/>Aportando 50% a mais</div><div style={{fontSize:14,fontWeight:700,color:"#34D399"}}>{w.timeSaved?`economiza ~${w.timeSaved} meses`:"—"}</div></div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {planTab==="decisoes"&&(
-              <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                <Card style={{padding:26}}>
-                  <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:6,display:"flex",alignItems:"center",gap:8}}><ShieldCheck size={16} color={accent}/>Decisões automáticas</div>
-                  <div style={{fontSize:12,color:TX2,marginBottom:18}}>Respostas geradas por regras, a partir dos seus dados — sem inteligência artificial. Toque em "Como cheguei a essa conclusão" em cada uma para ver o cálculo completo.</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                    {decisions.map(d=><DecisionRow key={d.key} d={d}/>)}
-                  </div>
-                </Card>
-
-                <Card style={{padding:26}}>
-                  <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><Target size={16} color={accent}/>Posso gastar isso?</div>
-                  <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                    <MoneyInput placeholder="Quanto você quer gastar (R$)" value={askAmount} onChange={setAskAmount} style={{...SI,flex:1,minWidth:180}}/>
-                    <Btn onClick={()=>setAskResult(FinancialEngine.DecisionEngine.canSpend({amount:parseNum(askAmount),transactions,plannedExpenses,balance,todayISO,currentMonthKey:currentMonthKeyReal}))} style={{padding:"0 20px"}}>Perguntar</Btn>
-                  </div>
-                  {askResult&&(
-                    <div>
-                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                        <span style={{fontSize:19}}>{askResult.status==="ok"?"✅":askResult.status==="atencao"?"❌":"ℹ️"}</span>
-                        <div style={{fontSize:14,fontWeight:700,color:decisionColor(askResult.status)}}>{askResult.answer}</div>
-                      </div>
-                      {askResult.detail&&<div style={{fontSize:12.5,color:TX2,marginBottom:16,lineHeight:1.55}}>{askResult.detail}</div>}
-                      {askResult.breakdown&&(
-                        <div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_INPUT,padding:18,display:"flex",flexDirection:"column",gap:16}}>
-                          <LedgerRows rows={askResult.breakdown.calcRows}/>
-                          {askResult.breakdown.commitItems?.length>0&&(
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Compromissos considerados</div>
-                              <LineItemsList items={askResult.breakdown.commitItems} accentColor="#F87171"/>
-                            </div>
-                          )}
-                          {askResult.breakdown.incomeItems?.length>0&&(
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Receitas futuras consideradas</div>
-                              <LineItemsList items={askResult.breakdown.incomeItems} accentColor="#34D399"/>
-                            </div>
-                          )}
-                          <DataUsedChecklist tags={askResult.evidence?.dataUsed}/>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </Card>
-
-                <Card style={{padding:26}}>
-                  <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:6,display:"flex",alignItems:"center",gap:8}}><Rocket size={16} color={accent}/>Simulação (E se...)</div>
-                  <div style={{fontSize:12,color:TX2,marginBottom:16}}>Simulação hipotética com os números que você informar — não é recomendação de investimento nem conselho financeiro.</div>
-                  <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-                    {[["economizar_mais","Economizar mais"],["compra_grande","Comprar parcelado"],["investir_mensal","Investir todo mês"]].map(([id,label])=>(
-                      <button key={id} onClick={()=>{setSimType(id);setSimResult(null);}} style={{padding:"8px 14px",borderRadius:R_CHIP,border:"none",cursor:"pointer",fontSize:12.5,fontWeight:600,background:simType===id?accent:"rgba(255,255,255,0.03)",color:simType===id?"white":TX2}}>{label}</button>
-                    ))}
-                  </div>
-                  {simType==="economizar_mais"&&(
-                    <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
-                      <select value={simGoalId} onChange={e=>setSimGoalId(e.target.value)} style={SI}>
-                        <option value="">Selecione uma meta</option>
-                        {enhancedWishes.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
-                      </select>
-                      <MoneyInput placeholder="Quanto a mais guardar por mês (R$)" value={simExtra} onChange={setSimExtra} style={SI}/>
-                    </div>
-                  )}
-                  {simType==="compra_grande"&&(
-                    <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                      <MoneyInput placeholder="Valor total (R$)" value={simValue} onChange={setSimValue} style={{...SI,flex:1,minWidth:140}}/>
-                      <input type="number" placeholder="Em quantas parcelas" value={simParcelas} onChange={e=>setSimParcelas(e.target.value)} style={{...SI,flex:1,minWidth:140}}/>
-                    </div>
-                  )}
-                  {simType==="investir_mensal"&&(
-                    <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                      <MoneyInput placeholder="Valor por mês (R$)" value={simValue} onChange={setSimValue} style={{...SI,flex:1,minWidth:120}}/>
-                      <input type="number" placeholder="Por quantos meses" value={simMonths} onChange={e=>setSimMonths(e.target.value)} style={{...SI,flex:1,minWidth:120}}/>
-                      <MoneyInput placeholder="Retorno anual estimado (%)" value={simReturn} onChange={setSimReturn} style={{...SI,flex:1,minWidth:120}}/>
-                    </div>
-                  )}
-                  <Btn onClick={runSimulation} style={{padding:"10px 20px",fontSize:13}}>Simular</Btn>
-                  {simResult&&(
-                    <div style={{marginTop:18,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_INPUT,padding:18}}>
-                      {simResult.type==="economizar_mais"&&(simResult.data?(
-                        <div style={{fontSize:13,color:TX}}>No novo ritmo, a meta ficaria pronta em <strong>{simResult.data.newMonths} meses</strong>{simResult.data.monthsSaved?` — cerca de ${simResult.data.monthsSaved} meses mais rápido que o ritmo atual.`:"."}</div>
-                      ):<div style={{fontSize:13,color:TX3}}>Selecione uma meta com valor restante para simular.</div>)}
-                      {simResult.type==="compra_grande"&&(
-                        <div style={{fontSize:13,color:TX}}>Isso adicionaria <strong>{fmt(simResult.data.monthlyImpact)}/mês</strong> aos seus compromissos. Seu comprometimento do próximo mês passaria de {fmt(committedNextMonth)} para <strong>{fmt(simResult.data.newCommittedNextMonth)}</strong>.</div>
-                      )}
-                      {simResult.type==="investir_mensal"&&(
-                        <div style={{fontSize:13,color:TX}}>Aportando {fmt(parseNum(simValue))}/mês por {simMonths} meses, a um retorno estimado de {simReturn}% ao ano: total aportado <strong>{fmt(simResult.data.aportado)}</strong>, rendimento estimado <strong>{fmt(simResult.data.rendimentoEstimado)}</strong>, total estimado <strong>{fmt(simResult.data.totalEstimado)}</strong>.</div>
-                      )}
-                    </div>
-                  )}
-                </Card>
-              </div>
-            )}
-
-            {planTab==="ano"&&(
-              <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                {summary.length===0?(
-                  <div style={{textAlign:"center",color:TX3,padding:40,fontSize:13,background:CARD,border:`1px solid ${BD}`,borderRadius:R_CARD}}>Ainda não há dados suficientes.</div>
-                ):(
-                  <>
-                    <Card className="chart-card" style={{height:340}}>
-                      <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:16}}>Comparativo mensal</div>
-                      <div className="chart-fill">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={summary}>
-                            <CartesianGrid strokeDasharray="3 6" stroke={BD} vertical={false}/>
-                            <XAxis dataKey="month" tick={{fill:TX2,fontSize:11}} axisLine={false} tickLine={false}/>
-                            <YAxis tick={{fill:TX2,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
-                            <Tooltip content={<ChartTooltip/>}/><Legend wrapperStyle={{fontSize:12,color:TX2}}/>
-                            <Bar dataKey="in" name="Receita" fill="#34D399" radius={[6,6,0,0]}/>
-                            <Bar dataKey="out" name="Despesa" fill="#F87171" radius={[6,6,0,0]}/>
-                            <Bar dataKey="balance" name="Saldo" fill={accent} radius={[6,6,0,0]}/>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </Card>
-                    <Card style={{padding:0,overflow:"hidden"}}>
-                      <div style={{overflowX:"auto"}}>
-                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                          <thead><tr style={{background:C2}}>
-                            {["Mês","Receita","Despesa","Saldo","Var. vs mês anterior"].map(h=>(
-                              <th key={h} style={{padding:"12px 16px",textAlign:"left",color:TX2,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.03em",whiteSpace:"nowrap"}}>{h}</th>
-                            ))}
-                          </tr></thead>
-                          <tbody>
-                            {summary.map((m,i)=>{
-                              const prev=summary[i-1];
-                              const delta=prev?pctChange(m.balance,prev.balance):null;
-                              return(
-                                <tr key={m.month} style={{borderTop:`1px solid ${BD}`}}>
-                                  <td style={{padding:"12px 16px",color:TX,fontWeight:600,whiteSpace:"nowrap"}}>{m.month}</td>
-                                  <td className="num" style={{padding:"12px 16px",color:"#34D399",fontWeight:600,whiteSpace:"nowrap"}}>{fmt(m.in)}</td>
-                                  <td className="num" style={{padding:"12px 16px",color:"#F87171",fontWeight:600,whiteSpace:"nowrap"}}>{fmt(m.out)}</td>
-                                  <td className="num" style={{padding:"12px 16px",color:m.balance>=0?"#34D399":"#F87171",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(m.balance)}</td>
-                                  <td title={delta===null?"Sem base de comparação no mês anterior":`Saldo ${delta>=0?"melhorou":"piorou"} ${fmt(Math.abs(m.balance-prev.balance))} em relação a ${prev.month}`} style={{padding:"12px 16px",color:delta===null?TX3:delta>=0?"#34D399":"#F87171",fontWeight:600,whiteSpace:"nowrap"}}>{delta===null?"—":`${delta>0?"+":""}${delta}%`}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </Card>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          <PlanningTab
+            accent={accent} planTab={planTab} setPlanTab={setPlanTab}
+            nextEvents={nextEvents} balance={balance} cashFlowProjections={cashFlowProjections} instStats={instStats}
+            pendingParcelasCount={pendingParcelasCount} subscriptions={subscriptions} committedNextMonth={committedNextMonth}
+            committedNext3Months={committedNext3Months} nextMonthKeyReal={nextMonthKeyReal} reminders={reminders} reminderVisual={reminderVisual}
+            shiftCalMonth={shiftCalMonth} calMonthLabel={calMonthLabel} calGrid={calGrid} todayISO={todayISO} setSelectedCalDay={setSelectedCalDay}
+            timelineBuckets={timelineBuckets}
+            enhancedWishes={enhancedWishes}
+            decisions={decisions} askAmount={askAmount} setAskAmount={setAskAmount} askResult={askResult} setAskResult={setAskResult}
+            transactions={transactions} plannedExpenses={plannedExpenses} currentMonthKeyReal={currentMonthKeyReal} decisionColor={decisionColor}
+            simType={simType} setSimType={setSimType} simResult={simResult} setSimResult={setSimResult} simGoalId={simGoalId} setSimGoalId={setSimGoalId}
+            simExtra={simExtra} setSimExtra={setSimExtra} simValue={simValue} setSimValue={setSimValue} simParcelas={simParcelas} setSimParcelas={setSimParcelas}
+            simMonths={simMonths} setSimMonths={setSimMonths} simReturn={simReturn} setSimReturn={setSimReturn} runSimulation={runSimulation}
+            summary={summary} pctChange={pctChange}
+          />
         )}
 
         {tab==="transactions"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:20}}>
-            <Card style={{padding:26}}>
-              <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:18,letterSpacing:"-0.01em"}}>Adicionar lançamento</div>
-              {renderTxForm()}
-            </Card>
-            <div style={{display:"flex",gap:10}}>
-              <label style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:CARD,border:`1px solid ${BD}`,color:accent,padding:"12px",borderRadius:R_BTN,cursor:"pointer",fontSize:13,fontWeight:700,boxShadow:SH_SM}}>
-                <Upload size={15}/>Importar CSV<input type="file" accept=".csv" style={{display:"none"}} onChange={importCSV}/>
-              </label>
-              <button onClick={exportCSV} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:CARD,border:`1px solid ${BD}`,color:TX2,padding:"12px",borderRadius:R_BTN,cursor:"pointer",fontSize:13,fontWeight:700,boxShadow:SH_SM}}><Download size={15}/>Exportar</button>
-              <button onClick={()=>setShowClearConfirm(true)} title="Apagar todas as transações" style={{display:"flex",alignItems:"center",justifyContent:"center",background:CARD,border:`1px solid ${BD}`,color:"#F87171",padding:"12px 17px",borderRadius:R_BTN,cursor:"pointer",boxShadow:SH_SM}}><Trash2 size={15}/></button>
-            </div>
-            <div style={{display:"flex",borderRadius:R_INPUT,overflow:"hidden",background:CARD,border:`1px solid ${BD}`,width:"fit-content"}}>
-              {[["","Todos"],["Entrada","Entrada"],["Saída","Saída"]].map(([val,label])=>(
-                <button key={val||"all"} onClick={()=>setFilterType(val)} style={{padding:"8px 16px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap",background:filterType===val?(val==="Entrada"?"#34D399":val==="Saída"?"#F87171":accent):"transparent",color:filterType===val?"white":TX2}}>{label}</button>
-              ))}
-            </div>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <div style={{position:"relative",flex:1,minWidth:160}}>
-                <Search size={14} color={TX3} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
-                <input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{...SI,paddingLeft:34}}/>
-              </div>
-              <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{...SI,width:"auto"}}>
-                <option value="">Todos os meses</option>
-                {months.map(m=><option key={m} value={m}>{m}</option>)}
-              </select>
-              <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{...SI,width:"auto"}}>
-                <option value="">Todas as categorias</option>
-                {fullCats.map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
-              {(filterMonth||filterCat||filterType||search)&&<button onClick={()=>{setFilterMonth("");setFilterCat("");setFilterType("");setSearch("");}} style={{background:CARD,border:`1px solid ${BD}`,color:TX2,padding:"8px 13px",borderRadius:R_INPUT,cursor:"pointer"}}><X size={13}/></button>}
-            </div>
-            <div className="stat3" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-              {[{l:"Entradas",v:viewTotals.totalIn,c:"#34D399"},{l:"Saídas",v:viewTotals.totalOut,c:"#F87171"},{l:"Saldo",v:viewTotals.balance,c:viewTotals.balance>=0?"#34D399":"#F87171"}].map(c=>(
-                <Card key={c.l} className="stat-card" style={{padding:18,textAlign:"center",overflow:"hidden"}}>
-                  <div className="stat-label" style={{fontSize:11,color:TX2}}>{c.l}</div>
-                  <div className="stat-val" style={{fontSize:18,fontWeight:700,color:c.c,marginTop:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><AnimatedValue value={c.v}/></div>
-                </Card>
-              ))}
-            </div>
-            {filtered.length===0&&(()=>{
-              const hasActiveFilter=!!(filterMonth||filterCat||filterType||search.trim());
-              return hasActiveFilter?(
-                <div style={{textAlign:"center",color:TX2,padding:40,fontSize:14}}>
-                  <div style={{marginBottom:12}}>Nenhuma transação encontrada com esse filtro.</div>
-                  <BtnGhost onClick={()=>{setFilterMonth("");setFilterCat("");setFilterType("");setSearch("");}} style={{padding:"9px 16px",fontSize:12.5}}>Limpar filtros</BtnGhost>
-                </div>
-              ):(
-                <div style={{textAlign:"center",color:TX2,padding:40,fontSize:14}}>Você ainda não tem nenhuma transação. Use o formulário acima para lançar a primeira.</div>
-              );
-            })()}
-            {groupedByDate.map(([date,txs])=>(
-              <div key={date}>
-                <div style={{fontSize:11,color:TX3,fontWeight:700,marginBottom:10,paddingLeft:2}}>{date}</div>
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {[...txs].reverse().map(t=>{
-                    const isIn=t.type==="Entrada";const bEdited=editingTx===t.id;
-                    const rowColor=catColor(t.cat);
-                    const invLabel=t.invTipo&&INV_TIPOS.includes(t.invTipo)?t.invTipo:null;
-                    return(
-                      <div key={t.id} style={{background:bEdited?`${accent}14`:CARD,border:`1px solid ${bEdited?accent+"45":BD}`,borderRadius:R_INPUT,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:SH_SM,transition:"background .15s, border-color .15s"}}>
-                        <div style={{width:34,height:34,borderRadius:8,background:rowColor+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><CategoryIcon cat={t.cat} size={15} color={rowColor}/></div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
-                          <div style={{fontSize:11,color:TX2,marginTop:3,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                            <span style={{color:rowColor,fontWeight:600}}>{t.cat}</span>
-                            {invLabel&&<span style={{color:INV_TIPO_COLORS[invLabel]}}>· {invLabel}</span>}
-                            {t.installmentId&&<span style={{display:"flex",alignItems:"center",gap:3,color:accent}}>· <CreditCard size={10}/>parcelado</span>}
-                            {t.plannedId&&<span style={{display:"flex",alignItems:"center",gap:3,color:accent}}>· <Calendar size={10}/>previsto</span>}
-                            <span>· {t.form}</span>
-                          </div>
-                        </div>
-                        <div className="num" style={{fontSize:14,fontWeight:700,color:isIn?"#34D399":"#F87171",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{isIn?"+":"-"}{fmt(t.val)}</div>
-                        <button onClick={()=>startEditTx(t)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
-                        <button onClick={()=>setConfirmDelete({type:"tx",id:t.id,label:t.desc})} title="Excluir" aria-label={`Excluir ${t.desc}`} style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+          <TransactionsTab
+            renderTxForm={renderTxForm} accent={accent} catColor={catColor}
+            filterType={filterType} search={search} filterMonth={filterMonth} months={months} filterCat={filterCat}
+            fullCats={fullCats} viewTotals={viewTotals} filtered={filtered} groupedByDate={groupedByDate} editingTx={editingTx}
+            setFilterType={setFilterType} setSearch={setSearch} setFilterMonth={setFilterMonth} setFilterCat={setFilterCat}
+            onImportCSV={importCSV} onExportCSV={exportCSV} onClearAll={()=>setShowClearConfirm(true)}
+            onStartEditTx={startEditTx} onRequestDelete={setConfirmDelete}
+          />
         )}
 
         {tab==="planned"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:20}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-              <div style={{fontSize:17,fontWeight:700,color:TX,letterSpacing:"-0.01em"}}>Gastos Previstos</div>
-              <Btn onClick={()=>{const empty={desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:plannedMonth,notes:""};setEditingPlanned(null);setPlannedForm(empty);plannedFormSnapshotRef.current=JSON.stringify(empty);setShowPlannedForm(p=>!p);}} style={{padding:"10px 18px",fontSize:13,display:"flex",alignItems:"center",gap:6}}><Plus size={14}/>Adicionar</Btn>
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:14,background:CARD,border:`1px solid ${BD}`,borderRadius:R_INPUT,padding:"10px 14px",boxShadow:SH_SM}}>
-              <button onClick={()=>setPlannedMonth(m=>shiftMonth(m,-1))} style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,width:28,height:28,color:TX2,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><ChevronLeft size={15}/></button>
-              <div style={{fontSize:14,fontWeight:700,color:TX,minWidth:70,textAlign:"center"}}>{plannedMonth}</div>
-              <button onClick={()=>setPlannedMonth(m=>shiftMonth(m,1))} style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,width:28,height:28,color:TX2,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><ChevronRight size={15}/></button>
-              {plannedMonth!==monthKey(todayFn())&&<button onClick={()=>setPlannedMonth(monthKey(todayFn()))} style={{background:"none",border:"none",color:accent,fontSize:11,fontWeight:700,cursor:"pointer",marginLeft:4}}>hoje</button>}
-            </div>
-            <div className="stat3" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-              {[{l:"Previsto",v:plannedStats.total,c:accent},{l:"Já pago",v:plannedStats.paid,c:"#34D399"},{l:"Falta pagar",v:plannedStats.pending,c:"#F87171"}].map(c=>(
-                <Card key={c.l} className="stat-card" style={{padding:18,textAlign:"center",overflow:"hidden"}}>
-                  <div className="stat-label" style={{fontSize:11,color:TX2}}>{c.l}</div>
-                  <div className="stat-val" style={{fontSize:18,fontWeight:700,color:c.c,marginTop:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><AnimatedValue value={c.v}/></div>
-                </Card>
-              ))}
-            </div>
-            {showPlannedForm&&(
-              <div ref={plannedFormRef}>
-              <Card style={{padding:26}}>
-                <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:18,letterSpacing:"-0.01em"}}>{editingPlanned!==null?"Editar previsto":"Novo gasto previsto"}</div>
-                {editingPlanned===null&&frequentTx.length>0&&renderFrequentPicks(applyFrequentToPlanned)}
-                <div style={{display:"flex",gap:10,marginBottom:12}}>
-                  <input placeholder="Ex: Kart, Smart Fit, Game Pass..." value={plannedForm.desc} maxLength={120} onChange={e=>setPlannedForm(p=>({...p,desc:e.target.value}))} style={{...SI,flex:2}}/>
-                  <MoneyInput ref={plannedValRef} placeholder="R$" value={plannedForm.val} onChange={v=>setPlannedForm(p=>({...p,val:v}))} style={{...SI,flex:1}}/>
-                </div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
-                  {fullCats.filter(c=>c!=="Investimento"&&c!=="Salario / Entradas").map(c=>{const cc=catColor(c);return(
-                    <button key={c} onClick={()=>setPlannedForm(p=>({...p,cat:c}))} className="chip-btn" style={{padding:"7px 12px",borderRadius:R_CHIP,border:"none",fontSize:12,cursor:"pointer",background:plannedForm.cat===c?cc+"26":"rgba(255,255,255,0.03)",color:plannedForm.cat===c?cc:TX2,display:"flex",alignItems:"center",gap:5}}><CategoryIcon cat={c} size={13}/>{c}</button>
-                  );})}
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16}}>
-                  <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Forma</div><select value={plannedForm.form} onChange={e=>setPlannedForm(p=>({...p,form:e.target.value}))} style={SI}>{["pix","debito","credito","dinheiro","deposito"].map(o=><option key={o}>{o}</option>)}</select></div>
-                  <div>
-                    <div style={{fontSize:11,color:TX2,marginBottom:5}}>Repetição</div>
-                    <div style={{display:"flex",borderRadius:R_INPUT,overflow:"hidden",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`}}>
-                      <button onClick={()=>setPlannedForm(p=>({...p,recurring:false}))} style={{flex:1,padding:"9px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:!plannedForm.recurring?accent:"transparent",color:!plannedForm.recurring?"white":TX2}}>Só este mês</button>
-                      <button onClick={()=>setPlannedForm(p=>({...p,recurring:true}))} style={{flex:1,padding:"9px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:plannedForm.recurring?accent:"transparent",color:plannedForm.recurring?"white":TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><Repeat size={12}/>Todo mês</button>
-                    </div>
-                  </div>
-                  {!plannedForm.recurring&&(
-                    <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Mês</div><select value={plannedForm.month} onChange={e=>setPlannedForm(p=>({...p,month:e.target.value}))} style={SI}>{MONTH_ORDER.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
-                  )}
-                </div>
-                <div style={{marginBottom:16}}>
-                  <div style={{fontSize:11,color:TX2,marginBottom:5}}>Notas / Descrição (opcional)</div>
-                  <textarea value={plannedForm.notes||""} maxLength={2000} onChange={e=>setPlannedForm(p=>({...p,notes:e.target.value}))} rows={4} placeholder="Motivo do lançamento, observações, links, planejamento..." style={{...SI,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}}/>
-                </div>
-                <div style={{display:"flex",gap:10}}>
-                  <Btn onClick={savePlannedItem} aria-disabled={!plannedForm.desc.trim()||!plannedForm.val} style={{padding:"10px 20px",fontSize:13,opacity:(!plannedForm.desc.trim()||!plannedForm.val)?0.5:1,cursor:"pointer"}}>{editingPlanned!==null?"Salvar":"Adicionar"}</Btn>
-                  <BtnGhost onClick={closePlannedForm} style={{padding:"10px 18px",fontSize:13}}>Cancelar</BtnGhost>
-                </div>
-              </Card>
-              </div>
-            )}
-            {plannedItemsForMonth.length===0&&(
-              <div style={{textAlign:"center",color:TX3,padding:48,fontSize:14,background:CARD,border:`1px solid ${BD}`,borderRadius:R_CARD,boxShadow:SH_SM}}>
-                <Calendar size={26} style={{marginBottom:12,opacity:0.5}}/><div>Nenhum gasto previsto para {plannedMonth}.</div>
-                <div style={{fontSize:12,color:TX3,marginTop:6}}>Toque em "Adicionar" para planejar contas, assinaturas ou compromissos deste mês.</div>
-              </div>
-            )}
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {sortedPlannedItemsForMonth.map(item=>{
-                const itemColor=catColor(item.cat);
-                const isPaid=!!item.paid?.[plannedMonth];
-                const isIgnored=!!item.ignored?.[plannedMonth];
-                const notesKey=`planned-${item.id}`;
-                return(
-                  <div key={item.id} style={{background:isPaid?"#34D39912":isIgnored?"#FBBF2412":CARD,border:`1px solid ${isPaid?"#34D39930":isIgnored?"#FBBF2430":BD}`,borderRadius:R_INPUT,padding:"14px 16px",boxShadow:SH_SM,opacity:isIgnored?0.75:1}}>
-                    <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-                      <button onClick={()=>togglePlannedPaid(item)} title={isPaid?"Marcar como não pago":"Marcar como pago"} style={{width:24,height:24,borderRadius:8,border:isPaid?"none":`1.5px solid ${BD2}`,background:isPaid?SUCCESS_FILL:"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{isPaid&&<Check size={13}/>}</button>
-                      <div style={{width:34,height:34,borderRadius:8,background:itemColor+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><CategoryIcon cat={item.cat} size={15} color={itemColor}/></div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,color:isPaid?TX2:TX,textDecoration:isPaid||isIgnored?"line-through":"none",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",wordBreak:"break-word",lineHeight:1.3}}>{item.desc}</div>
-                        <div style={{fontSize:11,color:TX2,marginTop:3,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                          <span style={{color:itemColor,fontWeight:600}}>{item.cat}</span>
-                          {item.recurring&&<span style={{display:"flex",alignItems:"center",gap:3,color:accent}}>· <Repeat size={10}/>mensal</span>}
-                          <span>· {item.form}</span>
-                          {isIgnored&&<span style={{color:"#FBBF24",fontWeight:600}}>· ignorado este mês</span>}
-                        </div>
-                      </div>
-                      <div className="num" style={{fontSize:14,fontWeight:700,color:isPaid?"#34D399":TX,flexShrink:0}}>{fmt(item.val)}</div>
-                      <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
-                        {item.notes&&<button onClick={()=>toggleNotes(notesKey)} title="Ver notas" style={{background:"none",border:"none",color:expandedNotes[notesKey]?accent:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Info size={14}/></button>}
-                        {item.recurring&&<button onClick={()=>togglePlannedIgnoredForMonth(item,plannedMonth)} title={isIgnored?"Reativar este mês":"Ignorar apenas este mês"} style={{background:"none",border:"none",color:isIgnored?"#FBBF24":TX3,cursor:"pointer",flexShrink:0,padding:4}}>{isIgnored?<Eye size={14}/>:<EyeOff size={14}/>}</button>}
-                        <button onClick={()=>openTransferToWish(item)} title="Mover para Metas" aria-label="Mover para Metas" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><ArrowRightLeft size={14}/></button>
-                        <button onClick={()=>startEditPlanned(item)} title="Editar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Pencil size={14}/></button>
-                        <button onClick={()=>setConfirmDelete({type:"planned",id:item.id,label:item.desc})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",flexShrink:0,padding:4}}><Trash2 size={14}/></button>
-                      </div>
-                    </div>
-                    {item.notes&&expandedNotes[notesKey]&&(
-                      <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${BD}`,fontSize:12.5,color:TX2,lineHeight:1.6}}>
-                        <LinkifiedText text={item.notes} color={accent}/>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <PlannedTab
+            plannedMonth={plannedMonth} plannedStats={plannedStats} showPlannedForm={showPlannedForm} plannedFormRef={plannedFormRef}
+            editingPlanned={editingPlanned} plannedForm={plannedForm} plannedValRef={plannedValRef}
+            frequentTx={frequentTx} renderFrequentPicks={renderFrequentPicks} applyFrequentToPlanned={applyFrequentToPlanned}
+            fullCats={fullCats} catColor={catColor}
+            plannedItemsForMonth={plannedItemsForMonth} sortedPlannedItemsForMonth={sortedPlannedItemsForMonth}
+            expandedNotes={expandedNotes} accent={accent}
+            setPlannedForm={setPlannedForm} setEditingPlanned={setEditingPlanned} setShowPlannedForm={setShowPlannedForm}
+            plannedFormSnapshotRef={plannedFormSnapshotRef}
+            onShiftMonth={delta=>setPlannedMonth(m=>shiftMonth(m,delta))} onGoToday={()=>setPlannedMonth(monthKey(todayFn()))}
+            onSave={savePlannedItem} onCancelForm={closePlannedForm} onTogglePaid={togglePlannedPaid}
+            onToggleIgnored={togglePlannedIgnoredForMonth} onTransferToWish={openTransferToWish}
+            onStartEdit={startEditPlanned} onRequestDelete={setConfirmDelete} onToggleNotes={toggleNotes}
+          />
         )}
 
         {tab==="installments"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:20}}>
-            <div className="stat3" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-              {[{l:"A pagar",v:instStats.remaining,c:"#F87171",f:true},{l:"Já pago",v:instStats.paid,c:"#34D399",f:true},{l:"Ativas",v:instStats.active,c:accent,f:false}].map(({l,v,c,f})=>(
-                <Card key={l} className="stat-card" style={{padding:18,textAlign:"center",overflow:"hidden"}}>
-                  <div className="stat-label" style={{fontSize:11,color:TX2,marginBottom:5}}>{l}</div>
-                  <div className="stat-val" style={{fontSize:19,fontWeight:700,color:c,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{f?<AnimatedValue value={v}/>:v}</div>
-                </Card>
-              ))}
-            </div>
-            {!showInstForm&&<BtnGhost onClick={openInstForm} style={{width:"100%",padding:"13px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Plus size={14}/>Nova compra parcelada</BtnGhost>}
-            {showInstForm&&(
-              <Card style={{padding:26}}>
-                <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:18,letterSpacing:"-0.01em"}}>Nova compra parcelada</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:14}}>
-                  <div style={{gridColumn:"1/-1"}}><div style={{fontSize:11,color:TX2,marginBottom:5}}>Descrição</div><input placeholder="Ex: iPhone" value={instDraft.desc} maxLength={120} onChange={e=>setInstDraft(d=>({...d,desc:e.target.value}))} style={SI}/></div>
-                  <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Valor total (R$)</div><MoneyInput placeholder="6000" value={instDraft.totalVal} onChange={v=>setInstDraft(d=>({...d,totalVal:v}))} style={SI}/></div>
-                  <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Nº de parcelas</div><input type="number" min="1" max="360" placeholder="12" value={instDraft.numParcelas} onChange={e=>setInstDraft(d=>({...d,numParcelas:e.target.value}))} style={SI}/></div>
-                  {monthlyPreview&&(
-                    <div style={{gridColumn:"1/-1",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_INPUT,padding:"10px 15px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
-                      <span style={{fontSize:12,color:TX2}}>Valor por parcela</span>
-                      <span className="num" style={{fontSize:16,fontWeight:700,color:accent}}>{fmt(monthlyPreview)}/mês</span>
-                    </div>
-                  )}
-                  <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Primeiro vencimento</div><input type="date" value={instDraft.startDate} min={DATE_MIN} max={DATE_MAX} onChange={e=>setInstDraft(d=>({...d,startDate:e.target.value}))} style={SI}/></div>
-                  <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Forma de pagamento</div><select value={instDraft.form} onChange={e=>setInstDraft(d=>({...d,form:e.target.value}))} style={SI}>{["credito","debito","pix","dinheiro"].map(o=><option key={o}>{o}</option>)}</select></div>
-                </div>
-                <div style={{fontSize:11,color:TX2,marginBottom:10}}>Categoria</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:16}}>
-                  {fullCats.filter(c=>c!=="Investimento"&&c!=="Salario / Entradas").map(c=>{const cc=catColor(c);return(
-                    <button key={c} onClick={()=>setInstDraft(d=>({...d,cat:c}))} className="chip-btn" style={{padding:"6px 12px",borderRadius:R_CHIP,border:"none",fontSize:12,cursor:"pointer",background:instDraft.cat===c?cc+"26":"rgba(255,255,255,0.03)",color:instDraft.cat===c?cc:TX2,display:"flex",alignItems:"center",gap:5}}>
-                      <CategoryIcon cat={c} size={13}/>{c}
-                    </button>
-                  );})}
-                </div>
-                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                  <BtnGhost onClick={()=>setShowInstForm(false)} style={{flex:1,padding:"11px",minWidth:100}}>Cancelar</BtnGhost>
-                  <button onClick={addInstallment} aria-disabled={!instDraft.desc||!instDraft.totalVal} style={{flex:2,padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:(!instDraft.desc||!instDraft.totalVal)?"rgba(255,255,255,0.04)":accent,color:(!instDraft.desc||!instDraft.totalVal)?TX3:"white",minWidth:180}}>
-                    {monthlyPreview?`Criar ${instDraft.numParcelas}x de ${fmt(monthlyPreview)}`:"Criar parcelamento"}
-                  </button>
-                </div>
-              </Card>
-            )}
-            {installments.length===0&&(
-              <div style={{textAlign:"center",color:TX3,padding:48,fontSize:14,background:CARD,border:`1px solid ${BD}`,borderRadius:R_CARD,boxShadow:SH_SM}}>
-                <CreditCard size={26} style={{marginBottom:12,opacity:0.5}}/><div>Nenhum parcelamento cadastrado.</div>
-              </div>
-            )}
-            {[...installments].reverse().map(inst=>{
-              const today=todayFn();
-              const instTxs=inst.txIds.map(id=>txMap.get(id)).filter(Boolean);
-              const paidTxs=instTxs.filter(t=>t.date<=today);
-              const pendingTxs=instTxs.filter(t=>t.date>today);
-              const remainingVal=pendingTxs.reduce((s,t)=>s+t.val,0);
-              const totalPaidVal=paidTxs.reduce((s,t)=>s+t.val,0);
-              const pct=inst.numParcelas>0?Math.round((paidTxs.length/inst.numParcelas)*100):0;
-              const isComplete=pendingTxs.length===0&&instTxs.length>0;
-              const monthly=inst.totalVal/inst.numParcelas;
-              const dotColor=catColor(inst.cat);
-              const endTx=[...instTxs].sort((a,b)=>b.date.localeCompare(a.date))[0];
-              const endDate=endTx?monthKey(endTx.date):"?";
-              return(
-                <Card key={inst.id} style={{padding:"20px 22px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                    <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:10}}>
-                      <div style={{width:30,height:30,borderRadius:8,background:dotColor+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><CategoryIcon cat={inst.cat} size={14} color={dotColor}/></div>
-                      <div style={{minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{inst.desc}</div>
-                        <div style={{fontSize:11,color:TX2,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fmt(monthly)}/mês · {inst.form} · até {endDate}</div>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:8,alignItems:"flex-start",flexShrink:0,marginLeft:10}}>
-                      <div style={{textAlign:"right"}}>
-                        {isComplete?<div style={{fontSize:12,color:"#34D399",fontWeight:700}}>Quitado</div>:<div className="num" style={{fontSize:13,fontWeight:700,color:"#F87171"}}>{fmt(remainingVal)}</div>}
-                        <div style={{fontSize:11,color:TX2,marginTop:3}}>{paidTxs.length}/{inst.numParcelas}x pagas</div>
-                      </div>
-                      <button onClick={()=>setDelInstId(inst.id)} title="Remover parcelamento" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:2}}><X size={16}/></button>
-                    </div>
-                  </div>
-                  <ProgressBar pct={pct} color={isComplete?"#34D399":dotColor} height={6} style={{marginBottom:12}}/>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:TX2,flexWrap:"wrap",gap:4}}>
-                    <span>pago: {fmt(totalPaidVal)}</span><span style={{color:accent,fontWeight:700}}>{pct}%</span><span>total: {fmt(inst.totalVal)}</span>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+          <InstallmentsTab
+            installments={installments} instStats={instStats} showInstForm={showInstForm} instDraft={instDraft}
+            monthlyPreview={monthlyPreview} fullCats={fullCats} txMap={txMap} todayFn={todayFn} accent={accent} catColor={catColor}
+            onOpenForm={openInstForm} onCancelForm={()=>setShowInstForm(false)} onChangeDraft={setInstDraft}
+            onAdd={addInstallment} onRequestDelete={setDelInstId}
+          />
         )}
 
         {tab==="wishes"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:20}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-              <div style={{fontSize:17,fontWeight:700,color:TX,letterSpacing:"-0.01em"}}>Minhas Metas</div>
-              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                <div style={{display:"flex",borderRadius:R_INPUT,overflow:"hidden",background:CARD,border:`1px solid ${BD}`}}>
-                  <button onClick={()=>setWishSortBy("progress")} title="Ordenar por progresso" style={{padding:"8px 14px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:wishSortBy==="progress"?accent:"transparent",color:wishSortBy==="progress"?"white":TX2}}>Progresso</button>
-                  <button onClick={()=>setWishSortBy("priority")} title="Ordenar por prioridade" style={{padding:"8px 14px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:wishSortBy==="priority"?accent:"transparent",color:wishSortBy==="priority"?"white":TX2}}>Prioridade</button>
-                </div>
-                <Btn onClick={()=>{const empty={name:"",price:"",saved:"",priority:"Média",monthsTarget:"",notes:""};setEditingWish(null);setWishForm(empty);wishFormSnapshotRef.current=JSON.stringify(empty);setShowWishForm(p=>!p);}} style={{padding:"10px 18px",fontSize:13,display:"flex",alignItems:"center",gap:6}}><Plus size={14}/>Adicionar</Btn>
-              </div>
-            </div>
-            {showWishForm&&(
-              <div ref={wishFormRef}>
-              <Card style={{padding:26}}>
-                <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:18,letterSpacing:"-0.01em"}}>{editingWish!==null?"Editar":"Novo desejo"}</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12}}>
-                  {[{l:"Nome",k:"name",t:"text"},{l:"Preço (R$)",k:"price",t:"money"},{l:"Já guardei (R$)",k:"saved",t:"money"},{l:"Meta (meses)",k:"monthsTarget",t:"number"}].map(f=>(
-                    <div key={f.k}><div style={{fontSize:11,color:TX2,marginBottom:5}}>{f.l}</div>{f.t==="money"
-                      ?<MoneyInput value={wishForm[f.k]} onChange={v=>setWishForm(p=>({...p,[f.k]:v}))} style={SI}/>
-                      :<input type={f.t} value={wishForm[f.k]} maxLength={f.t==="text"?80:undefined} onChange={e=>setWishForm(p=>({...p,[f.k]:e.target.value}))} style={SI}/>}</div>
-                  ))}
-                  <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Prioridade</div><select value={wishForm.priority} onChange={e=>setWishForm(p=>({...p,priority:e.target.value}))} style={SI}>{["Alta","Média","Baixa"].map(o=><option key={o}>{o}</option>)}</select></div>
-                  <div style={{gridColumn:"1/-1"}}>
-                    <div style={{fontSize:11,color:TX2,marginBottom:5}}>Notas / Descrição (opcional)</div>
-                    <textarea value={wishForm.notes||""} maxLength={2000} onChange={e=>setWishForm(p=>({...p,notes:e.target.value}))} rows={4} placeholder="Detalhes, observações, planejamento, links de produtos..." style={{...SI,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}}/>
-                  </div>
-                  <div style={{display:"flex",gap:10,alignItems:"flex-end",gridColumn:"1/-1",flexWrap:"wrap"}}>
-                    <Btn onClick={saveWish} aria-disabled={!wishForm.name||!wishForm.price} style={{padding:"10px 20px",fontSize:13,opacity:(!wishForm.name||!wishForm.price)?0.5:1,cursor:"pointer"}}>{editingWish!==null?"Salvar":"Adicionar"}</Btn>
-                    <BtnGhost onClick={closeWishForm} style={{padding:"10px 18px",fontSize:13}}>Cancelar</BtnGhost>
-                  </div>
-                </div>
-              </Card>
-              </div>
-            )}
-            {wishes.length===0&&<div style={{textAlign:"center",color:TX3,padding:48,fontSize:14}}><Sparkles size={26} style={{marginBottom:12,opacity:0.5}}/><div>Nenhum desejo ainda!</div><div style={{fontSize:12,color:TX3,marginTop:6}}>Adicione uma meta para começar a acompanhar seu progresso.</div></div>}
-            {sortedWishes.map(w=>{
-              const pct2=Math.min(100,Math.round(w.saved/w.price*100));
-              const pColor={"Alta":"#F87171","Média":"#FBBF24","Baixa":"#34D399"}[w.priority];
-              const remaining=w.price-w.saved;
-              const monthly=w.monthsTarget>0?Math.ceil(remaining/w.monthsTarget):null;
-              const notesKey=`wish-${w.id}`;
-              return(
-                <Card key={w.id} style={{padding:22,opacity:w.done?0.7:1}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                    <div style={{display:"flex",alignItems:"flex-start",gap:12,minWidth:0}}>
-                      <button onClick={()=>toggleWishDone(w.id)} title={w.done?"Marcar como não conquistado":"Marcar como conquistado"} style={{width:24,height:24,borderRadius:8,border:w.done?"none":`1.5px solid ${BD2}`,background:w.done?SUCCESS_FILL:"transparent",color:"white",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",marginTop:2}}>{w.done&&<Check size={13}/>}</button>
-                      <div style={{minWidth:0}}>
-                        <div style={{fontSize:14.5,fontWeight:700,color:w.done?TX2:TX,textDecoration:w.done?"line-through":"none",letterSpacing:"-0.01em"}}>{w.name}</div>
-                        <div style={{fontSize:11,color:TX2,marginTop:5}}>{fmt(w.saved)} de {fmt(w.price)} · faltam {fmt(remaining)}</div>
-                        {monthly&&<div style={{fontSize:11,color:accent,marginTop:5,fontWeight:700}}>Poupe {fmt(monthly)}/mês por {w.monthsTarget} meses</div>}
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
-                      <span style={{background:pColor+"22",color:pColor,fontSize:11,padding:"4px 10px",borderRadius:R_CHIP,fontWeight:700}}>{w.priority}</span>
-                      <button onClick={()=>openTransferToPlanned(w)} title="Mover para Previstos" aria-label="Mover para Previstos" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"5px 8px",color:TX2,cursor:"pointer"}}><ArrowRightLeft size={12}/></button>
-                      <button onClick={()=>{const snap={name:w.name,price:toDecimalStr(w.price),saved:toDecimalStr(w.saved),priority:w.priority,monthsTarget:String(w.monthsTarget||""),notes:w.notes||""};setEditingWish(w.id);setWishForm(snap);wishFormSnapshotRef.current=JSON.stringify(snap);setShowWishForm(true);}} title="Editar" aria-label="Editar" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"5px 8px",color:TX2,cursor:"pointer"}}><Pencil size={12}/></button>
-                      <button onClick={()=>setConfirmDelete({type:"wish",id:w.id,label:w.name})} title="Excluir" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4}}><Trash2 size={14}/></button>
-                    </div>
-                  </div>
-                  <ProgressBar pct={pct2} color={accent} height={7}/>
-                  <div style={{fontSize:11,color:TX2,marginTop:8}}>{pct2}% conquistado</div>
-                  {w.notes&&(
-                    <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${BD}`}}>
-                      <button onClick={()=>toggleNotes(notesKey)} style={{background:"none",border:"none",color:accent,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5,padding:0,marginBottom:expandedNotes[notesKey]?10:0}}>
-                        {expandedNotes[notesKey]?<ChevronUp size={13}/>:<ChevronDown size={13}/>} Notas e planejamento
-                      </button>
-                      {expandedNotes[notesKey]&&<div style={{fontSize:12.5,color:TX2,lineHeight:1.6}}><LinkifiedText text={w.notes} color={accent}/></div>}
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
+          <WishesTab
+            wishes={wishes} sortedWishes={sortedWishes} wishSortBy={wishSortBy} showWishForm={showWishForm}
+            wishForm={wishForm} editingWish={editingWish} expandedNotes={expandedNotes} accent={accent}
+            wishFormRef={wishFormRef} wishFormSnapshotRef={wishFormSnapshotRef}
+            setWishSortBy={setWishSortBy} setShowWishForm={setShowWishForm} setEditingWish={setEditingWish} setWishForm={setWishForm}
+            onSave={saveWish} onCancelForm={closeWishForm} onToggleDone={toggleWishDone}
+            onTransferToPlanned={openTransferToPlanned} onRequestDelete={setConfirmDelete} onToggleNotes={toggleNotes}
+          />
         )}
       </div>
     </div>
