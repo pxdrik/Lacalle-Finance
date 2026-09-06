@@ -28,14 +28,15 @@ export default function PlannedTab({
         <button onClick={() => onShiftMonth(1)} style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronRight size={15} /></button>
         {plannedMonth !== monthKey(todayFn()) && <button onClick={onGoToday} style={{ background: "none", border: "none", color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>hoje</button>}
       </div>
-      <div className="stat3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+      {/* ---- Resumo: 1 linha, não 3 cards (ajuste de 06/09/2026) ---- */}
+      <Card style={{ padding: "14px 18px", display: "flex", gap: 22, flexWrap: "wrap" }}>
         {[{ l: "Previsto", v: plannedStats.total, c: accent }, { l: "Já pago", v: plannedStats.paid, c: "#34D399" }, { l: "Falta pagar", v: plannedStats.pending, c: "#F87171" }].map(c => (
-          <Card key={c.l} className="stat-card" style={{ padding: 18, textAlign: "center", overflow: "hidden" }}>
-            <div className="stat-label" style={{ fontSize: 11, color: TX2 }}>{c.l}</div>
-            <div className="stat-val" style={{ fontSize: 18, fontWeight: 700, color: c.c, marginTop: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><AnimatedValue value={c.v} /></div>
-          </Card>
+          <div key={c.l} style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span style={{ fontSize: 11, color: TX2 }}>{c.l}</span>
+            <span className="num" style={{ fontSize: 14.5, fontWeight: 700, color: c.c }}><AnimatedValue value={c.v} /></span>
+          </div>
         ))}
-      </div>
+      </Card>
       {showPlannedForm && (
         <div ref={plannedFormRef}>
         <Card style={{ padding: 26 }}>

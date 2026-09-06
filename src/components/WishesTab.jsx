@@ -48,14 +48,19 @@ export default function WishesTab({
         </div>
       )}
       {wishes.length === 0 && <div style={{ textAlign: "center", color: TX3, padding: 48, fontSize: 14 }}><Sparkles size={26} style={{ marginBottom: 12, opacity: 0.5 }} /><div>Nenhum desejo ainda!</div><div style={{ fontSize: 12, color: TX3, marginTop: 6 }}>Adicione uma meta para começar a acompanhar seu progresso.</div></div>}
-      {sortedWishes.map(w => {
+      {/* ---- Cada meta era um Card próprio (moldura dentro de lista de
+           molduras) — ajuste de 06/09/2026: agora é uma lista, uma única
+           Card externa e uma borda inferior fina separando as metas. ---- */}
+      {sortedWishes.length > 0 && (
+      <Card style={{ padding: 0 }}>
+      {sortedWishes.map((w, wIdx) => {
         const pct2 = Math.min(100, Math.round(w.saved / w.price * 100));
         const pColor = { "Alta": "#F87171", "Média": "#FBBF24", "Baixa": "#34D399" }[w.priority];
         const remaining = w.price - w.saved;
         const monthly = w.monthsTarget > 0 ? Math.ceil(remaining / w.monthsTarget) : null;
         const notesKey = `wish-${w.id}`;
         return (
-          <Card key={w.id} style={{ padding: 22, opacity: w.done ? 0.7 : 1 }}>
+          <div key={w.id} style={{ padding: 22, opacity: w.done ? 0.7 : 1, borderBottom: wIdx < sortedWishes.length - 1 ? `1px solid ${BD}` : "none" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0 }}>
                 <button onClick={() => onToggleDone(w.id)} title={w.done ? "Marcar como não conquistado" : "Marcar como conquistado"} style={{ width: 24, height: 24, borderRadius: 8, border: w.done ? "none" : `1.5px solid ${BD2}`, background: w.done ? SUCCESS_FILL : "transparent", color: "white", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 2 }}>{w.done && <Check size={13} />}</button>
@@ -82,9 +87,11 @@ export default function WishesTab({
                 {expandedNotes[notesKey] && <div style={{ fontSize: 12.5, color: TX2, lineHeight: 1.6 }}><LinkifiedText text={w.notes} color={accent} /></div>}
               </div>
             )}
-          </Card>
+          </div>
         );
       })}
+      </Card>
+      )}
     </div>
   );
 }

@@ -50,14 +50,15 @@ export default function TransactionsTab({
         </select>
         {(filterMonth || filterCat || filterType || search) && <button onClick={() => { setFilterMonth(""); setFilterCat(""); setFilterType(""); setSearch(""); }} style={{ background: CARD, border: `1px solid ${BD}`, color: TX2, padding: "8px 13px", borderRadius: R_INPUT, cursor: "pointer" }}><X size={13} /></button>}
       </div>
-      <div className="stat3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+      {/* ---- Resumo: 1 linha, não 3 cards (ajuste de 06/09/2026) ---- */}
+      <Card style={{ padding: "14px 18px", display: "flex", gap: 22, flexWrap: "wrap" }}>
         {[{ l: "Entradas", v: viewTotals.totalIn, c: "#34D399" }, { l: "Saídas", v: viewTotals.totalOut, c: "#F87171" }, { l: "Saldo", v: viewTotals.balance, c: viewTotals.balance >= 0 ? "#34D399" : "#F87171" }].map(c => (
-          <Card key={c.l} className="stat-card" style={{ padding: 18, textAlign: "center", overflow: "hidden" }}>
-            <div className="stat-label" style={{ fontSize: 11, color: TX2 }}>{c.l}</div>
-            <div className="stat-val" style={{ fontSize: 18, fontWeight: 700, color: c.c, marginTop: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><AnimatedValue value={c.v} /></div>
-          </Card>
+          <div key={c.l} style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span style={{ fontSize: 11, color: TX2 }}>{c.l}</span>
+            <span className="num" style={{ fontSize: 14.5, fontWeight: 700, color: c.c }}><AnimatedValue value={c.v} /></span>
+          </div>
         ))}
-      </div>
+      </Card>
       {filtered.length === 0 && (() => {
         const hasActiveFilter = !!(filterMonth || filterCat || filterType || search.trim());
         return hasActiveFilter ? (

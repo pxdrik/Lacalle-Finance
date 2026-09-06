@@ -2226,7 +2226,7 @@ function MainApp({user,setUser}){
 
             <div>
               <div style={{fontSize:22,fontWeight:800,color:TX,letterSpacing:"-0.02em"}}>{greeting}, {firstName} 👋</div>
-              <div style={{fontSize:13.5,color:TX2,marginTop:6}}>Aqui está o que importa hoje na sua vida financeira.</div>
+              <div style={{fontSize:13.5,color:TX2,marginTop:6}}>{resumoDoMes?resumoDoMes.text:"Aqui está o que importa hoje na sua vida financeira."}</div>
             </div>
 
             {/* ---- Onboarding leve: só aparece pra quem ainda não tem nenhum dado cadastrado ---- */}
@@ -2238,41 +2238,6 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:13,color:TX2,lineHeight:1.6,marginBottom:4}}>Pra começar: lance sua primeira <strong style={{color:TX}}>transação</strong> na aba "Transações", cadastre contas fixas em <strong style={{color:TX}}>"Previstos"</strong> e metas de longo prazo em <strong style={{color:TX}}>"Metas"</strong>. Os Insights e os gráficos vão aparecer sozinhos conforme você for usando.</div>
                 </div>
                 <button onClick={()=>setOnboardingDismissed(true)} title="Dispensar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,flexShrink:0}}><X size={16}/></button>
-              </div>
-            )}
-
-            {/* ---- Resumo do mês: hero card visual estilo Wrapped/Duolingo ---- */}
-            {resumoDoMes&&(
-              <div className="fc-card hero-card-anim" style={{...cardStyle,padding:32,background:`linear-gradient(135deg, ${accent}24, ${CARD} 62%)`,border:`1px solid ${accent}35`,position:"relative",overflow:"hidden"}}>
-                <div style={{position:"absolute",top:-50,right:-50,width:190,height:190,borderRadius:"50%",background:`${accent}18`,filter:"blur(16px)"}}/>
-                <div style={{position:"relative"}}>
-                  <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:accent,marginBottom:22,display:"flex",alignItems:"center",gap:7}}><Sparkles size={13}/>Resumo do seu mês</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:22,marginBottom:24}}>
-                    <div>
-                      <div style={{fontSize:22,marginBottom:6}}>💰</div>
-                      <div style={{fontSize:10.5,color:TX2,fontWeight:600,marginBottom:3}}>Economia</div>
-                      <div className="num" style={{fontSize:20,fontWeight:800,color:resumoDoMes.stats.economia>=0?"#34D399":"#F87171",letterSpacing:"-0.01em"}}>{resumoDoMes.stats.economia>=0?"+":""}{fmt(resumoDoMes.stats.economia)}</div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:22,marginBottom:6}}>📈</div>
-                      <div style={{fontSize:10.5,color:TX2,fontWeight:600,marginBottom:3}}>Patrimônio</div>
-                      <div className="num" style={{fontSize:20,fontWeight:800,color:accent,letterSpacing:"-0.01em"}}>{fmt(resumoDoMes.stats.patrimonio)}</div>
-                    </div>
-                    {resumoDoMes.stats.meta&&(
-                      <div>
-                        <div style={{fontSize:22,marginBottom:6}}>🎯</div>
-                        <div style={{fontSize:10.5,color:TX2,fontWeight:600,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Meta {resumoDoMes.stats.meta.name}</div>
-                        <div className="num" style={{fontSize:20,fontWeight:800,color:"#34D399",letterSpacing:"-0.01em"}}>{resumoDoMes.stats.meta.pct}%</div>
-                      </div>
-                    )}
-                    <div>
-                      <div style={{fontSize:22,marginBottom:6}}>🧠</div>
-                      <div style={{fontSize:10.5,color:TX2,fontWeight:600,marginBottom:3}}>Descobertas</div>
-                      <div style={{fontSize:20,fontWeight:800,color:TX,letterSpacing:"-0.01em"}}>{consultantInsights.length}</div>
-                    </div>
-                  </div>
-                  <div style={{fontSize:13.5,color:TX2,lineHeight:1.6,fontWeight:500,maxWidth:640}}>{resumoDoMes.text}</div>
-                </div>
               </div>
             )}
 
@@ -2297,36 +2262,47 @@ function MainApp({user,setUser}){
               ))}
             </div>
 
-            {/* ---- 3 saldos (clicáveis: explicam como foram calculados) ---- */}
-            <div className="bento">
-              <div className="bento-half fc-card" onClick={()=>setExplainKey("saldoAtual")} title="Toque para entender este número" style={{...cardStyle,padding:24,cursor:"pointer"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <div style={{width:28,height:28,borderRadius:8,background:accent+"1f",display:"flex",alignItems:"center",justifyContent:"center"}}><Wallet size={14} color={accent}/></div>
-                  <div style={{fontSize:11.5,color:TX2,fontWeight:600,flex:1}}>Saldo Atual</div>
-                  <Info size={12} color={TX3}/>
-                </div>
-                <div style={{fontSize:24,fontWeight:800,color:balance>=0?"#34D399":"#F87171",letterSpacing:"-0.02em"}}><AnimatedValue value={balance}/></div>
-                <div style={{fontSize:11,color:TX3,marginTop:6,lineHeight:1.4}}>Dinheiro que existe na conta agora.</div>
+            {/* ---- Saldo: hero único (era 3 cards + o hero "Resumo do mês" separado) ----
+                 Consolidado num card por pedido do usuário (auditoria de
+                 04-06/09/2026): "Resumo do mês" + os 3 cards de saldo
+                 repetiam o mesmo padrão ícone+número+legenda 7 vezes antes de
+                 qualquer conteúdo real. Saldo Livre e Previsto no Fim do Mês
+                 continuam clicáveis (mesmos handlers de antes), só mudaram de
+                 card próprio para linha/texto. */}
+            <div className="fc-card" onClick={()=>setExplainKey("saldoAtual")} title="Toque para entender este número" style={{...cardStyle,padding:26,cursor:"pointer"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <div style={{width:28,height:28,borderRadius:8,background:accent+"1f",display:"flex",alignItems:"center",justifyContent:"center"}}><Wallet size={14} color={accent}/></div>
+                <div style={{fontSize:11.5,color:TX2,fontWeight:600,flex:1}}>Saldo Atual</div>
+                <Info size={12} color={TX3}/>
               </div>
-              <div className="bento-half fc-card" onClick={()=>setExplainKey("saldoLivre")} title="Toque para entender este número" style={{...cardStyle,padding:24,cursor:"pointer"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <div style={{width:28,height:28,borderRadius:8,background:"#FBBF241f",display:"flex",alignItems:"center",justifyContent:"center"}}><ShieldCheck size={14} color="#FBBF24"/></div>
-                  <div style={{fontSize:11.5,color:TX2,fontWeight:600,flex:1}}>Saldo Livre</div>
-                  <Info size={12} color={TX3}/>
-                </div>
-                <div style={{fontSize:24,fontWeight:800,color:freeBalance>=0?"#34D399":"#F87171",letterSpacing:"-0.02em"}}><AnimatedValue value={freeBalance}/></div>
-                <div style={{fontSize:11,color:TX3,marginTop:6,lineHeight:1.4}}>{(freeBalanceBreakdown.futureOut+freeBalanceBreakdown.plannedPending)>0?`Já descontando ${fmt(freeBalanceBreakdown.futureOut+freeBalanceBreakdown.plannedPending)} em parcelas, contas e recorrências.`:"Nenhum compromisso futuro cadastrado ainda."}</div>
-              </div>
-              <div className="bento-half fc-card" onClick={()=>setProjectionDrawer({key:"saldoPrevisto",daysAhead:daysToEndOfMonth,title:"Previsto no Fim do Mês"})} title="Toque para ver de onde vem esse número" style={{...cardStyle,padding:24,cursor:"pointer"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <div style={{width:28,height:28,borderRadius:8,background:"#3B82F61f",display:"flex",alignItems:"center",justifyContent:"center"}}><Target size={14} color="#3B82F6"/></div>
-                  <div style={{fontSize:11.5,color:TX2,fontWeight:600,flex:1}}>Previsto no Fim do Mês</div>
-                  <Info size={12} color={TX3}/>
-                </div>
-                <div style={{fontSize:24,fontWeight:800,color:(projection?projection.expected:0)>=0?"#34D399":"#F87171",letterSpacing:"-0.02em"}}>{projection?<AnimatedValue value={projection.expected}/>:"—"}</div>
-                <div style={{fontSize:11,color:TX3,marginTop:6,lineHeight:1.4}}>{projection?`Receitas ${fmt(projection.inc)} · Despesas ${fmt(projection.out)}${projection.plannedPending>0?` · Previstos ${fmt(projection.plannedPending)}`:""}`:`Projeção com receitas e despesas restantes de ${currentMonthKeyReal}.`}</div>
+              <div className="num" style={{fontSize:32,fontWeight:800,color:balance>=0?"#34D399":"#F87171",letterSpacing:"-0.02em"}}><AnimatedValue value={balance}/></div>
+              <div style={{fontSize:12.5,color:TX2,marginTop:8,lineHeight:1.5}}>
+                {resumoDoMes&&(<><span style={{color:resumoDoMes.stats.economia>=0?"#34D399":"#F87171",fontWeight:700}}>{resumoDoMes.stats.economia>=0?"+":""}{fmt(resumoDoMes.stats.economia)}</span> de economia este mês · </>)}
+                <span onClick={e=>{e.stopPropagation();setExplainKey("saldoLivre");}} style={{textDecoration:"underline",textUnderlineOffset:2,cursor:"pointer"}}>Saldo livre {fmt(freeBalance)}</span>
               </div>
             </div>
+
+            {/* ---- Patrimônio, meta, descobertas e previsão: lista, não grid ---- */}
+            <Card style={{padding:22}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`}}>
+                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Patrimônio</span>
+                <span className="num" style={{fontSize:14,fontWeight:700,color:accent}}>{resumoDoMes?fmt(resumoDoMes.stats.patrimonio):"—"}</span>
+              </div>
+              {resumoDoMes?.stats?.meta&&(
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`,gap:12}}>
+                  <span style={{fontSize:12.5,color:TX2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Meta {resumoDoMes.stats.meta.name}</span>
+                  <span className="num" style={{fontSize:14,fontWeight:700,color:"#34D399",flexShrink:0}}>{resumoDoMes.stats.meta.pct}%</span>
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`}}>
+                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Descobertas este mês</span>
+                <span style={{fontSize:14,fontWeight:700,color:TX}}>{consultantInsights.length}</span>
+              </div>
+              <div onClick={()=>setProjectionDrawer({key:"saldoPrevisto",daysAhead:daysToEndOfMonth,title:"Previsto no Fim do Mês"})} title="Toque para ver de onde vem esse número" style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",cursor:"pointer"}}>
+                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Previsto no fim do mês</span>
+                <span className="num" style={{fontSize:14,fontWeight:700,color:(projection?projection.expected:0)>=0?"#34D399":"#F87171"}}>{projection?fmt(projection.expected):"—"}</span>
+              </div>
+            </Card>
 
             {/* ---- Quanto posso gastar ---- */}
             {proj30&&(
@@ -2341,21 +2317,15 @@ function MainApp({user,setUser}){
               </div>
             )}
 
-            {/* ---- Evolução do dinheiro ---- */}
-            <Card style={{padding:26}}>
-              <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:20,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={16} color={accent}/>Evolução do seu dinheiro</div>
-              <div style={{display:"flex",alignItems:"center",gap:6,overflowX:"auto",paddingBottom:4}}>
-                {moneySteps.flatMap((s,i)=>{
-                  const nodes=[
-                    <div key={`step-${s.label}`} style={{flex:"1 1 120px",minWidth:110,textAlign:"center",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_INPUT,padding:"14px 10px"}}>
-                      <div style={{fontSize:11,color:TX2,marginBottom:6,fontWeight:600}}>{s.label}</div>
-                      <div className="num" style={{fontSize:15,fontWeight:700,color:s.value>=0?"#34D399":"#F87171"}}>{fmt(s.value)}</div>
-                    </div>
-                  ];
-                  if(i<moneySteps.length-1)nodes.push(<ChevronRight key={`arrow-${i}`} size={16} color={TX3} style={{flexShrink:0}}/>);
-                  return nodes;
-                })}
-              </div>
+            {/* ---- Evolução do dinheiro: lista, não caixas ligadas por seta ---- */}
+            <Card style={{padding:22}}>
+              <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:10,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={15} color={accent}/>Evolução do seu dinheiro</div>
+              {moneySteps.map((s,i)=>(
+                <div key={s.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:i<moneySteps.length-1?`1px solid ${BD}`:"none"}}>
+                  <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>{s.label}</span>
+                  <span className="num" style={{fontSize:13.5,fontWeight:700,color:s.value>=0?"#34D399":"#F87171"}}>{fmt(s.value)}</span>
+                </div>
+              ))}
             </Card>
 
             {/* ---- Próximos eventos ---- */}

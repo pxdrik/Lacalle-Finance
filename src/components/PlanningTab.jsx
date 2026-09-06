@@ -3,7 +3,7 @@ import {
   Clock, Calendar, Hourglass, ShieldCheck, Target, Rocket,
 } from "lucide-react";
 import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, ChartTooltip } from "./ui";
-import { TX, TX2, TX3, BD, CARD, C2, R_CHIP, R_CARD, R_INPUT, SI, cardStyle } from "../lib/theme";
+import { TX, TX2, TX3, BD, CARD, C2, R_CHIP, R_CARD, R_INPUT, SI } from "../lib/theme";
 import { fmt, FinancialEngine, formatMonths } from "../lib/financialEngine";
 import { parseNum } from "../lib/validation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
@@ -49,39 +49,45 @@ export default function PlanningTab({
 
       {planTab === "geral" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* ---- Próximos Eventos: lista, não grid de 5 células ----
+               Ajuste de 06/09/2026: 5 células repetindo o mesmo padrão
+               rótulo+número, a maioria "Nada agendado" quando vazia. */}
           <Card style={{ padding: 26 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: TX, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><Flag size={16} color={accent} />Próximos Eventos</div>
-            <div className="bento">
-              {[
-                { l: "Próxima conta", ev: nextEvents.proximaConta, c: "#F87171" },
-                { l: "Próxima receita", ev: nextEvents.proximaReceita, c: "#34D399" },
-                { l: "Próxima parcela", ev: nextEvents.proximaParcela, c: "#FBBF24" },
-                { l: "Maior pagamento futuro", ev: nextEvents.maiorPagamento, c: "#F87171" },
-                { l: "Maior entrada prevista", ev: nextEvents.maiorEntrada, c: "#34D399" },
-              ].map(item => (
-                <div key={item.l} className="bento-half" style={{ ...cardStyle, padding: 18 }}>
-                  <div style={{ fontSize: 11, color: TX2, marginBottom: 8 }}>{item.l}</div>
-                  {item.ev ? (
-                    <>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: TX, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.ev.desc}</div>
-                      <div className="num" style={{ fontSize: 12, color: item.c, fontWeight: 700, marginTop: 4 }}>{fmt(item.ev.val)}</div>
-                      <div style={{ fontSize: 11, color: TX3, marginTop: 2 }}>{item.ev.date}</div>
-                    </>
-                  ) : <div style={{ fontSize: 12, color: TX3 }}>Nada agendado</div>}
-                </div>
-              ))}
-            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: TX, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}><Flag size={16} color={accent} />Próximos Eventos</div>
+            {[
+              { l: "Próxima conta", ev: nextEvents.proximaConta, c: "#F87171" },
+              { l: "Próxima receita", ev: nextEvents.proximaReceita, c: "#34D399" },
+              { l: "Próxima parcela", ev: nextEvents.proximaParcela, c: "#FBBF24" },
+              { l: "Maior pagamento futuro", ev: nextEvents.maiorPagamento, c: "#F87171" },
+              { l: "Maior entrada prevista", ev: nextEvents.maiorEntrada, c: "#34D399" },
+            ].map((item, i, arr) => (
+              <div key={item.l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: i < arr.length - 1 ? `1px solid ${BD}` : "none" }}>
+                <span style={{ fontSize: 12.5, color: TX2, fontWeight: 600 }}>{item.l}</span>
+                {item.ev ? (
+                  <span style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: TX }}>{item.ev.desc}</span>{" "}
+                    <span className="num" style={{ fontSize: 13, color: item.c, fontWeight: 700 }}>{fmt(item.ev.val)}</span>
+                    <div style={{ fontSize: 11, color: TX3 }}>{item.ev.date}</div>
+                  </span>
+                ) : <span style={{ fontSize: 12, color: TX3 }}>Nada agendado</span>}
+              </div>
+            ))}
           </Card>
 
+          {/* ---- Fluxo de Caixa Futuro: lista, não grid de 5 stat-cards ---- */}
           <Card style={{ padding: 26 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: TX, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}><TrendingUp size={16} color={accent} />Fluxo de Caixa Futuro</div>
-            <div style={{ fontSize: 12, color: TX2, marginBottom: 16 }}>Estimativa com base no saldo atual, lançamentos futuros e previstos ainda não pagos.</div>
-            <div className="bento">
-              <StatTile label="Saldo atual" value={fmt(balance)} color={balance >= 0 ? "#34D399" : "#F87171"} size={17} textAlign="center" />
-              {cashFlowProjections.map(cp => (
-                <StatTile key={cp.days} label={`Em ${cp.days} dias`} value={fmt(cp.value)} color={cp.value >= 0 ? "#34D399" : "#F87171"} size={17} textAlign="center" />
-              ))}
+            <div style={{ fontSize: 12, color: TX2, marginBottom: 12 }}>Estimativa com base no saldo atual, lançamentos futuros e previstos ainda não pagos.</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${BD}` }}>
+              <span style={{ fontSize: 12.5, color: TX2, fontWeight: 600 }}>Saldo atual</span>
+              <span className="num" style={{ fontSize: 14, fontWeight: 700, color: balance >= 0 ? "#34D399" : "#F87171" }}>{fmt(balance)}</span>
             </div>
+            {cashFlowProjections.map((cp, i) => (
+              <div key={cp.days} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: i < cashFlowProjections.length - 1 ? `1px solid ${BD}` : "none" }}>
+                <span style={{ fontSize: 12.5, color: TX2, fontWeight: 600 }}>Em {cp.days} dias</span>
+                <span className="num" style={{ fontSize: 14, fontWeight: 700, color: cp.value >= 0 ? "#34D399" : "#F87171" }}>{fmt(cp.value)}</span>
+              </div>
+            ))}
           </Card>
 
           <Card style={{ padding: 26 }}>
