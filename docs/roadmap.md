@@ -33,3 +33,10 @@ O que sair daqui quando for retomado:
   (`WishesTab`) — todos Level 2-3, nenhum exige dependência nova.
 - **Decisão já tomada, não reabrir:** nada de spring physics como token —
   mesma regra do Life, para os dois produtos lerem como um sistema só.
+- **Restrição confirmada, 07/09/2026: só plano gratuito das seis fontes.**
+  Nenhuma recomendação depende de 60fps PRO, React Bits Pro, Curated Pro ou
+  GetLayers Unlimited/Full Stack — checado fonte a fonte na seção 01b do
+  relatório. Duas conferências pendentes na hora de implementar: Count
+  Up/Carousel/Dock do React Bits ainda no tier Starter, e o gradiente de
+  hero do GetLayers vindo do conjunto gratuito (não dos templates pagos
+  citados só como referência de tom).
