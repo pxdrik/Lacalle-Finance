@@ -153,7 +153,7 @@ export default function AuthScreen({ onLogin }) {
   };
 
   return (
-    <div style={{ background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter Variable','Inter',system-ui,sans-serif", padding: 24 }}>
+    <div style={{ background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif", padding: 24 }}>
       <style>{`
         .wl-input:focus{outline:none;border-color:${GOLD}80 !important;box-shadow:0 0 0 3px ${GOLD}22;}
         .wl-btn{transition:filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT};}

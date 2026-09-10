@@ -13,6 +13,16 @@ html, body {
   min-height: 100vh;
 }
 
+/* `<button>`/`<input>`/`<select>`/`<textarea>` não herdam font-family do
+   ancestral por padrão (UA stylesheet própria) — sem isto, todo botão e
+   campo do app renderiza em Arial, nunca na tipografia da marca, mesmo com
+   o fontFamily certo no container em volta. Achado ao verificar a troca pra
+   IBM Plex Sans com getComputedStyle: o app inteiro já rodava assim com a
+   Inter antes, silenciosamente. */
+button, input, select, textarea {
+  font-family: inherit;
+}
+
 /* LaCalle Brand System — Reduced motion (pág. 40): obrigatório em todos os
    produtos. Com o movimento reduzido a interface continua compreensível;
    nenhuma informação pode depender exclusivamente da animação. */

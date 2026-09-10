@@ -1587,7 +1587,7 @@ function MainApp({user,setUser}){
   const instTxCount=instToDelete?instToDelete.txIds.filter(id=>txMap.has(id)).length:0;
 
   if(!isLoaded)return(
-    <div style={{background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Inter Variable','Inter',system-ui,sans-serif",gap:16}}>
+    <div style={{background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif",gap:16}}>
       <div style={{background:"#111111",borderRadius:R_MODAL,width:54,height:54,display:"flex",alignItems:"center",justifyContent:"center"}}><LogoSymbol size={25} color="#FFFFFF"/></div>
       <div style={{color:TX,fontWeight:700,fontSize:17}}>LaCalle <span style={{color:GOLD}}>Finance</span></div>
       <div style={{color:TX2,fontSize:13,display:"flex",alignItems:"center",gap:6}}><Loader2 size={14} className="spin"/>Carregando seus dados…</div>
@@ -1598,7 +1598,7 @@ function MainApp({user,setUser}){
   return(
     <AccentContext.Provider value={accent}>
     {revealActive&&<LaCalleReveal duration={1000} onDone={()=>setRevealActive(false)}/>}
-    <div style={{background:BG,minHeight:"100vh",color:TX,fontFamily:"'Inter Variable','Inter',system-ui,sans-serif",overflowX:"hidden"}}>
+    <div style={{background:BG,minHeight:"100vh",color:TX,fontFamily:"'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif",overflowX:"hidden"}}>
       <style>{`
         *{box-sizing:border-box;}
         html,body{overflow-x:hidden;max-width:100vw;}
@@ -1651,7 +1651,7 @@ function MainApp({user,setUser}){
         .nav-tab:hover{color:${TX} !important;background:${HOVER}44 !important;}
         .surface-card{transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;}
 
-        /* ---- Tipografia dos números: Inter, tabular e com tracking negativo ---- */
+        /* ---- Tipografia dos números: IBM Plex Mono, tabular e com tracking negativo ---- */
         .num,.stat-val,.hero-balance{font-family:${NUM_FONT};font-variant-numeric:tabular-nums;letter-spacing:-0.02em;}
 
         /* ---- Motion (add): entrada em cascata, indicador de aba, hover lift ---- */

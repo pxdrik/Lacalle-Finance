@@ -66,10 +66,14 @@ export const cardStyle = { background: CARD, border: `1px solid ${BD}`, borderRa
 export const AccentContext = createContext(GOLD);
 export const useAccent = () => useContext(AccentContext);
 
-// Inter é a única tipografia institucional da LaCalle (pág. 16) — inclusive
-// para números. tabular-nums (aplicado onde os valores são exibidos) cuida do
-// alinhamento de colunas que antes vinha de uma fonte numérica à parte.
-export const NUM_FONT = "'Inter Variable','Inter',system-ui,sans-serif";
+// IBM Plex Sans é a tipografia institucional da LaCalle — Brand System V2,
+// 10/09/2026 (substitui a Inter em todo o app, ver import em main.jsx).
+// Números são a exceção documentada: a marca reserva IBM Plex Mono pra dado
+// numérico que precisa alinhar (saldo, valores de transação, tudo que já
+// levava font-variant-numeric:tabular-nums). A família não tem peso 800 —
+// os poucos lugares que pedem fontWeight:800 (saldo em destaque) caem pro
+// 700 mais próximo, degradação aceitável e não um "fonte não encontrada".
+export const NUM_FONT = "'IBM Plex Mono',ui-monospace,'SF Mono',monospace";
 
 // ---- Motion — pág. 38: os quatro tiers de duração e as duas curvas oficiais.
 export const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)"; // LaCalle Ease Out — entrada
