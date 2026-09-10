@@ -36,13 +36,15 @@ export const TX2 = "#9AA3AE";  // Text secondary
 export const TX3 = "#848C96";
 export const HDR = "#0B0D0F";  // Header/sidebar usam o Background, separados por borda de 1px
 
-// LaCalle Finance accent — dark mode sobe um passo de luminosidade (pág. 33):
-// 500 oficial #2563EB -> dark #3B82F6. TEAL é o accent ativo em tela; TEAL2 é
-// o 500 "de catálogo", usado onde o tom mais denso funciona melhor (gradientes,
-// texto sobre claro).
-export const TEAL = "#3B82F6";  // Finance accent · dark
-export const TEAL2 = "#2563EB"; // Finance accent · 500 (oficial/catálogo)
-export const HOVER = "#1D4ED8"; // Finance accent · 600 (hover)
+// LaCalle Finance accent — Brand System V2 (10/09/2026) fixa a identidade de
+// cor do Finance em Gold, a mesma calibrada pra nunca colidir com WARNING
+// (mesma família âmbar/marrom, Gold mais claro/saturado). Substitui o antigo
+// TEAL/TEAL2 (na verdade azul, nunca teal — nome já era enganoso antes do
+// V2). GOLD é o accent ativo em tela; GOLD2 é o 500 "de catálogo" (claro),
+// usado onde o tom mais denso funciona melhor (gradientes, texto sobre claro).
+export const GOLD = "#D4A017";  // Finance accent · dark, identidade fixa
+export const GOLD2 = "#A87A0E"; // Finance accent · 500 (oficial/catálogo, claro)
+export const HOVER = "#8A640C"; // Finance accent · hover/pressed, mais escuro
 
 // ---- Radius — pág. 23 (8 / 12 / 16 / 20 / 24, nunca valores intermediários)
 export const R_CARD = 16;  // Card padrão
@@ -61,7 +63,7 @@ export const SH_LG = "0 16px 48px rgba(0,0,0,0.48)";
 export const SI = { background: "rgba(255,255,255,0.03)", border: `1px solid ${BD2}`, borderRadius: R_INPUT, padding: "12px 15px", color: TX, fontSize: 13.5, width: "100%", boxSizing: "border-box" };
 export const cardStyle = { background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD, padding: 20, boxShadow: SH_SM };
 
-export const AccentContext = createContext(TEAL);
+export const AccentContext = createContext(GOLD);
 export const useAccent = () => useContext(AccentContext);
 
 // Inter é a única tipografia institucional da LaCalle (pág. 16) — inclusive

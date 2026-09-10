@@ -108,7 +108,7 @@ import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
@@ -144,7 +144,11 @@ const CAT_ICON_COMPONENTS={
 const INV_TIPOS=["Aporte","Resgate","Rendimento"];
 const INV_TIPO_COLORS={"Aporte":"#3B82F6","Resgate":"#FBBF24","Rendimento":"#34D399"};
 const INV_TIPO_ICONS={"Aporte":PiggyBank,"Resgate":Undo2,"Rendimento":TrendingUp};
+// "gold" é a identidade fixa do Finance (Brand System V2, 10/09/2026) e o
+// padrão pra conta nova — as outras seis continuam existindo como
+// personalização por conta, não como identidade do produto.
 const PALETTES={
+  gold:{name:"Gold",base:"#D4A017",dark:"#8A640C"},
   blue:{name:"Azul",base:"#3B82F6",dark:"#2563EB"},
   teal:{name:"Teal",base:"#2DD4BF",dark:"#14B8A6"},
   purple:{name:"Roxo",base:"#8B5CF6",dark:"#7C3AED"},
@@ -315,11 +319,11 @@ function MainApp({user,setUser}){
   const fullCats=useMemo(()=>[...CATS,...customCats],[customCats]);
   const catColor=c=>{const i=fullCats.indexOf(c);return i>=0?COLORS[i%COLORS.length]:TX3;};
 
-  const [accentKey,setAccentKey]=useState("blue");
+  const [accentKey,setAccentKey]=useState("gold");
   const [walletName,setWalletName]=useState("LaCalle Finance");
   const [onboardingDismissed,setOnboardingDismissed]=useState(false);
-  const accent=(PALETTES[accentKey]||PALETTES.blue).base;
-  const accentDark=(PALETTES[accentKey]||PALETTES.blue).dark;
+  const accent=(PALETTES[accentKey]||PALETTES.gold).base;
+  const accentDark=(PALETTES[accentKey]||PALETTES.gold).dark;
 
   // ---- Planejamento (estados) ----
   const [planTab,setPlanTab]=useState("geral");
@@ -389,7 +393,7 @@ function MainApp({user,setUser}){
     setInstallments(d.inst||[]);
     setPlannedExpenses(d.planned||[]);
     setCustomCats(d.customCats||[]);
-    setAccentKey(d.accentKey||"blue");
+    setAccentKey(d.accentKey||"gold");
     setWalletName(d.walletName||"LaCalle Finance");
     setOnboardingDismissed(!!d.onboardingDismissed);
     const cutoff=Date.now()-TRASH_RETENTION_DAYS*24*60*60*1000;
@@ -1585,7 +1589,7 @@ function MainApp({user,setUser}){
   if(!isLoaded)return(
     <div style={{background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Inter Variable','Inter',system-ui,sans-serif",gap:16}}>
       <div style={{background:"#111111",borderRadius:R_MODAL,width:54,height:54,display:"flex",alignItems:"center",justifyContent:"center"}}><LogoSymbol size={25} color="#FFFFFF"/></div>
-      <div style={{color:TX,fontWeight:700,fontSize:17}}>LaCalle <span style={{color:TEAL}}>Finance</span></div>
+      <div style={{color:TX,fontWeight:700,fontSize:17}}>LaCalle <span style={{color:GOLD}}>Finance</span></div>
       <div style={{color:TX2,fontSize:13,display:"flex",alignItems:"center",gap:6}}><Loader2 size={14} className="spin"/>Carregando seus dados…</div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} .spin{animation:spin 1s linear infinite;}`}</style>
     </div>

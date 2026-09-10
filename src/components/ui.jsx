@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, forwardRef } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, TEAL, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
 import LogoSymbol from "./LogoSymbol";
 
 const CAT_ICON_COMPONENTS={
@@ -261,7 +261,7 @@ export function LedgerRows({rows}){
 // ---- Itens reais que compõem uma conclusão (transações, contas previstas,
 // metas, parcelas...) — o "quais dados foram utilizados", com números de
 // verdade em vez de frases genéricas. ----
-export function LineItemsList({items,accentColor=TEAL,limit=5}){
+export function LineItemsList({items,accentColor=GOLD,limit=5}){
   if(!items||items.length===0)return null;
   const shown=items.slice(0,limit);
   const restCount=items.length-shown.length;

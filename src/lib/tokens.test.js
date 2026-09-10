@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   BG, CARD, C2, TX, TX2, TX3,
-  TEAL,
+  GOLD,
   SUCCESS, WARNING, ERROR,
   ERROR_BG, SUCCESS_FILL,
 } from "./theme.js";
@@ -66,12 +66,12 @@ const PAIRS = [
   [TX3, C2, 4.5, "texto terciário numa superfície elevada"],
 
   // Botão primário: rótulo BG sobre o accent (Btn, em ui.jsx) — o comentário
-  // de theme.js já assume esse par ao subir TEAL 500->dark. TEAL2 e HOVER
+  // de theme.js já assume esse par ao subir GOLD 500->dark. GOLD2 e HOVER
   // ficam de fora: nenhum dos dois pinta um fundo sólido com BG por cima na
-  // base de código hoje (TEAL2 não é usado; HOVER só aparece com alfa baixo
+  // base de código hoje (GOLD2 não é usado; HOVER só aparece com alfa baixo
   // por trás de texto TX) — testar esses pares seria inventar um uso que não
   // existe.
-  [BG, TEAL, 4.5, "rótulo do botão primário sobre o accent padrão"],
+  [BG, GOLD, 4.5, "rótulo do botão primário sobre o accent padrão"],
 
   // Estados sólidos — pág. 27/33, mesma divergência já documentada e testada
   // no LaCalle Life (branco não sustenta 4.5:1 sobre o token de ícone).
@@ -108,9 +108,10 @@ describe("theme.js — contraste dos tokens", () => {
  * PALETTES (LacalleFinance.jsx) é a lista de accents que a pessoa escolhe no
  * perfil — cada uma vira `accent` no AccentContext e pinta o botão primário
  * (BG por cima, cf. Btn em ui.jsx). theme.js só documenta o contraste do
- * accent padrão (TEAL); isto cobre as outras cinco opções e qualquer paleta
- * futura, lendo o arquivo-fonte em vez de duplicar as cores aqui — para não
- * ficar testando um valor que a paleta real já não usa mais.
+ * accent padrão (GOLD, também a primeira entrada de PALETTES); isto cobre as
+ * outras seis opções e qualquer paleta futura, lendo o arquivo-fonte em vez
+ * de duplicar as cores aqui — para não ficar testando um valor que a paleta
+ * real já não usa mais.
  */
 describe("PALETTES (LacalleFinance.jsx) — contraste do botão primário por accent", () => {
   const source = readFileSync(

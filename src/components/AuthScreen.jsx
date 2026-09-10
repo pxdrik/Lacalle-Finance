@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import { BG, CARD, BD, BD2, TX, TX2, TEAL, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, EASE_OUT, SUCCESS, ERROR } from "../lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, EASE_OUT, SUCCESS, ERROR } from "../lib/theme";
 import LogoSymbol from "./LogoSymbol";
 
 // CAPTCHA (Cloudflare Turnstile) é OPCIONAL e fica totalmente desligado até
@@ -155,25 +155,39 @@ export default function AuthScreen({ onLogin }) {
   return (
     <div style={{ background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter Variable','Inter',system-ui,sans-serif", padding: 24 }}>
       <style>{`
-        .wl-input:focus{outline:none;border-color:${TEAL}80 !important;box-shadow:0 0 0 3px ${TEAL}22;}
+        .wl-input:focus{outline:none;border-color:${GOLD}80 !important;box-shadow:0 0 0 3px ${GOLD}22;}
         .wl-btn{transition:filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT};}
-        .wl-btn:hover{filter:brightness(1.1);box-shadow:0 8px 24px -8px ${TEAL}70;}
+        .wl-btn:hover{filter:brightness(1.1);box-shadow:0 8px 24px -8px ${GOLD}70;}
         .wl-btn:active{transform:scale(0.98);}
         .wl-btn:disabled{opacity:0.6;cursor:not-allowed;}
+        /* P0: autofill do navegador (email/senha salvos) pinta fundo branco
+           por cima do card escuro, ignorando o background inline do input.
+           Forçamos o fundo de volta pro CARD com o truque do box-shadow
+           inset gigante (não dá pra sobrescrever "background" direto em
+           :-webkit-autofill) e a cor do texto de volta pro TX. */
+        .wl-input:-webkit-autofill,
+        .wl-input:-webkit-autofill:hover,
+        .wl-input:-webkit-autofill:focus {
+          -webkit-text-fill-color: ${TX};
+          -webkit-box-shadow: 0 0 0 1000px ${CARD} inset;
+          box-shadow: 0 0 0 1000px ${CARD} inset;
+          caret-color: ${TX};
+          transition: background-color 5000s ease-in-out 0s;
+        }
       `}</style>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ background: "#111111", borderRadius: R_MODAL, width: 54, height: 54, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: `0 8px 24px -8px ${TEAL}45` }}>
+          <div style={{ background: "#111111", borderRadius: R_MODAL, width: 54, height: 54, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: `0 8px 24px -8px ${GOLD}45` }}>
             <LogoSymbol size={25} color="#FFFFFF" />
           </div>
-          <div style={{ fontWeight: 700, fontSize: 27, color: TX, letterSpacing: "-0.025em" }}>LaCalle <span style={{ color: TEAL }}>Finance</span></div>
+          <div style={{ fontWeight: 700, fontSize: 27, color: TX, letterSpacing: "-0.025em" }}>LaCalle <span style={{ color: GOLD }}>Finance</span></div>
           <div style={{ fontSize: 13, color: TX2, marginTop: 8 }}>Sincronizado em todos os dispositivos</div>
         </div>
 
         <div style={{ background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD, padding: 32, boxShadow: SH_MD }}>
           <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", border: `1px solid ${BD}`, borderRadius: R_INPUT, padding: 4, marginBottom: 22 }}>
-            <button onClick={() => { setMode("login"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "login" ? TEAL : "transparent", color: mode === "login" ? BG : TX2 }}>Entrar</button>
-            <button onClick={() => { setMode("signup"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "signup" ? TEAL : "transparent", color: mode === "signup" ? BG : TX2 }}>Criar conta</button>
+            <button onClick={() => { setMode("login"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "login" ? GOLD : "transparent", color: mode === "login" ? BG : TX2 }}>Entrar</button>
+            <button onClick={() => { setMode("signup"); setErr(""); setInfo(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, background: mode === "signup" ? GOLD : "transparent", color: mode === "signup" ? BG : TX2 }}>Criar conta</button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -204,7 +218,7 @@ export default function AuthScreen({ onLogin }) {
 
             {TURNSTILE_SITE_KEY && <div ref={turnstileRef} />}
 
-            <button className="wl-btn" disabled={loading || (!!TURNSTILE_SITE_KEY && !captchaToken)} onClick={submit} style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: TEAL, color: BG, boxShadow: `0 2px 8px ${TEAL}45` }}>
+            <button className="wl-btn" disabled={loading || (!!TURNSTILE_SITE_KEY && !captchaToken)} onClick={submit} style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: GOLD, color: BG, boxShadow: `0 2px 8px ${GOLD}45` }}>
               {loading ? "Um momento..." : mode === "signup" ? "Criar conta" : mode === "forgot" ? "Enviar link de recuperação" : "Entrar"}
             </button>
 
@@ -217,8 +231,8 @@ export default function AuthScreen({ onLogin }) {
           </div>
 
           <div style={{ marginTop: 22, padding: "13px 15px", background: "rgba(255,255,255,0.03)", border: `1px solid ${BD}`, borderRadius: R_INPUT, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <Cloud size={14} color={TEAL} />
-            <span style={{ fontSize: 12, color: TEAL, fontWeight: 600 }}>Login real, protegido por senha — seus dados são só seus</span>
+            <Cloud size={14} color={GOLD} />
+            <span style={{ fontSize: 12, color: GOLD, fontWeight: 600 }}>Login real, protegido por senha — seus dados são só seus</span>
           </div>
         </div>
       </div>
