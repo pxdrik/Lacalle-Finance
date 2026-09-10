@@ -2281,7 +2281,7 @@ function MainApp({user,setUser}){
               </div>
               <div className="num" style={{fontSize:32,fontWeight:800,color:balance>=0?"#34D399":"#F87171",letterSpacing:"-0.02em"}}><AnimatedValue value={balance}/></div>
               <div style={{fontSize:12.5,color:TX2,marginTop:8,lineHeight:1.5}}>
-                {resumoDoMes&&(<><span style={{color:resumoDoMes.stats.economia>=0?"#34D399":"#F87171",fontWeight:700}}>{resumoDoMes.stats.economia>=0?"+":""}{fmt(resumoDoMes.stats.economia)}</span> de economia este mês · </>)}
+                {resumoDoMes&&(<><span style={{color:resumoDoMes.stats.economia>=0?"#34D399":"#F87171",fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}>{resumoDoMes.stats.economia>=0?<ArrowUpCircle size={12}/>:<ArrowDownCircle size={12}/>}{resumoDoMes.stats.economia>=0?"+":""}{fmt(resumoDoMes.stats.economia)}</span> de economia este mês · </>)}
                 <span onClick={e=>{e.stopPropagation();setExplainKey("saldoLivre");}} style={{textDecoration:"underline",textUnderlineOffset:2,cursor:"pointer"}}>Saldo livre {fmt(freeBalance)}</span>
               </div>
             </div>

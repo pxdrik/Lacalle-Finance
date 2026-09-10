@@ -138,30 +138,68 @@ Por isso:
 - [x] Card sem sombra difusa — `SH_SM` é `0 1px 2px rgba(0,0,0,.32)`,
       elevação equivalente à do Life, calibrada pro fundo escuro
 
-### Não verificado nesta entrega — pendente de sessão no navegador
+### Verificado no navegador — QA de 10/09/2026, conta real do Pedro em produção
 
-- [ ] Alvos de toque de 44×44 em mobile
-- [ ] Grid/breakpoints e comportamento responsivo real
-- [ ] Único botão primário por tela
-- [ ] Os 3 testes de identidade (abaixo) na tela de verdade, não só na leitura
-      do código
+- [x] Único botão primário por tela — passa em Início, Transações, Previstos,
+      Parcelas e Metas. As "ações rápidas" da Home (Nova Receita/Despesa/
+      Aporte/Resgate/Nova Meta) são um trilho de atalhos de estilo secundário
+      (borda + fundo transparente), não cinco primários competindo — só existe
+      um botão de preenchimento sólido por tela.
+- [ ] **Alvos de toque de 44×44 em mobile — FALHA real, sistemática.** Ver
+      achado detalhado abaixo.
+- [ ] Grid/breakpoints em largura real de celular — não verificado nesta
+      sessão: a janela do navegador não aceitou redimensionar abaixo da
+      resolução de desktop neste ambiente. O código tem breakpoints reais
+      (`@media(max-width:760px)` troca abas por bottom nav, `560px` e `380px`
+      ajustam tipografia/espaçamento) e um comentário próprio (`BUG-08`) já
+      documentando a preocupação com 44px na bottom nav — mas isso não foi
+      visto renderizado, só lido.
+- [x] Os 3 testes de identidade — ver abaixo, agora medidos, não só lidos.
+
+### Achado real: alvos de toque abaixo de 44×44, em quase toda lista
+
+O Finance não tem nenhum equivalente ao utilitário `touch-44` que o Life já
+usa (área de toque ampliada por `::after`, sem crescer o ícone visual). Toda
+ação de linha é só `padding` em volta do ícone, e o padding não chega nem
+nos 24×24 que a pág. 23 aceita fora de ação primária no desktop:
+
+| Onde | Ação | Medido (desktop) |
+| --- | --- | --- |
+| `TransactionsTab.jsx:95-96` | Editar / Excluir, em toda linha de transação | 22&times;25px |
+| Previstos (linha de gasto previsto) | Ignorar mês / Mover pra Metas / Editar / Excluir | 22&times;25px |
+| Previstos (linha de gasto previsto) | Marcar como pago / não pago | 24&times;24px |
+| Metas (linha de meta) | Transferir / Editar / Excluir | mesmo padrão, 22&times;25px |
+| `LacalleFinance.jsx:1745` | "Salvar agora" (retry de sync, cabeçalho) | **11&times;11px** — o pior caso |
+
+Medido com `getBoundingClientRect()` direto no DOM em produção
+(lacalle-finance.netlify.app), não estimado. Repete em pelo menos três telas
+(Transações, Previstos, Metas), então não é um botão esquecido, é um padrão
+sem solução — o Finance nunca ganhou o equivalente ao `touch-44`. Correção
+proposta, não implementada ainda: mesma técnica do Life (pseudo-elemento
+`::after` com `max(100%, 2.75rem)`), aplicada em CSS puro já que este projeto
+não usa Tailwind.
 
 ---
 
-## Os três testes de identidade — pág. 52 (leitura preliminar, não medida)
+## Os três testes de identidade — pág. 52 (medidos em produção, 10/09/2026)
 
-**Teste 01 · logo removida.** Provavelmente passa: sobram os cards de raio 16
-com borda de 1px, o hero único do "Saldo" (ver auditoria abaixo), listas em
-vez de grade para os dados secundários. Precisa de confirmação visual.
+**Teste 01 · logo removida. Passa.** Cards de raio 16 com borda de 1px, hero
+único do "Saldo" (ver auditoria abaixo), listas em vez de grade pros dados
+secundários — confirmado nas cinco telas.
 
-**Teste 02 · cor removida.** Ponto de atenção real: o acento é escolhível, e
-o Finance depende de cor sozinha em pelo menos um lugar encontrado nesta
-leitura — a "economia este mês" em `LacalleFinance.jsx:2280` é verde/vermelho
-sem ícone. Ver auditoria abaixo.
+**Teste 02 · cor removida. Passa, com uma correção já feita mas não publicada.**
+A "economia este mês" (`LacalleFinance.jsx`, perto da linha 2284) usava só
+cor pra dizer se o resultado do mês foi bom ou ruim — corrigido nesta mesma
+sessão com `ArrowUpCircle`/`ArrowDownCircle` ao lado do valor, mesmo ícone já
+usado em "Nova Receita"/"Nova Despesa". Ainda não está no ar: o site em
+produção (Netlify) reflete o build anterior a esta correção. As cores
+"Entradas"/"Saídas" nas listas não entram nessa regra — sempre vêm com o
+rótulo de texto ao lado, nunca cor sozinha.
 
-**Teste 03 · motion removido.** Provavelmente passa: `prefers-reduced-motion`
-está implementado tanto globalmente (`index.css`) quanto no hook de contagem
-(`useCountUp`), e nenhuma informação nova parece depender só da animação.
+**Teste 03 · motion removido. Passa** — `prefers-reduced-motion` implementado
+globalmente (`index.css`) e no hook de contagem (`useCountUp`); nenhuma
+informação nova depende só da animação. Não testado com a preferência do SO
+ligada de verdade nesta sessão, só confirmado por leitura do código.
 
 ---
 
@@ -186,11 +224,11 @@ referência externa.
 
 **Componente de comparação temporal (cor + ícone + texto).** O Finance já
 tem `ComparisonBar` (duas barras, média vs. mês atual) e o token
-`DATA_COMPARISON` — mas a "economia este mês" em `LacalleFinance.jsx:2280`
-usa só cor num texto solto, sem ícone. É o mesmo gap apontado no Life. Ao
-formalizar o componente de comparação proposto no `docs/brandbook.md` do
-Life, desenhar para os dois produtos ao mesmo tempo e fechar este caso aqui —
-é também o item que falha o Teste 02 acima.
+`DATA_COMPARISON`. A "economia este mês", que usava só cor num texto solto
+sem ícone, foi corrigida em 10/09/2026 — ver Teste 02 acima. O componente
+formal de comparação (nomeado, reutilizável) proposto no `docs/brandbook.md`
+do Life segue sem existir nos dois produtos; a correção pontual daqui não o
+substitui.
 
 **Duração de contagem sem tier nomeado.** Já registrado na divergência 5
 acima; é a mesma pendência, só repetida aqui por completude da auditoria.
@@ -230,16 +268,19 @@ acima; é a mesma pendência, só repetida aqui por completude da auditoria.
 
 ## Lacunas conhecidas
 
-- **Nunca medido no navegador para este documento.** Todo item acima veio de
-  leitura de código e teste automatizado, não de inspeção visual nos dois
-  temas (aqui só há um) e nas larguras reais. Uma primeira sessão de QA no
-  navegador, no molde da que o Life já fez em 15/08/2026, é o próximo passo
-  natural antes de tratar este documento como equivalente em confiança ao do
-  Life.
-- **"Economia este mês" sem ícone** — já registrado acima como o item que
-  falha o Teste 02; é uma correção pontual, não uma revisão de sistema.
-- **`R_BTN`, `R_INPUT`, alturas de controle e alvo de toque de 44×44** não
-  foram conferidos linha a linha nesta leitura — só os raios de card/modal, que
+- **QA no navegador feito em 10/09/2026** (conta real do Pedro em produção),
+  no molde do que o Life já tinha feito em 15/08/2026 — ver seção própria
+  acima. Ficou pendente só a largura real de celular (o navegador não
+  redimensionou abaixo de desktop neste ambiente) e o teste de
+  `prefers-reduced-motion` com a preferência do SO de fato ligada.
+- **Alvos de toque abaixo de 44×44 em praticamente toda lista** — achado real
+  desta sessão, com números medidos, não estimados. Ver seção própria acima.
+  Correção proposta (mesma técnica do Life, `touch-44`), ainda não
+  implementada — decisão do Pedro foi registrar primeiro, priorizar depois.
+- **"Economia este mês" sem ícone** — corrigido no código nesta sessão, ainda
+  não publicado no Netlify.
+- **`R_BTN`, `R_INPUT`, alturas de controle** não foram conferidos linha a
+  linha nesta leitura — só os raios de card/modal, que
   aparecem em `cardStyle`/`Modal` de forma centralizada e fácil de verificar.
   Uma auditoria de controles (botão, input, chip) fica pendente.
 - **Seis acentos escolhíveis** é uma decisão de produto que o Brand System
