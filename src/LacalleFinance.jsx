@@ -109,7 +109,7 @@ import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile } from "./components/ui";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile, Comparison } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
@@ -2281,7 +2281,7 @@ function MainApp({user,setUser}){
               </div>
               <div className="num" style={{fontSize:32,fontWeight:800,color:balance>=0?"#34D399":"#F87171",letterSpacing:"-0.02em"}}><AnimatedValue value={balance}/></div>
               <div style={{fontSize:12.5,color:TX2,marginTop:8,lineHeight:1.5}}>
-                {resumoDoMes&&(<><span style={{color:resumoDoMes.stats.economia>=0?"#34D399":"#F87171",fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}>{resumoDoMes.stats.economia>=0?<ArrowUpCircle size={12}/>:<ArrowDownCircle size={12}/>}{resumoDoMes.stats.economia>=0?"+":""}{fmt(resumoDoMes.stats.economia)}</span> de economia este mês · </>)}
+                {resumoDoMes&&(<Comparison delta={resumoDoMes.stats.economia} formatMagnitude={fmt} label="de economia este mês ·" tone={resumoDoMes.stats.economia>=0?"positive":"negative"} style={{fontWeight:700,display:"inline-flex"}}/>)}
                 <span onClick={e=>{e.stopPropagation();setExplainKey("saldoLivre");}} style={{textDecoration:"underline",textUnderlineOffset:2,cursor:"pointer"}}>Saldo livre {fmt(freeBalance)}</span>
               </div>
             </div>

@@ -6,10 +6,45 @@
 // importa daqui em vez de redefinir os mesmos componentes.
 // ============================================================================
 import { useState, useRef, useEffect, forwardRef } from "react";
-import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight } from "lucide-react";
+import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
 import LogoSymbol from "./LogoSymbol";
+
+// ==================== Comparison ====================
+// Um número, a direção que ele moveu, e se essa direção é boa notícia.
+// Mesmo componente que o Life ganhou em design-system/components/comparison.tsx
+// nesta sessão — "componente de comparação temporal" tinha sido proposto duas
+// vezes (brandbook do Life e do Finance) e construído em nenhum dos dois, cada
+// tela resolvendo à própria maneira (a "economia este mês" da Home usava só
+// cor, sem ícone, até ser corrigida manualmente — isto formaliza o padrão pra
+// não repetir o gap na próxima tela que precisar da mesma ideia).
+// `tone` nunca é inferido do sinal: quanto custou um mês pode subir e ser
+// ótimo (investimento) ou péssimo (gasto) com o mesmo delta positivo — só
+// quem chama sabe o julgamento certo. Sem `tone`, cai em neutro (TX2), nunca
+// verde/vermelho por acidente.
+const COMPARISON_TONE={neutral:TX2,positive:SUCCESS,negative:ERROR};
+// Nenhum utilitário sr-only existia neste projeto antes deste componente —
+// o ícone de direção é aria-hidden, então sem isto a seta vira ruído puro
+// pra leitor de tela (nenhuma informação, só um glifo sem nome).
+const VISUALLY_HIDDEN={position:"absolute",width:1,height:1,padding:0,margin:-1,overflow:"hidden",clip:"rect(0,0,0,0)",whiteSpace:"nowrap",border:0};
+export function Comparison({delta,formatMagnitude,label,whenZero="sem mudança",tone="neutral",style}){
+  const color=COMPARISON_TONE[tone];
+  if(delta===0){
+    return (
+      <span style={{display:"inline-flex",alignItems:"center",gap:4,color,...style}}>
+        <Minus size={13} aria-hidden="true"/><span style={VISUALLY_HIDDEN}>estável:</span>{whenZero} {label}
+      </span>
+    );
+  }
+  const Icon=delta>0?ArrowUp:ArrowDown;
+  const sign=delta>0?"+":"−";
+  return (
+    <span style={{display:"inline-flex",alignItems:"center",gap:4,color,...style}}>
+      <Icon size={13} aria-hidden="true"/><span style={VISUALLY_HIDDEN}>{delta>0?"subiu":"desceu"}:</span>{sign}{formatMagnitude(Math.abs(delta))} {label}
+    </span>
+  );
+}
 
 const CAT_ICON_COMPONENTS={
   "Lazer":Gamepad2,"Alimentação":UtensilsCrossed,"Transporte":Car,"Desejos":Sparkles,"Roupas":Shirt,
