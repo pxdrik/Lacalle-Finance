@@ -88,7 +88,7 @@ export default function InstallmentsTab({
                   {isComplete ? <div style={{ fontSize: 12, color: "#34D399", fontWeight: 700 }}>Quitado</div> : <div className="num" style={{ fontSize: 13, fontWeight: 700, color: "#F87171" }}>{fmt(remainingVal)}</div>}
                   <div style={{ fontSize: 11, color: TX2, marginTop: 3 }}>{paidTxs.length}/{inst.numParcelas}x pagas</div>
                 </div>
-                <button onClick={() => onRequestDelete(inst.id)} title="Remover parcelamento" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", padding: 2 }}><X size={16} /></button>
+                <button onClick={() => onRequestDelete(inst.id)} title="Remover parcelamento" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", padding: 2 }}><X size={16} /></button>
               </div>
             </div>
             <ProgressBar pct={pct} color={isComplete ? "#34D399" : dotColor} height={6} style={{ marginBottom: 12 }} />

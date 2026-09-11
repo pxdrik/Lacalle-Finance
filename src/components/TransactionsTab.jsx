@@ -28,7 +28,7 @@ export default function TransactionsTab({
           <Upload size={15} />Importar CSV<input type="file" accept=".csv" style={{ display: "none" }} onChange={onImportCSV} />
         </label>
         <button onClick={onExportCSV} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: CARD, border: `1px solid ${BD}`, color: TX2, padding: "12px", borderRadius: R_BTN, cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: SH_SM }}><Download size={15} />Exportar</button>
-        <button onClick={onClearAll} title="Apagar todas as transações" style={{ display: "flex", alignItems: "center", justifyContent: "center", background: CARD, border: `1px solid ${BD}`, color: "#F87171", padding: "12px 17px", borderRadius: R_BTN, cursor: "pointer", boxShadow: SH_SM }}><Trash2 size={15} /></button>
+        <button onClick={onClearAll} title="Apagar todas as transações" className="touch-44" style={{ display: "flex", alignItems: "center", justifyContent: "center", background: CARD, border: `1px solid ${BD}`, color: "#F87171", padding: "12px 17px", borderRadius: R_BTN, cursor: "pointer", boxShadow: SH_SM }}><Trash2 size={15} /></button>
       </div>
       <div style={{ display: "flex", borderRadius: R_INPUT, overflow: "hidden", background: CARD, border: `1px solid ${BD}`, width: "fit-content" }}>
         {[["", "Todos"], ["Entrada", "Entrada"], ["Saída", "Saída"]].map(([val, label]) => (
@@ -92,8 +92,8 @@ export default function TransactionsTab({
                     </div>
                   </div>
                   <div className="num" style={{ fontSize: 14, fontWeight: 700, color: isIn ? "#34D399" : "#F87171", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{isIn ? "+" : "-"}{fmt(t.val)}</div>
-                  <button onClick={() => onStartEditTx(t)} title="Editar" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Pencil size={14} /></button>
-                  <button onClick={() => onRequestDelete({ type: "tx", id: t.id, label: t.desc })} title="Excluir" aria-label={`Excluir ${t.desc}`} style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Trash2 size={14} /></button>
+                  <button onClick={() => onStartEditTx(t)} title="Editar" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Pencil size={14} /></button>
+                  <button onClick={() => onRequestDelete({ type: "tx", id: t.id, label: t.desc })} title="Excluir" aria-label={`Excluir ${t.desc}`} className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Trash2 size={14} /></button>
                 </div>
               );
             })}

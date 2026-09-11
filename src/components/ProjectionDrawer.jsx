@@ -142,8 +142,9 @@ export default function ProjectionDrawer({
         }
         .proj-drawer-body{overflow-y:auto;flex:1;}
         .proj-item-row{display:flex;align-items:center;gap:9px;padding:9px 0;}
-        .proj-item-actions button{background:none;border:none;color:${TX3};cursor:pointer;padding:5px;border-radius:8px;display:flex;align-items:center;justify-content:center;}
+        .proj-item-actions button{position:relative;background:none;border:none;color:${TX3};cursor:pointer;padding:5px;border-radius:8px;display:flex;align-items:center;justify-content:center;}
         .proj-item-actions button:hover{background:${HOVER}55;color:${TX};}
+        .proj-item-actions button::after{content:"";position:absolute;top:50%;left:50%;translate:-50% -50%;width:max(100%,2.75rem);height:max(100%,2.75rem);}
         .proj-cat-header{display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 0;}
         .proj-drag-handle{display:none;}
         @media(max-width:760px){.proj-drag-handle{display:block;width:36px;height:4px;border-radius:3px;background:${BD2};margin:10px auto 2px;}}
@@ -157,7 +158,7 @@ export default function ProjectionDrawer({
               <div style={{ fontSize: 11, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{horizonLabel}</div>
               <div style={{ fontSize: 15.5, fontWeight: 700, color: TX }}>{config.title}</div>
             </div>
-            <button onClick={onClose} aria-label="Fechar" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", padding: 4, flexShrink: 0 }}><X size={18} /></button>
+            <button onClick={onClose} aria-label="Fechar" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", padding: 4, flexShrink: 0 }}><X size={18} /></button>
           </div>
           <div style={{ marginTop: 14, fontFamily: NUM_FONT, fontSize: 32, fontWeight: 800, color: headlineColor, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{fmt(headline)}</div>
           <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>

@@ -122,9 +122,9 @@ export default function PlanningTab({
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card style={{ padding: 22 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginBottom: 18 }}>
-              <button onClick={() => shiftCalMonth(-1)} style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 30, height: 30, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronLeft size={16} /></button>
+              <button onClick={() => shiftCalMonth(-1)} className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 30, height: 30, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronLeft size={16} /></button>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: TX, minWidth: 150, textAlign: "center" }}>{calMonthLabel}</div>
-              <button onClick={() => shiftCalMonth(1)} style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 30, height: 30, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronRight size={16} /></button>
+              <button onClick={() => shiftCalMonth(1)} className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 30, height: 30, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronRight size={16} /></button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 6 }}>
               {WEEKDAYS_PT.map((w, i) => <div key={i} style={{ textAlign: "center", fontSize: 11, color: TX3, fontWeight: 700, padding: "4px 0" }}>{w}</div>)}

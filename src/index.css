@@ -23,6 +23,27 @@ button, input, select, textarea {
   font-family: inherit;
 }
 
+/* LaCalle Brand System — Interaction Contract (brandbook, seção 13): alvo de
+   toque mínimo 44x44px, independente do tamanho visual do ícone dentro.
+   Mesma técnica do `touch-44` do Life (globals.css), portada pra CSS puro
+   já que este projeto não usa Tailwind: um pseudo-elemento `::after`
+   absoluto, fora do fluxo, cresce a área clicável sem empurrar os vizinhos
+   nem aumentar o ícone desenhado. Achado real: QA de 10/09/2026 mediu
+   22x25px (e até 11x11px) em ação de linha por todo o app, sem nenhum
+   mecanismo de área de toque ampliada. */
+.touch-44 {
+  position: relative;
+}
+.touch-44::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: max(100%, 2.75rem);
+  height: max(100%, 2.75rem);
+}
+
 /* LaCalle Brand System — Reduced motion (pág. 40): obrigatório em todos os
    produtos. Com o movimento reduzido a interface continua compreensível;
    nenhuma informação pode depender exclusivamente da animação. */

@@ -1742,19 +1742,19 @@ function MainApp({user,setUser}){
           <div style={{display:"flex",alignItems:"center",gap:6,marginTop:1}}>
             {syncStatus==="loading"&&<><Loader2 size={11} className="spin" color={TX3}/><span className="sync-label" style={{fontSize:11,color:TX3}}>Carregando</span></>}
             {syncStatus==="saving"&&<><Loader2 size={11} className="spin" color={TX3}/><span className="sync-label" style={{fontSize:11,color:TX3}}>Salvando</span></>}
-            {syncStatus==="saved"&&<><Cloud size={11} color={accent}/><span className="sync-label" style={{fontSize:11,color:TX2}}>Sincronizado</span><button onClick={retrySave} title="Salvar agora" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:0,display:"flex"}}><RefreshCw size={11}/></button></>}
-            {syncStatus==="error"&&<><AlertTriangle size={11} color="#FBBF24"/><span className="sync-label" style={{fontSize:11,color:"#FBBF24"}}>Erro</span><button onClick={retrySave} style={{background:"none",border:"none",color:"#FBBF24",cursor:"pointer",padding:0}}><RefreshCw size={11}/></button></>}
-            {syncStatus==="conflict"&&<><AlertTriangle size={11} color="#F87171"/><span className="sync-label" style={{fontSize:11,color:"#F87171"}} title="Esses dados foram alterados em outra aba ou aparelho">Dados desatualizados</span><button onClick={reloadFromRemote} title="Recarregar dados mais recentes" style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:3,fontSize:11,fontWeight:600}}><RefreshCw size={11}/>Recarregar</button></>}
+            {syncStatus==="saved"&&<><Cloud size={11} color={accent}/><span className="sync-label" style={{fontSize:11,color:TX2}}>Sincronizado</span><button onClick={retrySave} title="Salvar agora" className="touch-44" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:0,display:"flex"}}><RefreshCw size={11}/></button></>}
+            {syncStatus==="error"&&<><AlertTriangle size={11} color="#FBBF24"/><span className="sync-label" style={{fontSize:11,color:"#FBBF24"}}>Erro</span><button onClick={retrySave} title="Tentar salvar de novo" className="touch-44" style={{background:"none",border:"none",color:"#FBBF24",cursor:"pointer",padding:0}}><RefreshCw size={11}/></button></>}
+            {syncStatus==="conflict"&&<><AlertTriangle size={11} color="#F87171"/><span className="sync-label" style={{fontSize:11,color:"#F87171"}} title="Esses dados foram alterados em outra aba ou aparelho">Dados desatualizados</span><button onClick={reloadFromRemote} title="Recarregar dados mais recentes" className="touch-44" style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:3,fontSize:11,fontWeight:600}}><RefreshCw size={11}/>Recarregar</button></>}
           </div>
         </div>
         <div className="hdr-actions">
-          <button onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} style={{background:historyLen>0?"rgba(255,255,255,0.05)":"transparent",border:"none",borderRadius:12,padding:"7px 10px",color:historyLen>0?TX2:TX3,cursor:historyLen>0?"pointer":"not-allowed",fontSize:12,flexShrink:0,display:"flex",alignItems:"center",gap:5}}>
+          <button onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} className="touch-44" style={{background:historyLen>0?"rgba(255,255,255,0.05)":"transparent",border:"none",borderRadius:12,padding:"7px 10px",color:historyLen>0?TX2:TX3,cursor:historyLen>0?"pointer":"not-allowed",fontSize:12,flexShrink:0,display:"flex",alignItems:"center",gap:5}}>
             <Undo2 size={14}/><span className="undo-count">{historyLen>0?historyLen:""}</span>
           </button>
-          <button onClick={()=>setShowSearch(true)} title="Pesquisar (Ctrl+K)" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><Search size={14}/></button>
+          <button onClick={()=>setShowSearch(true)} title="Pesquisar (Ctrl+K)" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><Search size={14}/></button>
           <div className="hdr-username" style={{fontSize:12,color:TX2,flexShrink:0,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
-          <button onClick={()=>setShowProfile(true)} title="Minha conta" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><Settings size={14}/></button>
-          <button onClick={()=>setUser(null)} title="Sair" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><LogOut size={14}/></button>
+          <button onClick={()=>setShowProfile(true)} title="Minha conta" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><Settings size={14}/></button>
+          <button onClick={()=>setUser(null)} title="Sair" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><LogOut size={14}/></button>
         </div>
       </div>
 
@@ -2100,7 +2100,7 @@ function MainApp({user,setUser}){
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Cor de destaque</div>
             <div style={{display:"flex",gap:10,marginBottom:22,flexWrap:"wrap"}}>
               {Object.entries(PALETTES).map(([key,p])=>(
-                <button key={key} onClick={()=>setAccentKey(key)} title={p.name} style={{width:28,height:28,borderRadius:"50%",border:accentKey===key?`2px solid ${TX}`:"2px solid transparent",background:p.base,cursor:"pointer",padding:0}}/>
+                <button key={key} onClick={()=>setAccentKey(key)} title={p.name} className="touch-44" style={{width:28,height:28,borderRadius:"50%",border:accentKey===key?`2px solid ${TX}`:"2px solid transparent",background:p.base,cursor:"pointer",padding:0}}/>
               ))}
             </div>
 
@@ -2110,7 +2110,7 @@ function MainApp({user,setUser}){
               {customCats.map(c=>(
                 <span key={c} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"5px 10px",fontSize:12,color:TX2}}>
                   <Tag size={11}/>{c}
-                  <button onClick={()=>removeCustomCat(c)} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",padding:0,display:"flex"}}><X size={12}/></button>
+                  <button onClick={()=>removeCustomCat(c)} title={`Remover categoria ${c}`} aria-label={`Remover categoria ${c}`} className="touch-44" style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",padding:0,display:"flex"}}><X size={12}/></button>
                 </span>
               ))}
             </div>
@@ -2185,7 +2185,7 @@ function MainApp({user,setUser}){
                         <div style={{fontSize:13,color:TX,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</div>
                         <div style={{fontSize:11,color:TX3}}>{typeName} · {fmt(value)} · some em {daysLeft} dia{daysLeft===1?"":"s"}</div>
                       </div>
-                      <button onClick={()=>restoreFromTrash(entry.trashId)} title="Restaurar" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"6px 10px",color:accent,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}><Undo2 size={13}/>Restaurar</button>
+                      <button onClick={()=>restoreFromTrash(entry.trashId)} title="Restaurar" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"6px 10px",color:accent,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}><Undo2 size={13}/>Restaurar</button>
                       <button onClick={()=>purgeTrashItem(entry.trashId)} title="Excluir definitivamente" aria-label="Excluir definitivamente" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4}}><X size={14}/></button>
                     </div>
                   );
@@ -2241,7 +2241,7 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:6}}>Bem-vindo(a) ao {walletName}!</div>
                   <div style={{fontSize:13,color:TX2,lineHeight:1.6,marginBottom:4}}>Pra começar: lance sua primeira <strong style={{color:TX}}>transação</strong> na aba "Transações", cadastre contas fixas em <strong style={{color:TX}}>"Previstos"</strong> e metas de longo prazo em <strong style={{color:TX}}>"Metas"</strong>. Os Insights e os gráficos vão aparecer sozinhos conforme você for usando.</div>
                 </div>
-                <button onClick={()=>setOnboardingDismissed(true)} title="Dispensar" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,flexShrink:0}}><X size={16}/></button>
+                <button onClick={()=>setOnboardingDismissed(true)} title="Dispensar" className="touch-44" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,flexShrink:0}}><X size={16}/></button>
               </div>
             )}
 

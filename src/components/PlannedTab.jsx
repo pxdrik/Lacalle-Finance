@@ -23,9 +23,9 @@ export default function PlannedTab({
         <Btn onClick={() => { const empty = { desc: "", val: "", cat: "Assinaturas", form: "pix", recurring: false, month: plannedMonth, notes: "" }; setEditingPlanned(null); setPlannedForm(empty); plannedFormSnapshotRef.current = JSON.stringify(empty); setShowPlannedForm(p => !p); }} style={{ padding: "10px 18px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Plus size={14} />Adicionar</Btn>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, background: CARD, border: `1px solid ${BD}`, borderRadius: R_INPUT, padding: "10px 14px", boxShadow: SH_SM }}>
-        <button onClick={() => onShiftMonth(-1)} style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronLeft size={15} /></button>
+        <button onClick={() => onShiftMonth(-1)} className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronLeft size={15} /></button>
         <div style={{ fontSize: 14, fontWeight: 700, color: TX, minWidth: 70, textAlign: "center" }}>{plannedMonth}</div>
-        <button onClick={() => onShiftMonth(1)} style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronRight size={15} /></button>
+        <button onClick={() => onShiftMonth(1)} className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronRight size={15} /></button>
         {plannedMonth !== monthKey(todayFn()) && <button onClick={onGoToday} style={{ background: "none", border: "none", color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>hoje</button>}
       </div>
       {/* ---- Resumo: 1 linha, não 3 cards (ajuste de 06/09/2026) ---- */}
@@ -90,7 +90,7 @@ export default function PlannedTab({
           return (
             <div key={item.id} style={{ background: isPaid ? "#34D39912" : isIgnored ? "#FBBF2412" : CARD, border: `1px solid ${isPaid ? "#34D39930" : isIgnored ? "#FBBF2430" : BD}`, borderRadius: R_INPUT, padding: "14px 16px", boxShadow: SH_SM, opacity: isIgnored ? 0.75 : 1 }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <button onClick={() => onTogglePaid(item)} title={isPaid ? "Marcar como não pago" : "Marcar como pago"} style={{ width: 24, height: 24, borderRadius: 8, border: isPaid ? "none" : `1.5px solid ${BD2}`, background: isPaid ? SUCCESS_FILL : "transparent", color: "white", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>{isPaid && <Check size={13} />}</button>
+                <button onClick={() => onTogglePaid(item)} title={isPaid ? "Marcar como não pago" : "Marcar como pago"} className="touch-44" style={{ width: 24, height: 24, borderRadius: 8, border: isPaid ? "none" : `1.5px solid ${BD2}`, background: isPaid ? SUCCESS_FILL : "transparent", color: "white", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>{isPaid && <Check size={13} />}</button>
                 <div style={{ width: 34, height: 34, borderRadius: 8, background: itemColor + "1f", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CategoryIcon cat={item.cat} size={15} color={itemColor} /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: isPaid ? TX2 : TX, textDecoration: isPaid || isIgnored ? "line-through" : "none", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word", lineHeight: 1.3 }}>{item.desc}</div>
@@ -103,11 +103,11 @@ export default function PlannedTab({
                 </div>
                 <div className="num" style={{ fontSize: 14, fontWeight: 700, color: isPaid ? "#34D399" : TX, flexShrink: 0 }}>{fmt(item.val)}</div>
                 <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-                  {item.notes && <button onClick={() => onToggleNotes(notesKey)} title="Ver notas" style={{ background: "none", border: "none", color: expandedNotes[notesKey] ? accent : TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Info size={14} /></button>}
-                  {item.recurring && <button onClick={() => onToggleIgnored(item, plannedMonth)} title={isIgnored ? "Reativar este mês" : "Ignorar apenas este mês"} style={{ background: "none", border: "none", color: isIgnored ? "#FBBF24" : TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}>{isIgnored ? <Eye size={14} /> : <EyeOff size={14} />}</button>}
-                  <button onClick={() => onTransferToWish(item)} title="Mover para Metas" aria-label="Mover para Metas" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><ArrowRightLeft size={14} /></button>
-                  <button onClick={() => onStartEdit(item)} title="Editar" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Pencil size={14} /></button>
-                  <button onClick={() => onRequestDelete({ type: "planned", id: item.id, label: item.desc })} title="Excluir" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Trash2 size={14} /></button>
+                  {item.notes && <button onClick={() => onToggleNotes(notesKey)} title="Ver notas" className="touch-44" style={{ background: "none", border: "none", color: expandedNotes[notesKey] ? accent : TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Info size={14} /></button>}
+                  {item.recurring && <button onClick={() => onToggleIgnored(item, plannedMonth)} title={isIgnored ? "Reativar este mês" : "Ignorar apenas este mês"} className="touch-44" style={{ background: "none", border: "none", color: isIgnored ? "#FBBF24" : TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}>{isIgnored ? <Eye size={14} /> : <EyeOff size={14} />}</button>}
+                  <button onClick={() => onTransferToWish(item)} title="Mover para Metas" aria-label="Mover para Metas" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><ArrowRightLeft size={14} /></button>
+                  <button onClick={() => onStartEdit(item)} title="Editar" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Pencil size={14} /></button>
+                  <button onClick={() => onRequestDelete({ type: "planned", id: item.id, label: item.desc })} title="Excluir" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Trash2 size={14} /></button>
                 </div>
               </div>
               {item.notes && expandedNotes[notesKey] && (
