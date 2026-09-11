@@ -8,7 +8,8 @@
 import { useState, useRef, useEffect, forwardRef } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, BTN_PAD_Y, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
+import { DENSITIES, useDensity } from "../lib/density";
 import LogoSymbol from "./LogoSymbol";
 
 // ==================== Comparison ====================
@@ -126,6 +127,32 @@ export function TabPanel({ id, idPrefix, children, style }) {
   );
 }
 
+// ==================== DensityToggle ====================
+// Três paradas fixas, não um slider — mesma razão do `DensityToggle` que o
+// Life já tinha (design-system/density/density-toggle.tsx): "Compacto"
+// contra um número cru não se anuncia bem pra leitor de tela, e três
+// posições fixas não ganham nada sendo arrastáveis. Construído sobre radios
+// nativos pela mesma razão de lá: navegação por seta e foco circulando
+// vêm do próprio navegador, não de teclado customizado que pode errar.
+const DENSITY_LABEL={compact:"Compacto",default:"Padrão",comfortable:"Confortável"};
+export function DensityToggle(){
+  const {density,setDensity}=useDensity();
+  return (
+    <fieldset style={{display:"inline-flex",border:`1px solid ${BD}`,borderRadius:R_BTN,background:"rgba(255,255,255,0.03)",padding:2,margin:0}}>
+      <legend style={VISUALLY_HIDDEN}>Tamanho dos botões</legend>
+      {DENSITIES.map(value=>{
+        const active=density===value;
+        return (
+          <label key={value} style={{cursor:"pointer"}}>
+            <input type="radio" name="density" value={value} checked={active} onChange={()=>setDensity(value)} style={VISUALLY_HIDDEN}/>
+            <span style={{display:"flex",alignItems:"center",justifyContent:"center",height:32,padding:"0 12px",borderRadius:R_CHIP,fontSize:12,fontWeight:active?600:500,color:active?TX:TX2,background:active?BD2:"transparent",transition:`background .15s ${EASE_OUT}, color .15s ${EASE_OUT}`}}>{DENSITY_LABEL[value]}</span>
+          </label>
+        );
+      })}
+    </fieldset>
+  );
+}
+
 // ==================== Table ====================
 // Mantém forma de planilha sem ser um <table> nativo: Card + cabeçalho de
 // coluna com aria-hidden (ele rotula a lista, cada linha já lê como frase
@@ -191,7 +218,7 @@ export function EmptyState({icon:Icon,title,caption,action,boxed=true,padding=48
       <div>{title}</div>
       {caption&&<div style={{fontSize:12,color:TX3,marginTop:6}}>{caption}</div>}
       {action&&(
-        <BtnGhost onClick={action.onClick} style={{marginTop:16,padding:`${BTN_PAD_Y}px 18px`,fontSize:13,display:"inline-flex",alignItems:"center",gap:6}}>
+        <BtnGhost onClick={action.onClick} style={{marginTop:16,paddingInline:18,fontSize:13,display:"inline-flex",alignItems:"center",gap:6}}>
           {ActionIcon&&<ActionIcon size={14}/>}{action.label}
         </BtnGhost>
       )}
@@ -665,8 +692,17 @@ MoneyInput.displayName="MoneyInput";
 // abaixo dos 4,5:1 que a pág. 48 exige de texto abaixo de 18px. Ink passa em
 // todos com folga. Mesma divergência já documentada e testada no LaCalle Life
 // (pág. 25 do Brand System, "tinta sobre o acento").
+// `paddingBlock`/`paddingInline` em vez de `padding`, de propósito: assim
+// cada chamada continua livre pra ajustar só o espaçamento horizontal
+// (`paddingInline` no próprio `style`) sem precisar redigitar o vertical, que
+// agora vem de `useDensity()` e muda sozinho com o toggle — a mesma divisão
+// que motivou `BTN_PAD_Y` existir, um passo adiante.
 export const Btn=(props)=>{
   const accent=useAccent();
-  return <button {...props} className={`btn-primary ${props.className||""}`} style={{background:accent,border:"none",color:BG,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,boxShadow:`0 2px 10px ${accent}40`,transition:`filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT}`,...props.style}}/>;
+  const {btnPadY}=useDensity();
+  return <button {...props} className={`btn-primary ${props.className||""}`} style={{background:accent,border:"none",color:BG,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,paddingBlock:btnPadY,paddingInline:18,boxShadow:`0 2px 10px ${accent}40`,transition:`filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT}`,...props.style}}/>;
 };
-export const BtnGhost=(props)=><button {...props} className={`btn-ghost ${props.className||""}`} style={{background:"transparent",border:`1px solid ${BD2}`,color:TX2,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,transition:`border-color .15s ${EASE_OUT}, color .15s ${EASE_OUT}, background .15s ${EASE_OUT}`,...props.style}}/>;
+export const BtnGhost=(props)=>{
+  const {btnPadY}=useDensity();
+  return <button {...props} className={`btn-ghost ${props.className||""}`} style={{background:"transparent",border:`1px solid ${BD2}`,color:TX2,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,paddingBlock:btnPadY,paddingInline:18,transition:`border-color .15s ${EASE_OUT}, color .15s ${EASE_OUT}, background .15s ${EASE_OUT}`,...props.style}}/>;
+};

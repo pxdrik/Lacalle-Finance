@@ -1,6 +1,6 @@
 import { Plus, Check, ArrowRightLeft, Pencil, Trash2, ChevronUp, ChevronDown, Sparkles } from "lucide-react";
 import { Card, Btn, BtnGhost, MoneyInput, ProgressBar, LinkifiedText, toDecimalStr, EmptyState } from "./ui";
-import { TX, TX2, TX3, BD, BD2, CARD, R_INPUT, R_CHIP, BTN_PAD_Y, SI, SUCCESS_FILL } from "../lib/theme";
+import { TX, TX2, TX3, BD, BD2, CARD, R_INPUT, R_CHIP, SI, SUCCESS_FILL } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
 
 // Aba "Metas" (Desejos/Wishes) — extraída de LacalleFinance.jsx (Fase 2,
@@ -21,7 +21,7 @@ export default function WishesTab({
             <button onClick={() => setWishSortBy("progress")} title="Ordenar por progresso" style={{ padding: "8px 14px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: wishSortBy === "progress" ? accent : "transparent", color: wishSortBy === "progress" ? "white" : TX2 }}>Progresso</button>
             <button onClick={() => setWishSortBy("priority")} title="Ordenar por prioridade" style={{ padding: "8px 14px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: wishSortBy === "priority" ? accent : "transparent", color: wishSortBy === "priority" ? "white" : TX2 }}>Prioridade</button>
           </div>
-          <Btn onClick={() => { const empty = { name: "", price: "", saved: "", priority: "Média", monthsTarget: "", notes: "" }; setEditingWish(null); setWishForm(empty); wishFormSnapshotRef.current = JSON.stringify(empty); setShowWishForm(p => !p); }} style={{ padding: `${BTN_PAD_Y}px 18px`, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Plus size={14} />Adicionar</Btn>
+          <Btn onClick={() => { const empty = { name: "", price: "", saved: "", priority: "Média", monthsTarget: "", notes: "" }; setEditingWish(null); setWishForm(empty); wishFormSnapshotRef.current = JSON.stringify(empty); setShowWishForm(p => !p); }} style={{ paddingInline: 18, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Plus size={14} />Adicionar</Btn>
         </div>
       </div>
       {showWishForm && (
@@ -40,8 +40,8 @@ export default function WishesTab({
               <textarea value={wishForm.notes || ""} maxLength={2000} onChange={e => setWishForm(p => ({ ...p, notes: e.target.value }))} rows={4} placeholder="Detalhes, observações, planejamento, links de produtos..." style={{ ...SI, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "flex-end", gridColumn: "1/-1", flexWrap: "wrap" }}>
-              <Btn onClick={onSave} aria-disabled={!wishForm.name || !wishForm.price} style={{ padding: `${BTN_PAD_Y}px 20px`, fontSize: 13, opacity: (!wishForm.name || !wishForm.price) ? 0.5 : 1, cursor: "pointer" }}>{editingWish !== null ? "Salvar" : "Adicionar"}</Btn>
-              <BtnGhost onClick={onCancelForm} style={{ padding: `${BTN_PAD_Y}px 18px`, fontSize: 13 }}>Cancelar</BtnGhost>
+              <Btn onClick={onSave} aria-disabled={!wishForm.name || !wishForm.price} style={{ paddingInline: 20, fontSize: 13, opacity: (!wishForm.name || !wishForm.price) ? 0.5 : 1, cursor: "pointer" }}>{editingWish !== null ? "Salvar" : "Adicionar"}</Btn>
+              <BtnGhost onClick={onCancelForm} style={{ paddingInline: 18, fontSize: 13 }}>Cancelar</BtnGhost>
             </div>
           </div>
         </Card>

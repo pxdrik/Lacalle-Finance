@@ -3,7 +3,7 @@ import {
   Clock, Calendar, Hourglass, ShieldCheck, Target, Rocket,
 } from "lucide-react";
 import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, ChartTooltip, Table, TableRow, Comparison } from "./ui";
-import { TX, TX2, TX3, BD, CARD, R_CHIP, R_CARD, R_INPUT, BTN_PAD_Y, SI } from "../lib/theme";
+import { TX, TX2, TX3, BD, CARD, R_CHIP, R_CARD, R_INPUT, SI } from "../lib/theme";
 import { fmt, FinancialEngine, formatMonths } from "../lib/financialEngine";
 import { parseNum } from "../lib/validation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
@@ -294,7 +294,7 @@ export default function PlanningTab({
                 <MoneyInput placeholder="Retorno anual estimado (%)" value={simReturn} onChange={setSimReturn} style={{ ...SI, flex: 1, minWidth: 120 }} />
               </div>
             )}
-            <Btn onClick={runSimulation} style={{ padding: `${BTN_PAD_Y}px 20px`, fontSize: 13 }}>Simular</Btn>
+            <Btn onClick={runSimulation} style={{ paddingInline: 20, fontSize: 13 }}>Simular</Btn>
             {simResult && (
               <div style={{ marginTop: 18, background: "rgba(255,255,255,0.03)", border: `1px solid ${BD}`, borderRadius: R_INPUT, padding: 18 }}>
                 {simResult.type === "economizar_mais" && (simResult.data ? (

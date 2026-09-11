@@ -1,6 +1,6 @@
 import { Plus, ChevronLeft, ChevronRight, Repeat, Calendar, Check, Info, Eye, EyeOff, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
 import { Card, Btn, BtnGhost, MoneyInput, CategoryIcon, AnimatedValue, LinkifiedText, EmptyState } from "./ui";
-import { TX, TX2, TX3, BD, BD2, CARD, R_INPUT, R_CHIP, BTN_PAD_Y, SH_SM, SI, SUCCESS_FILL } from "../lib/theme";
+import { TX, TX2, TX3, BD, BD2, CARD, R_INPUT, R_CHIP, SH_SM, SI, SUCCESS_FILL } from "../lib/theme";
 import { fmt, monthKey, MONTH_ORDER } from "../lib/financialEngine";
 
 const todayFn = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -20,7 +20,7 @@ export default function PlannedTab({
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: TX, letterSpacing: "-0.01em" }}>Gastos Previstos</div>
-        <Btn onClick={() => { const empty = { desc: "", val: "", cat: "Assinaturas", form: "pix", recurring: false, month: plannedMonth, notes: "" }; setEditingPlanned(null); setPlannedForm(empty); plannedFormSnapshotRef.current = JSON.stringify(empty); setShowPlannedForm(p => !p); }} style={{ padding: `${BTN_PAD_Y}px 18px`, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Plus size={14} />Adicionar</Btn>
+        <Btn onClick={() => { const empty = { desc: "", val: "", cat: "Assinaturas", form: "pix", recurring: false, month: plannedMonth, notes: "" }; setEditingPlanned(null); setPlannedForm(empty); plannedFormSnapshotRef.current = JSON.stringify(empty); setShowPlannedForm(p => !p); }} style={{ paddingInline: 18, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Plus size={14} />Adicionar</Btn>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, background: CARD, border: `1px solid ${BD}`, borderRadius: R_INPUT, padding: "10px 14px", boxShadow: SH_SM }}>
         <button onClick={() => onShiftMonth(-1)} className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronLeft size={15} /></button>
@@ -69,8 +69,8 @@ export default function PlannedTab({
             <textarea value={plannedForm.notes || ""} maxLength={2000} onChange={e => setPlannedForm(p => ({ ...p, notes: e.target.value }))} rows={4} placeholder="Motivo do lançamento, observações, links, planejamento..." style={{ ...SI, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <Btn onClick={onSave} aria-disabled={!plannedForm.desc.trim() || !plannedForm.val} style={{ padding: `${BTN_PAD_Y}px 20px`, fontSize: 13, opacity: (!plannedForm.desc.trim() || !plannedForm.val) ? 0.5 : 1, cursor: "pointer" }}>{editingPlanned !== null ? "Salvar" : "Adicionar"}</Btn>
-            <BtnGhost onClick={onCancelForm} style={{ padding: `${BTN_PAD_Y}px 18px`, fontSize: 13 }}>Cancelar</BtnGhost>
+            <Btn onClick={onSave} aria-disabled={!plannedForm.desc.trim() || !plannedForm.val} style={{ paddingInline: 20, fontSize: 13, opacity: (!plannedForm.desc.trim() || !plannedForm.val) ? 0.5 : 1, cursor: "pointer" }}>{editingPlanned !== null ? "Salvar" : "Adicionar"}</Btn>
+            <BtnGhost onClick={onCancelForm} style={{ paddingInline: 18, fontSize: 13 }}>Cancelar</BtnGhost>
           </div>
         </Card>
         </div>

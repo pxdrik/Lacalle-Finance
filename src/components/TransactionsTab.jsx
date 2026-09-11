@@ -1,6 +1,6 @@
 import { Upload, Download, Trash2, Search, CreditCard, Calendar, Pencil, X } from "lucide-react";
 import { Card, BtnGhost, AnimatedValue, CategoryIcon } from "./ui";
-import { TX, TX2, TX3, BD, CARD, R_BTN, R_INPUT, BTN_PAD_Y, SH_SM, SI } from "../lib/theme";
+import { TX, TX2, TX3, BD, CARD, R_BTN, R_INPUT, SH_SM, SI } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
 
 const INV_TIPOS = ["Aporte", "Resgate", "Rendimento"];
@@ -64,7 +64,7 @@ export default function TransactionsTab({
         return hasActiveFilter ? (
           <div style={{ textAlign: "center", color: TX2, padding: 40, fontSize: 14 }}>
             <div style={{ marginBottom: 12 }}>Nenhuma transação encontrada com esse filtro.</div>
-            <BtnGhost onClick={() => { setFilterMonth(""); setFilterCat(""); setFilterType(""); setSearch(""); }} style={{ padding: `${BTN_PAD_Y}px 16px`, fontSize: 12.5 }}>Limpar filtros</BtnGhost>
+            <BtnGhost onClick={() => { setFilterMonth(""); setFilterCat(""); setFilterType(""); setSearch(""); }} style={{ paddingInline: 16, fontSize: 12.5 }}>Limpar filtros</BtnGhost>
           </div>
         ) : (
           <div style={{ textAlign: "center", color: TX2, padding: 40, fontSize: 14 }}>Você ainda não tem nenhuma transação. Use o formulário acima para lançar a primeira.</div>

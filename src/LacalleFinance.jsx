@@ -108,8 +108,9 @@ import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, BTN_PAD_Y, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile, Comparison, EmptyState, Tabs, TabPanel } from "./components/ui";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile, Comparison, EmptyState, Tabs, TabPanel, DensityToggle } from "./components/ui";
+import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
@@ -1597,6 +1598,7 @@ function MainApp({user,setUser}){
 
   return(
     <AccentContext.Provider value={accent}>
+    <DensityProvider>
     {revealActive&&<LaCalleReveal duration={1000} onDone={()=>setRevealActive(false)}/>}
     <div style={{background:BG,minHeight:"100vh",color:TX,fontFamily:"'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif",overflowX:"hidden"}}>
       <style>{`
@@ -1774,8 +1776,8 @@ function MainApp({user,setUser}){
           <div style={{fontSize:13,color:TX2,marginBottom:10,lineHeight:1.5}}>Isso vai <strong style={{color:TX}}>substituir</strong> todos os seus dados atuais (transações, previstos, parcelamentos, desejos, categorias) pelos dados desse arquivo.</div>
           <div style={{fontSize:12,color:TX3,marginBottom:24}}>{pendingImport.tx?.length||0} transações · {pendingImport.planned?.length||0} previstos · {pendingImport.inst?.length||0} parcelamentos · {pendingImport.wishes?.length||0} desejos</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setPendingImport(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
-            <Btn onClick={confirmImportAll} style={{flex:1,padding:BTN_PAD_Y,fontSize:13}}>Importar</Btn>
+            <BtnGhost onClick={()=>setPendingImport(null)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
+            <Btn onClick={confirmImportAll} style={{flex:1,paddingInline:12,fontSize:13}}>Importar</Btn>
           </div>
         </Modal>
       )}
@@ -1785,7 +1787,7 @@ function MainApp({user,setUser}){
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar tudo?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Todas as transações serão removidas permanentemente.</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setShowClearConfirm(false)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
+            <BtnGhost onClick={()=>setShowClearConfirm(false)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
             <button onClick={()=>{pushHistory();setTransactions([]);setShowClearConfirm(false);showToast("Tudo apagado.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo</button>
           </div>
         </Modal>
@@ -1796,8 +1798,8 @@ function MainApp({user,setUser}){
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Parece duplicado</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você já tem um lançamento de "{pendingDuplicateTx.desc}" de {fmt(pendingDuplicateTx.val)} nesse mesmo dia. Quer lançar mesmo assim?</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setPendingDuplicateTx(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
-            <Btn onClick={()=>{setPendingDuplicateTx(null);commitQuickAdd();}} style={{flex:1,padding:BTN_PAD_Y,justifyContent:"center"}}>Lançar mesmo assim</Btn>
+            <BtnGhost onClick={()=>setPendingDuplicateTx(null)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
+            <Btn onClick={()=>{setPendingDuplicateTx(null);commitQuickAdd();}} style={{flex:1,paddingInline:12,justifyContent:"center"}}>Lançar mesmo assim</Btn>
           </div>
         </Modal>
       )}
@@ -1807,7 +1809,7 @@ function MainApp({user,setUser}){
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Descartar alterações?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você tem alterações não salvas neste formulário. Se sair agora, elas serão perdidas.</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setConfirmDiscard(null)} style={{flex:1,padding:BTN_PAD_Y}}>Continuar editando</BtnGhost>
+            <BtnGhost onClick={()=>setConfirmDiscard(null)} style={{flex:1,paddingInline:12}}>Continuar editando</BtnGhost>
             <button onClick={()=>{
               if(confirmDiscard==="wish"){setShowWishForm(false);setEditingWish(null);}
               else if(confirmDiscard==="planned"){setShowPlannedForm(false);setEditingPlanned(null);}
@@ -1841,7 +1843,7 @@ function MainApp({user,setUser}){
             style={{...SI,marginBottom:20,letterSpacing:"0.04em"}}
           />
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={closeDeleteAccount} disabled={deleteAccountBusy} style={{flex:1,padding:BTN_PAD_Y,opacity:deleteAccountBusy?0.5:1}}>Cancelar</BtnGhost>
+            <BtnGhost onClick={closeDeleteAccount} disabled={deleteAccountBusy} style={{flex:1,paddingInline:12,opacity:deleteAccountBusy?0.5:1}}>Cancelar</BtnGhost>
             <button
               onClick={deleteAccount}
               disabled={!phraseOk||deleteAccountBusy}
@@ -1860,7 +1862,7 @@ function MainApp({user,setUser}){
           )}
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você pode usar o botão "desfazer" no topo logo em seguida, caso mude de ideia.</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setConfirmDelete(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
+            <BtnGhost onClick={()=>setConfirmDelete(null)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
             <button onClick={()=>{
               if(confirmDelete.type==="wish")deleteWish(confirmDelete.id);
               else if(confirmDelete.type==="planned")deletePlannedItem(confirmDelete.id);
@@ -1876,8 +1878,8 @@ function MainApp({user,setUser}){
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={transferPlanned.desc}>Mover "{transferPlanned.desc}" para Metas?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>As informações compatíveis serão preservadas. Categoria, forma de pagamento e mês previsto ficam guardados nas notas do desejo.</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setTransferPlanned(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
-            <Btn onClick={confirmTransferToWish} style={{flex:1,padding:BTN_PAD_Y,justifyContent:"center"}}>Mover</Btn>
+            <BtnGhost onClick={()=>setTransferPlanned(null)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
+            <Btn onClick={confirmTransferToWish} style={{flex:1,paddingInline:12,justifyContent:"center"}}>Mover</Btn>
           </div>
         </Modal>
       )}
@@ -1907,8 +1909,8 @@ function MainApp({user,setUser}){
             )}
           </div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setTransferWish(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
-            <Btn onClick={confirmTransferToPlanned} style={{flex:1,padding:BTN_PAD_Y,justifyContent:"center"}}>Mover para Previstos</Btn>
+            <BtnGhost onClick={()=>setTransferWish(null)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
+            <Btn onClick={confirmTransferToPlanned} style={{flex:1,paddingInline:12,justifyContent:"center"}}>Mover para Previstos</Btn>
           </div>
         </Modal>
       )}
@@ -2078,7 +2080,7 @@ function MainApp({user,setUser}){
           <div style={{fontSize:15,fontWeight:700,color:TX,marginBottom:8,letterSpacing:"-0.01em"}}>Apagar "{instToDelete.desc}"?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:22}}>{instTxCount} transações vinculadas.</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <BtnGhost onClick={()=>deleteInstallment(delInstId,false)} style={{width:"100%",padding:BTN_PAD_Y}}>Apagar só o parcelamento</BtnGhost>
+            <BtnGhost onClick={()=>deleteInstallment(delInstId,false)} style={{width:"100%",paddingInline:12}}>Apagar só o parcelamento</BtnGhost>
             <button onClick={()=>deleteInstallment(delInstId,true)} style={{width:"100%",padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo + {instTxCount} transações</button>
             <button onClick={()=>setDelInstId(null)} style={{width:"100%",padding:"9px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,background:"transparent",color:TX3}}>Cancelar</button>
           </div>
@@ -2092,7 +2094,7 @@ function MainApp({user,setUser}){
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Nome</div>
             <input value={newName} onChange={e=>setNewName(e.target.value)} style={{...SI,marginBottom:14}}/>
             {profileMsg&&<div style={{fontSize:12,color:"#34D399",marginBottom:10}}>{profileMsg}</div>}
-            <Btn onClick={saveProfile} style={{width:"100%",padding:BTN_PAD_Y,fontSize:13,marginBottom:26}}>Salvar nome</Btn>
+            <Btn onClick={saveProfile} style={{width:"100%",paddingInline:12,fontSize:13,marginBottom:26}}>Salvar nome</Btn>
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Nome da sua conta (aparece no topo do app)</div>
             <input value={walletName} onChange={e=>setWalletName(e.target.value)} style={{...SI,marginBottom:20}}/>
@@ -2103,6 +2105,9 @@ function MainApp({user,setUser}){
                 <button key={key} onClick={()=>setAccentKey(key)} title={p.name} className="touch-44" style={{width:28,height:28,borderRadius:"50%",border:accentKey===key?`2px solid ${TX}`:"2px solid transparent",background:p.base,cursor:"pointer",padding:0}}/>
               ))}
             </div>
+
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Tamanho dos botões</div>
+            <div style={{marginBottom:26}}><DensityToggle/></div>
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Tag size={12}/>Categorias personalizadas</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
@@ -2131,7 +2136,7 @@ function MainApp({user,setUser}){
               </label>
             </div>
             <button onClick={()=>{setDeleteAccountPhrase("");setDeleteAccountOpen(true);}} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#F8717114",color:"#F87171",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar conta e dados</button>
-            <BtnGhost onClick={()=>setShowProfile(false)} style={{width:"100%",padding:BTN_PAD_Y}}>Fechar</BtnGhost>
+            <BtnGhost onClick={()=>setShowProfile(false)} style={{width:"100%",paddingInline:12}}>Fechar</BtnGhost>
         </Modal>
       )}
       {selectedCalDay&&(
@@ -2538,6 +2543,7 @@ function MainApp({user,setUser}){
         )}
       </div>
     </div>
+    </DensityProvider>
     </AccentContext.Provider>
   );
 }
