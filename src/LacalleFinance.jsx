@@ -108,8 +108,8 @@ import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile, Comparison } from "./components/ui";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, BTN_PAD_Y, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile, Comparison, EmptyState, Tabs, TabPanel } from "./components/ui";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
@@ -1774,8 +1774,8 @@ function MainApp({user,setUser}){
           <div style={{fontSize:13,color:TX2,marginBottom:10,lineHeight:1.5}}>Isso vai <strong style={{color:TX}}>substituir</strong> todos os seus dados atuais (transações, previstos, parcelamentos, desejos, categorias) pelos dados desse arquivo.</div>
           <div style={{fontSize:12,color:TX3,marginBottom:24}}>{pendingImport.tx?.length||0} transações · {pendingImport.planned?.length||0} previstos · {pendingImport.inst?.length||0} parcelamentos · {pendingImport.wishes?.length||0} desejos</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setPendingImport(null)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
-            <Btn onClick={confirmImportAll} style={{flex:1,padding:"12px",fontSize:13}}>Importar</Btn>
+            <BtnGhost onClick={()=>setPendingImport(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
+            <Btn onClick={confirmImportAll} style={{flex:1,padding:BTN_PAD_Y,fontSize:13}}>Importar</Btn>
           </div>
         </Modal>
       )}
@@ -1785,7 +1785,7 @@ function MainApp({user,setUser}){
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar tudo?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Todas as transações serão removidas permanentemente.</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setShowClearConfirm(false)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
+            <BtnGhost onClick={()=>setShowClearConfirm(false)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
             <button onClick={()=>{pushHistory();setTransactions([]);setShowClearConfirm(false);showToast("Tudo apagado.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo</button>
           </div>
         </Modal>
@@ -1796,8 +1796,8 @@ function MainApp({user,setUser}){
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Parece duplicado</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você já tem um lançamento de "{pendingDuplicateTx.desc}" de {fmt(pendingDuplicateTx.val)} nesse mesmo dia. Quer lançar mesmo assim?</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setPendingDuplicateTx(null)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
-            <Btn onClick={()=>{setPendingDuplicateTx(null);commitQuickAdd();}} style={{flex:1,padding:"12px",justifyContent:"center"}}>Lançar mesmo assim</Btn>
+            <BtnGhost onClick={()=>setPendingDuplicateTx(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
+            <Btn onClick={()=>{setPendingDuplicateTx(null);commitQuickAdd();}} style={{flex:1,padding:BTN_PAD_Y,justifyContent:"center"}}>Lançar mesmo assim</Btn>
           </div>
         </Modal>
       )}
@@ -1807,7 +1807,7 @@ function MainApp({user,setUser}){
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Descartar alterações?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você tem alterações não salvas neste formulário. Se sair agora, elas serão perdidas.</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setConfirmDiscard(null)} style={{flex:1,padding:"12px"}}>Continuar editando</BtnGhost>
+            <BtnGhost onClick={()=>setConfirmDiscard(null)} style={{flex:1,padding:BTN_PAD_Y}}>Continuar editando</BtnGhost>
             <button onClick={()=>{
               if(confirmDiscard==="wish"){setShowWishForm(false);setEditingWish(null);}
               else if(confirmDiscard==="planned"){setShowPlannedForm(false);setEditingPlanned(null);}
@@ -1841,7 +1841,7 @@ function MainApp({user,setUser}){
             style={{...SI,marginBottom:20,letterSpacing:"0.04em"}}
           />
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={closeDeleteAccount} disabled={deleteAccountBusy} style={{flex:1,padding:"12px",opacity:deleteAccountBusy?0.5:1}}>Cancelar</BtnGhost>
+            <BtnGhost onClick={closeDeleteAccount} disabled={deleteAccountBusy} style={{flex:1,padding:BTN_PAD_Y,opacity:deleteAccountBusy?0.5:1}}>Cancelar</BtnGhost>
             <button
               onClick={deleteAccount}
               disabled={!phraseOk||deleteAccountBusy}
@@ -1860,7 +1860,7 @@ function MainApp({user,setUser}){
           )}
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você pode usar o botão "desfazer" no topo logo em seguida, caso mude de ideia.</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setConfirmDelete(null)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
+            <BtnGhost onClick={()=>setConfirmDelete(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
             <button onClick={()=>{
               if(confirmDelete.type==="wish")deleteWish(confirmDelete.id);
               else if(confirmDelete.type==="planned")deletePlannedItem(confirmDelete.id);
@@ -1876,8 +1876,8 @@ function MainApp({user,setUser}){
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={transferPlanned.desc}>Mover "{transferPlanned.desc}" para Metas?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>As informações compatíveis serão preservadas. Categoria, forma de pagamento e mês previsto ficam guardados nas notas do desejo.</div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setTransferPlanned(null)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
-            <Btn onClick={confirmTransferToWish} style={{flex:1,padding:"12px",justifyContent:"center"}}>Mover</Btn>
+            <BtnGhost onClick={()=>setTransferPlanned(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
+            <Btn onClick={confirmTransferToWish} style={{flex:1,padding:BTN_PAD_Y,justifyContent:"center"}}>Mover</Btn>
           </div>
         </Modal>
       )}
@@ -1907,8 +1907,8 @@ function MainApp({user,setUser}){
             )}
           </div>
           <div style={{display:"flex",gap:10}}>
-            <BtnGhost onClick={()=>setTransferWish(null)} style={{flex:1,padding:"12px"}}>Cancelar</BtnGhost>
-            <Btn onClick={confirmTransferToPlanned} style={{flex:1,padding:"12px",justifyContent:"center"}}>Mover para Previstos</Btn>
+            <BtnGhost onClick={()=>setTransferWish(null)} style={{flex:1,padding:BTN_PAD_Y}}>Cancelar</BtnGhost>
+            <Btn onClick={confirmTransferToPlanned} style={{flex:1,padding:BTN_PAD_Y,justifyContent:"center"}}>Mover para Previstos</Btn>
           </div>
         </Modal>
       )}
@@ -2078,7 +2078,7 @@ function MainApp({user,setUser}){
           <div style={{fontSize:15,fontWeight:700,color:TX,marginBottom:8,letterSpacing:"-0.01em"}}>Apagar "{instToDelete.desc}"?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:22}}>{instTxCount} transações vinculadas.</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <BtnGhost onClick={()=>deleteInstallment(delInstId,false)} style={{width:"100%",padding:"12px"}}>Apagar só o parcelamento</BtnGhost>
+            <BtnGhost onClick={()=>deleteInstallment(delInstId,false)} style={{width:"100%",padding:BTN_PAD_Y}}>Apagar só o parcelamento</BtnGhost>
             <button onClick={()=>deleteInstallment(delInstId,true)} style={{width:"100%",padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo + {instTxCount} transações</button>
             <button onClick={()=>setDelInstId(null)} style={{width:"100%",padding:"9px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,background:"transparent",color:TX3}}>Cancelar</button>
           </div>
@@ -2092,7 +2092,7 @@ function MainApp({user,setUser}){
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Nome</div>
             <input value={newName} onChange={e=>setNewName(e.target.value)} style={{...SI,marginBottom:14}}/>
             {profileMsg&&<div style={{fontSize:12,color:"#34D399",marginBottom:10}}>{profileMsg}</div>}
-            <Btn onClick={saveProfile} style={{width:"100%",padding:"11px",fontSize:13,marginBottom:26}}>Salvar nome</Btn>
+            <Btn onClick={saveProfile} style={{width:"100%",padding:BTN_PAD_Y,fontSize:13,marginBottom:26}}>Salvar nome</Btn>
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Nome da sua conta (aparece no topo do app)</div>
             <input value={walletName} onChange={e=>setWalletName(e.target.value)} style={{...SI,marginBottom:20}}/>
@@ -2131,7 +2131,7 @@ function MainApp({user,setUser}){
               </label>
             </div>
             <button onClick={()=>{setDeleteAccountPhrase("");setDeleteAccountOpen(true);}} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#F8717114",color:"#F87171",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar conta e dados</button>
-            <BtnGhost onClick={()=>setShowProfile(false)} style={{width:"100%",padding:"10px"}}>Fechar</BtnGhost>
+            <BtnGhost onClick={()=>setShowProfile(false)} style={{width:"100%",padding:BTN_PAD_Y}}>Fechar</BtnGhost>
         </Modal>
       )}
       {selectedCalDay&&(
@@ -2166,7 +2166,7 @@ function MainApp({user,setUser}){
             </div>
             <div style={{fontSize:12.5,color:TX2,marginBottom:18,lineHeight:1.5}}>Itens excluídos ficam aqui por {TRASH_RETENTION_DAYS} dias antes de serem apagados de vez.</div>
             {trash.length===0?(
-              <div style={{textAlign:"center",color:TX3,fontSize:13,padding:"32px 16px"}}><Trash2 size={22} style={{marginBottom:10,opacity:0.5}}/><div>A lixeira está vazia.</div></div>
+              <EmptyState icon={Trash2} title="A lixeira está vazia." boxed={false} padding="32px 16px" iconSize={22} style={{fontSize:13}}/>
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {trash.map(entry=>{
@@ -2195,16 +2195,7 @@ function MainApp({user,setUser}){
         </Modal>
       )}
 
-      <div className="top-tabs" style={{display:"flex",gap:4,padding:"8px 20px 0",overflowX:"auto",background:HDR,borderBottom:`1px solid ${BD}`}}>
-        {appTabs.map(t=>{const Ic=t.icon;return(
-          <button key={t.id} className="nav-tab" onClick={()=>setTab(t.id)} style={{
-            padding:"9px 15px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,whiteSpace:"nowrap",
-            background:tab===t.id?`${accent}18`:"transparent",color:tab===t.id?TX:TX3,
-            borderRadius:"12px 12px 0 0",marginBottom:tab===t.id?0:0,
-            display:"flex",alignItems:"center",gap:7,
-          }}><Ic size={15}/>{t.label}{tab===t.id&&<span className="nav-tab-underline"/>}</button>
-        );})}
-      </div>
+      <Tabs items={appTabs} value={tab} onChange={setTab} idPrefix="app" style={{padding:"8px 20px 0",background:HDR,borderBottom:`1px solid ${BD}`}}/>
 
       {/* ---- Navegação inferior (só no celular) ---- */}
       <nav className="bottom-nav">
@@ -2218,7 +2209,9 @@ function MainApp({user,setUser}){
 
       <div key={tab} className="main-content" style={{padding:"28px 32px",maxWidth:1600,margin:"0 auto",animation:`fadeIn .35s ${EASE_OUT}`}}>
 
-        {tab==="dashboard"&&(()=>{
+        {tab==="dashboard"&&(
+        <TabPanel id="dashboard" idPrefix="app">
+        {(()=>{
           const hour=new Date().getHours();
           const greeting=hour<5?"Boa noite":hour<12?"Bom dia":hour<18?"Boa tarde":"Boa noite";
           const firstName=(user.name||"").split(" ")[0]||user.name;
@@ -2465,8 +2458,11 @@ function MainApp({user,setUser}){
           </div>
           );
         })()}
+        </TabPanel>
+        )}
 
         {tab==="planning"&&(
+        <TabPanel id="planning" idPrefix="app">
           <PlanningTab
             accent={accent} planTab={planTab} setPlanTab={setPlanTab}
             nextEvents={nextEvents} balance={balance} cashFlowProjections={cashFlowProjections} instStats={instStats}
@@ -2482,9 +2478,11 @@ function MainApp({user,setUser}){
             simMonths={simMonths} setSimMonths={setSimMonths} simReturn={simReturn} setSimReturn={setSimReturn} runSimulation={runSimulation}
             summary={summary} pctChange={pctChange}
           />
+        </TabPanel>
         )}
 
         {tab==="transactions"&&(
+        <TabPanel id="transactions" idPrefix="app">
           <TransactionsTab
             renderTxForm={renderTxForm} accent={accent} catColor={catColor}
             filterType={filterType} search={search} filterMonth={filterMonth} months={months} filterCat={filterCat}
@@ -2493,9 +2491,11 @@ function MainApp({user,setUser}){
             onImportCSV={importCSV} onExportCSV={exportCSV} onClearAll={()=>setShowClearConfirm(true)}
             onStartEditTx={startEditTx} onRequestDelete={setConfirmDelete}
           />
+        </TabPanel>
         )}
 
         {tab==="planned"&&(
+        <TabPanel id="planned" idPrefix="app">
           <PlannedTab
             plannedMonth={plannedMonth} plannedStats={plannedStats} showPlannedForm={showPlannedForm} plannedFormRef={plannedFormRef}
             editingPlanned={editingPlanned} plannedForm={plannedForm} plannedValRef={plannedValRef}
@@ -2510,18 +2510,22 @@ function MainApp({user,setUser}){
             onToggleIgnored={togglePlannedIgnoredForMonth} onTransferToWish={openTransferToWish}
             onStartEdit={startEditPlanned} onRequestDelete={setConfirmDelete} onToggleNotes={toggleNotes}
           />
+        </TabPanel>
         )}
 
         {tab==="installments"&&(
+        <TabPanel id="installments" idPrefix="app">
           <InstallmentsTab
             installments={installments} instStats={instStats} showInstForm={showInstForm} instDraft={instDraft}
             monthlyPreview={monthlyPreview} fullCats={fullCats} txMap={txMap} todayFn={todayFn} accent={accent} catColor={catColor}
             onOpenForm={openInstForm} onCancelForm={()=>setShowInstForm(false)} onChangeDraft={setInstDraft}
             onAdd={addInstallment} onRequestDelete={setDelInstId}
           />
+        </TabPanel>
         )}
 
         {tab==="wishes"&&(
+        <TabPanel id="wishes" idPrefix="app">
           <WishesTab
             wishes={wishes} sortedWishes={sortedWishes} wishSortBy={wishSortBy} showWishForm={showWishForm}
             wishForm={wishForm} editingWish={editingWish} expandedNotes={expandedNotes} accent={accent}
@@ -2530,6 +2534,7 @@ function MainApp({user,setUser}){
             onSave={saveWish} onCancelForm={closeWishForm} onToggleDone={toggleWishDone}
             onTransferToPlanned={openTransferToPlanned} onRequestDelete={setConfirmDelete} onToggleNotes={toggleNotes}
           />
+        </TabPanel>
         )}
       </div>
     </div>

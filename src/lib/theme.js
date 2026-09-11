@@ -53,6 +53,16 @@ export const R_INPUT = 12;
 export const R_CHIP = 8;   // Checkbox, tags, chips, badges
 export const R_MODAL = 20; // Containers maiores, modais, painéis agrupadores
 
+// ---- Altura de controle — token novo, 10/09/2026 (brandbook, seção 43).
+// Levantamento real: todo <Btn>/<BtnGhost> do app usava um padding vertical
+// digitado à mão a cada chamada (10, 11, 12 ou 13px, quatro valores pra uma
+// intenção só). BTN_PAD_Y consolida no valor real mais comum do levantamento
+// — não é uma escolha nova, é parar de redigitar a mesma decisão sem
+// precisão. Pré-requisito documentado para o sistema de densidade (que o
+// Life já tem via `--control-h`; o Finance não tinha o token central que um
+// toggle de densidade precisaria mudar).
+export const BTN_PAD_Y = 12;
+
 // ---- Sombra — pág. 24/49: elevação em dark mode vem da superfície, não da
 // sombra. Os valores oficiais (rgba(17,17,17,.04) / .10) são calibrados para
 // fundo claro; abaixo, a mesma proporção adaptada a um fundo quase-preto.

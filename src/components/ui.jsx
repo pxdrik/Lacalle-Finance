@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, forwardRef } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, BTN_PAD_Y, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
 import LogoSymbol from "./LogoSymbol";
 
 // ==================== Comparison ====================
@@ -43,6 +43,159 @@ export function Comparison({delta,formatMagnitude,label,whenZero="sem mudança",
     <span style={{display:"inline-flex",alignItems:"center",gap:4,color,...style}}>
       <Icon size={13} aria-hidden="true"/><span style={VISUALLY_HIDDEN}>{delta>0?"subiu":"desceu"}:</span>{sign}{formatMagnitude(Math.abs(delta))} {label}
     </span>
+  );
+}
+
+// ==================== Tabs ====================
+// role="tablist"/"tab" com aria-selected, aria-controls e roving tabindex —
+// a semântica que faltava (brandbook, seção 43). O visual é o `.nav-tab` que
+// o Finance já tinha (ícone + rótulo, fundo tingido no ativo, sublinhado que
+// entra com `.nav-tab-underline`/`indicatorIn`, definidos em
+// `LacalleFinance.jsx`) — só o papel ARIA e o foco por teclado são novos.
+// Mesmo contrato do `Tabs` que o Life ganhou em
+// design-system/components/tabs.tsx nesta sessão: foco por teclado é roving
+// tabindex (só a aba ativa entra no tab order; ←/→ movem a seleção e levam o
+// foco, Home/End vão pras pontas).
+function tabId(prefix, id) {
+  return `${prefix}-tab-${id}`;
+}
+export function tabPanelId(prefix, id) {
+  return `${prefix}-panel-${id}`;
+}
+export function Tabs({ items, value, onChange, idPrefix, style }) {
+  const accent = useAccent();
+  const buttonsRef = useRef(new Map());
+
+  function focusTab(id) {
+    buttonsRef.current.get(id)?.focus();
+  }
+
+  function handleKeyDown(e) {
+    const index = items.findIndex(item => item.id === value);
+    if (index === -1) return;
+    let next = null;
+    if (e.key === "ArrowRight") next = (index + 1) % items.length;
+    else if (e.key === "ArrowLeft") next = (index - 1 + items.length) % items.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = items.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    const nextItem = items[next];
+    onChange(nextItem.id);
+    focusTab(nextItem.id);
+  }
+
+  return (
+    <div role="tablist" className="top-tabs" style={{ display: "flex", gap: 4, overflowX: "auto", ...style }} onKeyDown={handleKeyDown}>
+      {items.map(item => {
+        const active = item.id === value;
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.id}
+            ref={el => { if (el === null) buttonsRef.current.delete(item.id); else buttonsRef.current.set(item.id, el); }}
+            id={tabId(idPrefix, item.id)}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-controls={tabPanelId(idPrefix, item.id)}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(item.id)}
+            className="nav-tab"
+            style={{
+              padding: "9px 15px", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap",
+              background: active ? `${accent}18` : "transparent", color: active ? TX : TX3,
+              borderRadius: `${R_BTN}px ${R_BTN}px 0 0`,
+              display: "flex", alignItems: "center", gap: 7,
+            }}
+          >
+            <Icon size={15} />{item.label}
+            {active && <span className="nav-tab-underline" />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+/** O painel de uma aba — `aria-labelledby` fecha o par com o botão que o abriu. */
+export function TabPanel({ id, idPrefix, children, style }) {
+  return (
+    <div id={tabPanelId(idPrefix, id)} role="tabpanel" aria-labelledby={tabId(idPrefix, id)} style={style}>
+      {children}
+    </div>
+  );
+}
+
+// ==================== Table ====================
+// Mantém forma de planilha sem ser um <table> nativo: Card + cabeçalho de
+// coluna com aria-hidden (ele rotula a lista, cada linha já lê como frase
+// completa pro leitor de tela) + linhas com divide via borda superior,
+// dentro de overflow-x-auto com piso de largura — rola de lado numa tela
+// estreita em vez de espremer coluna até ficar ilegível (brandbook, seção
+// 43). Mesma anatomia do `Tabela` que o Life ganhou em
+// design-system/components/tabela.tsx nesta sessão: só o molde (cabeçalho +
+// moldura + rolagem) é compartilhado — a linha em si continua escrita por
+// quem chama, porque o conteúdo de cada linha é sempre específico da tela
+// (aqui, o resumo mensal do Planejamento).
+function colFlex(width) {
+  return width === undefined ? 1 : `0 0 ${typeof width === "number" ? `${width}px` : width}`;
+}
+export function Table({ columns, minWidth = 480, children }) {
+  return (
+    <Card style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth }}>
+          <div aria-hidden style={{ display: "flex", gap: 12, padding: "12px 16px 8px", borderBottom: `1px solid ${BD}` }}>
+            {columns.map(({ key, label, align = "left", width }) => (
+              <span key={key} style={{ flex: colFlex(width), textAlign: align, fontSize: 11, fontWeight: 700, color: TX2, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap" }}>{label}</span>
+            ))}
+          </div>
+          {children}
+        </div>
+      </div>
+    </Card>
+  );
+}
+/** Uma linha — mesmos `columns` (largura/alinhamento) da `Table` que a envolve, pra bater com o cabeçalho. */
+export function TableRow({ columns, cells, style }) {
+  return (
+    <div style={{ display: "flex", gap: 12, padding: "12px 16px", borderTop: `1px solid ${BD}`, ...style }}>
+      {columns.map(({ key, align = "left", width, numeric }, i) => (
+        <span key={key} className={numeric ? "num" : undefined} style={{ flex: colFlex(width), textAlign: align, whiteSpace: "nowrap", ...cells[i]?.style }}>{cells[i]?.value}</span>
+      ))}
+    </div>
+  );
+}
+
+// ==================== EmptyState ====================
+// Ícone (contido, aria-hidden) + frase de estado, sempre; legenda e ação são
+// opcionais — nunca dado inventado só pra preencher o espaço (brandbook,
+// seção 43). Promovido a partir da versão incompleta que quatro telas já
+// repetiam à mão (InstallmentsTab, PlannedTab, WishesTab, a lixeira em
+// LacalleFinance): ícone a 50% de opacidade + uma linha de texto, sem
+// legenda nem ação — nunca tinha sido pensado como o padrão, só copiado.
+// Mesmo componente que o Life ganhou em design-system/components/empty-state.tsx
+// nesta sessão, mesma anatomia.
+// `boxed=false` existe só pra lixeira: ela já mora dentro de um `Modal`, que
+// já é o card — um segundo card por dentro seria "card dentro de card sem
+// necessidade" (anti-padrão da seção 40).
+export function EmptyState({icon:Icon,title,caption,action,boxed=true,padding=48,iconSize=26,style}){
+  const ActionIcon=action?.icon;
+  return (
+    <div style={{
+      textAlign:"center",color:TX3,padding,fontSize:14,
+      ...(boxed?{background:CARD,border:`1px solid ${BD}`,borderRadius:R_CARD,boxShadow:SH_SM}:{}),
+      ...style,
+    }}>
+      <Icon size={iconSize} aria-hidden="true" style={{marginBottom:12,opacity:0.5}}/>
+      <div>{title}</div>
+      {caption&&<div style={{fontSize:12,color:TX3,marginTop:6}}>{caption}</div>}
+      {action&&(
+        <BtnGhost onClick={action.onClick} style={{marginTop:16,padding:`${BTN_PAD_Y}px 18px`,fontSize:13,display:"inline-flex",alignItems:"center",gap:6}}>
+          {ActionIcon&&<ActionIcon size={14}/>}{action.label}
+        </BtnGhost>
+      )}
+    </div>
   );
 }
 

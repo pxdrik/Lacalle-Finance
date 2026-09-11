@@ -2,13 +2,22 @@ import {
   CalendarDays, Flag, TrendingUp, Briefcase, Bell, ChevronLeft, ChevronRight,
   Clock, Calendar, Hourglass, ShieldCheck, Target, Rocket,
 } from "lucide-react";
-import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, ChartTooltip } from "./ui";
-import { TX, TX2, TX3, BD, CARD, C2, R_CHIP, R_CARD, R_INPUT, SI } from "../lib/theme";
+import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, ChartTooltip, Table, TableRow, Comparison } from "./ui";
+import { TX, TX2, TX3, BD, CARD, R_CHIP, R_CARD, R_INPUT, BTN_PAD_Y, SI } from "../lib/theme";
 import { fmt, FinancialEngine, formatMonths } from "../lib/financialEngine";
 import { parseNum } from "../lib/validation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
 
 const WEEKDAYS_PT = ["D", "S", "T", "Q", "Q", "S", "S"];
+
+/** Resumo mensal (aba "Ano") — colunas numéricas sempre à direita (brandbook, seção 43). */
+const YEAR_SUMMARY_COLUMNS = [
+  { key: "month", label: "Mês" },
+  { key: "in", label: "Receita", align: "right", width: 100, numeric: true },
+  { key: "out", label: "Despesa", align: "right", width: 100, numeric: true },
+  { key: "balance", label: "Saldo", align: "right", width: 110, numeric: true },
+  { key: "delta", label: "Var. vs mês anterior", align: "right", width: 170, numeric: true },
+];
 
 // Aba "Planejamento" (6 sub-abas: geral/calendário/timeline/metas/decisões/
 // ano) — extraída de LacalleFinance.jsx (Fase 2, código-motion puro, sem
@@ -285,7 +294,7 @@ export default function PlanningTab({
                 <MoneyInput placeholder="Retorno anual estimado (%)" value={simReturn} onChange={setSimReturn} style={{ ...SI, flex: 1, minWidth: 120 }} />
               </div>
             )}
-            <Btn onClick={runSimulation} style={{ padding: "10px 20px", fontSize: 13 }}>Simular</Btn>
+            <Btn onClick={runSimulation} style={{ padding: `${BTN_PAD_Y}px 20px`, fontSize: 13 }}>Simular</Btn>
             {simResult && (
               <div style={{ marginTop: 18, background: "rgba(255,255,255,0.03)", border: `1px solid ${BD}`, borderRadius: R_INPUT, padding: 18 }}>
                 {simResult.type === "economizar_mais" && (simResult.data ? (
@@ -325,32 +334,38 @@ export default function PlanningTab({
                   </ResponsiveContainer>
                 </div>
               </Card>
-              <Card style={{ padding: 0, overflow: "hidden" }}>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr style={{ background: C2 }}>
-                      {["Mês", "Receita", "Despesa", "Saldo", "Var. vs mês anterior"].map(h => (
-                        <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: TX2, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap" }}>{h}</th>
-                      ))}
-                    </tr></thead>
-                    <tbody>
-                      {summary.map((m, i) => {
-                        const prev = summary[i - 1];
-                        const delta = prev ? pctChange(m.balance, prev.balance) : null;
-                        return (
-                          <tr key={m.month} style={{ borderTop: `1px solid ${BD}` }}>
-                            <td style={{ padding: "12px 16px", color: TX, fontWeight: 600, whiteSpace: "nowrap" }}>{m.month}</td>
-                            <td className="num" style={{ padding: "12px 16px", color: "#34D399", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(m.in)}</td>
-                            <td className="num" style={{ padding: "12px 16px", color: "#F87171", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(m.out)}</td>
-                            <td className="num" style={{ padding: "12px 16px", color: m.balance >= 0 ? "#34D399" : "#F87171", fontWeight: 700, whiteSpace: "nowrap" }}>{fmt(m.balance)}</td>
-                            <td title={delta === null ? "Sem base de comparação no mês anterior" : `Saldo ${delta >= 0 ? "melhorou" : "piorou"} ${fmt(Math.abs(m.balance - prev.balance))} em relação a ${prev.month}`} style={{ padding: "12px 16px", color: delta === null ? TX3 : delta >= 0 ? "#34D399" : "#F87171", fontWeight: 600, whiteSpace: "nowrap" }}>{delta === null ? "—" : `${delta > 0 ? "+" : ""}${delta}%`}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
+              <Table columns={YEAR_SUMMARY_COLUMNS} minWidth={560}>
+                {summary.map((m, i) => {
+                  const prev = summary[i - 1];
+                  const delta = prev ? pctChange(m.balance, prev.balance) : null;
+                  return (
+                    <TableRow
+                      key={m.month}
+                      columns={YEAR_SUMMARY_COLUMNS}
+                      cells={[
+                        { value: m.month, style: { color: TX, fontWeight: 600 } },
+                        { value: fmt(m.in), style: { color: "#34D399", fontWeight: 600 } },
+                        { value: fmt(m.out), style: { color: "#F87171", fontWeight: 600 } },
+                        { value: fmt(m.balance), style: { color: m.balance >= 0 ? "#34D399" : "#F87171", fontWeight: 700 } },
+                        {
+                          value: delta === null ? (
+                            <span title="Sem base de comparação no mês anterior" style={{ color: TX3 }}>—</span>
+                          ) : (
+                            <span title={`Saldo ${delta >= 0 ? "melhorou" : "piorou"} ${fmt(Math.abs(m.balance - prev.balance))} em relação a ${prev.month}`}>
+                              <Comparison
+                                delta={delta}
+                                formatMagnitude={magnitude => `${magnitude}%`}
+                                label="vs. mês anterior"
+                                tone={delta >= 0 ? "positive" : "negative"}
+                              />
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
+                  );
+                })}
+              </Table>
             </>
           )}
         </div>
