@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import { BG, CARD, BD, BD2, TX, TX2, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, EASE_OUT, SUCCESS, ERROR } from "../lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, EASE_OUT, SUCCESS, ERROR, PRESS_SCALE } from "../lib/theme";
 import LogoSymbol from "./LogoSymbol";
 
 // CAPTCHA (Cloudflare Turnstile) é OPCIONAL e fica totalmente desligado até
@@ -158,7 +158,7 @@ export default function AuthScreen({ onLogin }) {
         .wl-input:focus{outline:none;border-color:${GOLD}80 !important;box-shadow:0 0 0 3px ${GOLD}22;}
         .wl-btn{transition:filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT};}
         .wl-btn:hover{filter:brightness(1.1);box-shadow:0 8px 24px -8px ${GOLD}70;}
-        .wl-btn:active{transform:scale(0.98);}
+        .wl-btn:active{transform:scale(${PRESS_SCALE});}
         .wl-btn:disabled{opacity:0.6;cursor:not-allowed;}
         /* P0: autofill do navegador (email/senha salvos) pinta fundo branco
            por cima do card escuro, ignorando o background inline do input.

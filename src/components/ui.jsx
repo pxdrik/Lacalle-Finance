@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, forwardRef } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR } from "../lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA } from "../lib/theme";
 import { DENSITIES, useDensity } from "../lib/density";
 import LogoSymbol from "./LogoSymbol";
 
@@ -121,7 +121,7 @@ export function Tabs({ items, value, onChange, idPrefix, style }) {
 /** O painel de uma aba — `aria-labelledby` fecha o par com o botão que o abriu. */
 export function TabPanel({ id, idPrefix, children, style }) {
   return (
-    <div id={tabPanelId(idPrefix, id)} role="tabpanel" aria-labelledby={tabId(idPrefix, id)} style={style}>
+    <div id={tabPanelId(idPrefix, id)} role="tabpanel" aria-labelledby={tabId(idPrefix, id)} className="tab-panel-enter" style={style}>
       {children}
     </div>
   );
@@ -320,7 +320,7 @@ const prefersReducedMotion=()=>
   typeof window.matchMedia==="function"&&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function useCountUp(value,duration=520){
+function useCountUp(value,duration=DUR_DATA){
   const target=Number.isFinite(value)?value:0;
   const [display,setDisplay]=useState(target);
   const displayRef=useRef(target);
@@ -524,7 +524,7 @@ export function DataUsedChecklist({tags}){
 // ---- Número-herói animado: conta de 0 até o valor, dominando visualmente o card ----
 export function HeroNumberAnimated({heroNumber,color}){
   const{value=0,format="plain",suffix="",sign="none"}=heroNumber||{};
-  const display=useCountUp(value,650);
+  const display=useCountUp(value,DUR_DATA);
   let formatted;
   if(format==="currency")formatted=fmt(Math.abs(display));
   else if(format==="percent")formatted=`${Math.round(display)}%`;

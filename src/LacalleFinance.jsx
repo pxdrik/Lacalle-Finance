@@ -108,7 +108,7 @@ import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL } from "./lib/theme";
+import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile, Comparison, EmptyState, Tabs, TabPanel, DensityToggle } from "./components/ui";
 import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
@@ -1613,7 +1613,7 @@ function MainApp({user,setUser}){
         ::-webkit-scrollbar-thumb{background:${BD2};border-radius:4px}
         button{transition:filter .15s ease, transform .12s ease, opacity .15s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;}
         button:hover:not(:disabled){filter:brightness(1.1);}
-        button:active:not(:disabled){transform:scale(0.97);}
+        button:active:not(:disabled){transform:scale(${PRESS_SCALE});}
         button:focus-visible{outline:2px solid ${accent}90;outline-offset:2px;}
         a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid ${accent}90;outline-offset:2px;}
         .fc-card{transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;}
@@ -1652,6 +1652,11 @@ function MainApp({user,setUser}){
         .nav-tab{position:relative;transition:background .18s ease, color .18s ease;}
         .nav-tab:hover{color:${TX} !important;background:${HOVER}44 !important;}
         .surface-card{transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;}
+
+        /* Bounce na entrada de aba — exceção pontual à regra "sem física de mola" (pág. 36),
+           ratificada no Motion System v1 junto com o Life: reusa o keyframe fadeIn já existente,
+           só com DUR_PAGE/EASE_BOUNCE em vez do EASE_OUT padrão. */
+        .tab-panel-enter{animation:fadeIn ${DUR_PAGE}ms ${EASE_BOUNCE} both;}
 
         /* ---- Tipografia dos números: IBM Plex Mono, tabular e com tracking negativo ---- */
         .num,.stat-val,.hero-balance{font-family:${NUM_FONT};font-variant-numeric:tabular-nums;letter-spacing:-0.02em;}

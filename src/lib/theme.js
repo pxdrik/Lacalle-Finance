@@ -92,6 +92,11 @@ export const DUR_MICRO = 150;
 export const DUR_STANDARD = 250;
 export const DUR_SIGNATURE = 450;
 export const DUR_HERO = 800;
+// Tiers ratificados no Motion System v1 (Life+Finance, 17-18/09/2026):
+export const DUR_DATA = 550; // contagem numérica — substitui os 520/650 soltos do useCountUp
+export const DUR_PAGE = 900; // entrada de página/aba, sempre com EASE_BOUNCE abaixo
+export const EASE_BOUNCE = "cubic-bezier(0.34, 1.56, 0.64, 1)"; // exceção pontual à regra "sem física de mola" — só na entrada de página/aba, nunca em outro `animate-*`
+export const PRESS_SCALE = 0.95; // encolher no toque, universal — unifica os 0.97 (app) e 0.98 (login) que discordavam entre si
 
 // ---- Cores semânticas de UI e de dado — pág. 27, ajustadas um passo para
 // dark mode (pág. 33). Data colors (positive/negative/neutral/comparison)

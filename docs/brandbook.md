@@ -100,48 +100,38 @@ pode usar — mas é uma diferença real entre as duas aplicações que vale
 registrar: o Finance nunca foi validado em claro, porque não pretende
 existir em claro.
 
-### 5. Duração de contagem animada não vem de um tier nomeado
+### 5. Duração de contagem animada — feito, 18/09/2026
 
-`useCountUp` (`ui.jsx:108`) tem `duration=520` como default, e um segundo
-call site (`ui.jsx:312`) passa `650` explicitamente — dois valores soltos e
-próximos, nenhum nomeado. É exatamente o caso que o `docs/brandbook.md` do
-Life cita como origem do tier `--duration-data: 550ms` proposto (emenda
-"Motion System v1", ainda não ratificada no PDF). **Quando esse tier for
-ratificado, migrar os dois valores do Finance para ele junto com o Life** —
-não faz sentido o token nascer só de um lado.
+`useCountUp` (`ui.jsx`) e o segundo call site em `HeroNumberAnimated`
+passavam `520`/`650` soltos, nenhum nomeado. O tier `--duration-data: 550ms`
+do Life foi ratificado; portado para o Finance como `DUR_DATA=550` em
+`theme.js`, e os dois call sites migrados para ele.
 
-### 6. Duas peças novas do Motion System do Life ainda não chegaram aqui
+### 6. Duas peças novas do Motion System do Life — portadas, 18/09/2026
 
-O LaCalle Life ganhou duas decisões de motion nesta mesma leva de sessões
-(17-18/09/2026), registradas em `Life/docs/brandbook.md`. Nenhuma das duas
-foi implementada no Finance ainda — só registradas aqui, mesmo padrão da
-divergência 5 acima ("registrar primeiro, priorizar depois").
+O LaCalle Life ganhou duas decisões de motion na leva de sessões de
+17-18/09/2026 (`Life/docs/brandbook.md`). As duas foram portadas para o
+Finance nesta entrega.
 
-**Bounce na transição de página/aba.** O Life abriu uma exceção pontual à
-regra de "sem física de mola" (pág. 36): `--ease-bounce`
-(`cubic-bezier(0.34, 1.56, 0.64, 1)`), usada só na entrada de página
-(`--animate-page-enter`), nunca em outro `animate-*`. Ganhou também um tier
-de duração próprio, `--duration-page`, que terminou em 900ms depois de dois
-pedidos de "mais devagar" no mesmo dia. O Finance não tem um "page
-transition" no sentido do Life — é um app de uma página só, com estado de
-aba (`setTab`), não navegação de rota. O equivalente mais próximo é a troca
-de conteúdo de `TabPanel` (`ui.jsx`), que hoje troca instantaneamente, sem
-nenhuma transição. Se a mesma exceção fizer sentido aqui, o candidato
-natural é aplicar o bounce à entrada do `TabPanel` ativo, não a cada card
-dentro dele.
+**Bounce na transição de aba.** O Finance não tem "page transition" no
+sentido do Life — é uma página só, com estado de aba (`setTab`), não
+navegação de rota. O candidato natural era aplicar o bounce à entrada do
+`TabPanel` ativo, não a cada card dentro dele, e foi isso que ficou:
+`TabPanel` (`ui.jsx`) ganhou a classe `tab-panel-enter`, que reaproveita o
+keyframe `fadeIn` já existente com `DUR_PAGE=900ms`/`EASE_BOUNCE` (ambos em
+`theme.js`) no lugar do `EASE_OUT` padrão — como cada aba é renderizada
+condicionalmente (`{tab==="x"&&<TabPanel>}`), o `TabPanel` remonta a cada
+troca e a animação toca de novo, igual à entrada de página do Life.
 
-**Encolher no toque, universal.** O Life terminou com `--press-scale: 0.95`
-aplicado a todo `<button>` e todo `<a>` da página numa regra global única,
-substituindo vários valores diferentes por componente. O Finance já tem,
-independentemente, duas regras parecidas e não alinhadas entre si:
-`button:active:not(:disabled){transform:scale(0.97)}`
-(`LacalleFinance.jsx:1616`, um botão global) e
-`.wl-btn:active{transform:scale(0.98)}` (`AuthScreen.jsx:161`, só nos
-botões de login/cadastro) — 0.97 e 0.98 já discordam um do outro, antes de
-qualquer decisão do Life entrar na conversa. Não há aqui equivalente a
-"todo link": o Finance não navega por `<a>` internamente, é tudo estado de
-aba; a única superfície de `<a>` real é o link externo de `LinkifiedText`
-nas notas.
+**Encolher no toque, universal — feito.** O Finance tinha duas regras
+divergentes: `button:active:not(:disabled){transform:scale(0.97)}`
+(`LacalleFinance.jsx`, global no app) e `.wl-btn:active{transform:scale(0.98)}`
+(`AuthScreen.jsx`, só login/cadastro) — porque a tela de login roda antes do
+`<style>` global do app montar. As duas foram unificadas em `PRESS_SCALE=0.95`
+(`theme.js`), igual ao Life. Não há aqui equivalente a "todo link": o Finance
+não navega por `<a>` internamente, é tudo estado de aba; a única superfície de
+`<a>` real é o link externo de `LinkifiedText` nas notas, sem regra de escala
+própria — mesma lacuna que já existia, não introduzida por esta entrega.
 
 ---
 
