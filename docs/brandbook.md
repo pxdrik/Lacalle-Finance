@@ -110,6 +110,39 @@ Life cita como origem do tier `--duration-data: 550ms` proposto (emenda
 ratificado, migrar os dois valores do Finance para ele junto com o Life** —
 não faz sentido o token nascer só de um lado.
 
+### 6. Duas peças novas do Motion System do Life ainda não chegaram aqui
+
+O LaCalle Life ganhou duas decisões de motion nesta mesma leva de sessões
+(17-18/09/2026), registradas em `Life/docs/brandbook.md`. Nenhuma das duas
+foi implementada no Finance ainda — só registradas aqui, mesmo padrão da
+divergência 5 acima ("registrar primeiro, priorizar depois").
+
+**Bounce na transição de página/aba.** O Life abriu uma exceção pontual à
+regra de "sem física de mola" (pág. 36): `--ease-bounce`
+(`cubic-bezier(0.34, 1.56, 0.64, 1)`), usada só na entrada de página
+(`--animate-page-enter`), nunca em outro `animate-*`. Ganhou também um tier
+de duração próprio, `--duration-page`, que terminou em 900ms depois de dois
+pedidos de "mais devagar" no mesmo dia. O Finance não tem um "page
+transition" no sentido do Life — é um app de uma página só, com estado de
+aba (`setTab`), não navegação de rota. O equivalente mais próximo é a troca
+de conteúdo de `TabPanel` (`ui.jsx`), que hoje troca instantaneamente, sem
+nenhuma transição. Se a mesma exceção fizer sentido aqui, o candidato
+natural é aplicar o bounce à entrada do `TabPanel` ativo, não a cada card
+dentro dele.
+
+**Encolher no toque, universal.** O Life terminou com `--press-scale: 0.95`
+aplicado a todo `<button>` e todo `<a>` da página numa regra global única,
+substituindo vários valores diferentes por componente. O Finance já tem,
+independentemente, duas regras parecidas e não alinhadas entre si:
+`button:active:not(:disabled){transform:scale(0.97)}`
+(`LacalleFinance.jsx:1616`, um botão global) e
+`.wl-btn:active{transform:scale(0.98)}` (`AuthScreen.jsx:161`, só nos
+botões de login/cadastro) — 0.97 e 0.98 já discordam um do outro, antes de
+qualquer decisão do Life entrar na conversa. Não há aqui equivalente a
+"todo link": o Finance não navega por `<a>` internamente, é tudo estado de
+aba; a única superfície de `<a>` real é o link externo de `LinkifiedText`
+nas notas.
+
 ---
 
 ## QA — o que foi verificado nesta entrega, e o que não foi
@@ -283,6 +316,12 @@ acima; é a mesma pendência, só repetida aqui por completude da auditoria.
   linha nesta leitura — só os raios de card/modal, que
   aparecem em `cardStyle`/`Modal` de forma centralizada e fácil de verificar.
   Uma auditoria de controles (botão, input, chip) fica pendente.
+- **Motion System do Life ganhou bounce de transição e encolher universal
+  no toque (17-18/09/2026), nenhum dos dois portado ainda** — ver
+  divergência 6. O Finance já tem duas escalas de encolhimento diferentes
+  e não alinhadas entre si (0.97 e 0.98), independente da decisão do Life.
+  Registrado primeiro, decisão de implementar fica pra depois, mesmo
+  padrão da divergência 5.
 - **Seis acentos escolhíveis** é uma decisão de produto que o Brand System
   V1.1 não prevê — não é lacuna do Finance, é lacuna do documento normativo,
   que hoje só descreve um acento fixo por submarca. Candidato a uma nota na

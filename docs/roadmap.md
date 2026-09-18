@@ -33,6 +33,11 @@ O que sair daqui quando for retomado:
   (`WishesTab`) — todos Level 2-3, nenhum exige dependência nova.
 - **Decisão já tomada, não reabrir:** nada de spring physics como token —
   mesma regra do Life, para os dois produtos lerem como um sistema só.
+  **Atualização, 18/09/2026:** o Life reabriu isto pra si mesmo — não pra
+  esta regra em geral, mas como uma exceção pontual e documentada, só na
+  transição de página (`--ease-bounce`). Ver `docs/brandbook.md`,
+  divergência 6, pra decidir se o Finance ganha o mesmo tipo de exceção
+  quando este item for retomado.
 - **Restrição confirmada, 07/09/2026: só plano gratuito das seis fontes.**
   Nenhuma recomendação depende de 60fps PRO, React Bits Pro, Curated Pro ou
   GetLayers Unlimited/Full Stack — checado fonte a fonte na seção 01b do
