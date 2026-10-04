@@ -114,7 +114,7 @@ import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
-import { validateBackup } from "./lib/backupValidation";
+import { validateBackup, buildBackup } from "./lib/backupValidation";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
@@ -1379,7 +1379,7 @@ function MainApp({user,setUser}){
   };
   const exportAllBackup=()=>{
     try{
-      const data={tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,exportedAt:new Date().toISOString()};
+      const data=buildBackup({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,onboardingDismissed});
       const json=JSON.stringify(data,null,2);
       const blob=new Blob([json],{type:"application/json"});
       const url=URL.createObjectURL(blob);const a=document.createElement("a");

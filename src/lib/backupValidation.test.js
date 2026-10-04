@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { validateBackup } from "./backupValidation.js";
+import { validateBackup, buildBackup } from "./backupValidation.js";
 
 const validTx = { id: "t1", date: "2026-01-15", type: "Saída", fixed: "Variavel", cat: "Alimentação", desc: "Mercado", val: 150.5, form: "pix", invTipo: null };
 const validInst = { id: "i1", desc: "Notebook", totalVal: 3000, numParcelas: 12, cat: "Eletrônicos", form: "credito", startDate: "2026-01-01", txIds: ["i11", "i12"] };
@@ -119,5 +119,60 @@ describe("BUG-03 — invalid backup records must be rejected", () => {
     });
     assert.equal(r.ok, false, "um único registro inválido invalida o backup inteiro");
     assert.ok(r.errors.some(e => e.path === "tx[1].val"));
+  });
+});
+
+// Ida e volta: o backup que o próprio app exporta precisa voltar. Os testes
+// acima usavam só previstos recorrentes (`month: null`) e nenhum rendimento,
+// e por isso nunca viram que um backup real era recusado. Os registros abaixo
+// copiam o formato que o app grava de verdade (monthKey "out/26", paid/ignored
+// por mês, invTipo "Rendimento", lixeira).
+describe("backup exportado pelo app volta na importação", () => {
+  const appState = {
+    tx: [
+      { id: 1759600000001, date: "2026-10-04", type: "Saída", fixed: "Variavel", cat: "Alimentação", desc: "Mercado", val: 286.4, form: "pix", invTipo: null },
+      { id: 1759600000002, date: "2026-10-03", type: "Entrada", fixed: "Variavel", cat: "Investimento", desc: "Rendimento CDB", val: 180, form: "deposito", invTipo: "Rendimento" },
+      { id: 1759600000003, date: "2026-10-01", type: "Saída", fixed: "Fixa", cat: "Assinaturas", desc: "Netflix", val: 55.9, form: "credito", invTipo: null, plannedId: 1759500000001 },
+    ],
+    planned: [
+      { id: 1759500000001, desc: "Netflix", val: 55.9, cat: "Assinaturas", form: "credito", recurring: true, month: null, notes: "", paid: { "out/26": 1759600000003 }, ignored: {} },
+      { id: 1759500000002, desc: "IPVA", val: 412.3, cat: "Outros", form: "pix", recurring: false, month: "out/26", notes: "", paid: {}, ignored: {} },
+    ],
+    inst: [{ id: 1759400000001, desc: "Notebook", totalVal: 3899, numParcelas: 10, cat: "Tecnologia", form: "credito", startDate: "2026-08-10", txIds: [1759400000002] }],
+    wishes: [{ id: 1759300000001, name: "Viagem Chile", price: 5000, saved: 3100, priority: "Alta", monthsTarget: 8, notes: "", done: false }],
+    customCats: ["Pet"],
+    name: "Pedro", accentKey: "gold", walletName: "Carteira do Pedro", onboardingDismissed: true,
+    trash: [{ trashId: "x1", type: "wish", deletedAt: 1759000000000, item: { id: 9, name: "Fone", price: 180, saved: 180 } }],
+  };
+
+  test("exportar → JSON → importar passa na validação", () => {
+    const file = JSON.stringify(buildBackup(appState));
+    const r = validateBackup(JSON.parse(file));
+    assert.deepEqual(r.errors, []);
+    assert.equal(r.ok, true);
+  });
+
+  test("previsto de mês único gravado como monthKey é aceito", () => {
+    const r = validateBackup({ planned: [{ ...validPlanned, recurring: false, month: "out/26" }] });
+    assert.equal(r.ok, true);
+  });
+
+  test("formato antigo AAAA-MM continua aceito", () => {
+    const r = validateBackup({ planned: [{ ...validPlanned, recurring: false, month: "2026-10" }] });
+    assert.equal(r.ok, true);
+  });
+
+  test("mês inexistente é recusado", () => {
+    assert.equal(validateBackup({ planned: [{ ...validPlanned, recurring: false, month: "abc/26" }] }).ok, false);
+    assert.equal(validateBackup({ planned: [{ ...validPlanned, recurring: false, month: "2026-13" }] }).ok, false);
+  });
+
+  test("lançamento de Rendimento é aceito", () => {
+    const r = validateBackup({ tx: [{ ...validTx, type: "Entrada", invTipo: "Rendimento" }] });
+    assert.equal(r.ok, true);
+  });
+
+  test("o backup leva onboardingDismissed", () => {
+    assert.equal(buildBackup(appState).onboardingDismissed, true);
   });
 });
