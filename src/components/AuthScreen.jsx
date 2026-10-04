@@ -3,6 +3,7 @@ import { Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { BG, CARD, BD, BD2, TX, TX2, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, EASE_OUT, SUCCESS, ERROR, PRESS_SCALE } from "../lib/theme";
 import LogoSymbol from "./LogoSymbol";
+import { checkNewPassword } from "../lib/authRecovery";
 
 // CAPTCHA (Cloudflare Turnstile) é OPCIONAL e fica totalmente desligado até
 // alguém configurar VITE_TURNSTILE_SITE_KEY — sem isso, o login/cadastro
@@ -140,7 +141,9 @@ export default function AuthScreen({ onLogin }) {
         const displayName = data.user.user_metadata?.name || data.user.email.split("@")[0];
         onLogin(data.user.email, displayName);
       } else if (mode === "forgot") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), captchaOptions);
+        // redirectTo traz a pessoa de volta para este mesmo endereço, onde o app
+        // reconhece o link de recuperação e mostra a tela de senha nova.
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: window.location.origin, ...captchaOptions });
         if (error) throw error;
         setInfo("Se esse e-mail tiver uma conta, enviamos um link de recuperação para ele.");
       }
@@ -236,6 +239,56 @@ export default function AuthScreen({ onLogin }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Tela de senha nova, mostrada quando a pessoa volta pelo link de
+// "Esqueci minha senha". Ela já está logada nesse momento (o link cria a
+// sessão); falta só trocar a senha com updateUser.
+export function NewPasswordScreen({ onDone }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async e => {
+    e.preventDefault();
+    const problem = checkNewPassword(password, confirm);
+    setErr(problem);
+    if (problem) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      onDone();
+    } catch (e2) {
+      const m = e2?.message || "";
+      setErr(m.includes("different from the old") ? "A senha nova precisa ser diferente da antiga." : "Não consegui salvar a senha nova. Tente de novo; se continuar, peça outro link.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const labelStyle = { display: "block", fontSize: 12, color: TX2, marginBottom: 8, fontWeight: 600, letterSpacing: "0.02em" };
+  return (
+    <div style={{ background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif", padding: 24 }}>
+      <form onSubmit={submit} noValidate style={{ width: "100%", maxWidth: 400, background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD, padding: 32, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 20, color: TX, letterSpacing: "-0.02em" }}>Crie uma senha nova</div>
+          <div style={{ fontSize: 13, color: TX2, marginTop: 6 }}>Você entrou pelo link de recuperação. Escolha a senha que vai usar daqui pra frente.</div>
+        </div>
+        <div>
+          <label htmlFor="new-password" style={labelStyle}>Senha nova</label>
+          <input id="new-password" type="password" autoComplete="new-password" autoFocus value={password} onChange={e => setPassword(e.target.value)} placeholder="Pelo menos 6 caracteres" style={inputStyle} aria-describedby={err ? "new-password-err" : undefined} />
+        </div>
+        <div>
+          <label htmlFor="new-password-confirm" style={labelStyle}>Repita a senha nova</label>
+          <input id="new-password-confirm" type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} style={inputStyle} aria-describedby={err ? "new-password-err" : undefined} />
+        </div>
+        {err && <div id="new-password-err" role="alert" style={{ background: `${ERROR}14`, borderRadius: R_INPUT, padding: "10px 13px", fontSize: 13, color: ERROR, display: "flex", alignItems: "center", gap: 8 }}><AlertCircle size={14} />{err}</div>}
+        <button type="submit" disabled={loading} className="wl-btn" style={{ width: "100%", padding: "14px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, background: GOLD, color: BG }}>{loading ? "Salvando..." : "Salvar senha nova"}</button>
+      </form>
     </div>
   );
 }

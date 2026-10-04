@@ -97,9 +97,9 @@
  *   COMPONENTES DE UI      -> src/components/{Dashboard,Calendar,Timeline,...}.jsx
  */
 import { useState, useMemo, useEffect, useRef } from "react";
-import { supabase } from "./lib/supabaseClient";
+import { supabase, openedFromRecoveryLink } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
-import AuthScreen from "./components/AuthScreen";
+import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
 import LogoSymbol from "./components/LogoSymbol";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
@@ -2556,6 +2556,9 @@ function MainApp({user,setUser}){
 export default function Root(){
   const [user,setUser]=useState(null);
   const [checkingSession,setCheckingSession]=useState(true);
+  // Voltou pelo link de "Esqueci minha senha": antes de entrar no app, pede
+  // a senha nova (ver lib/authRecovery.js).
+  const [recovering,setRecovering]=useState(openedFromRecoveryLink);
 
   // Ao carregar a página, confere se já existe uma sessão válida (cookie do
   // Supabase) — se sim, entra direto sem pedir login de novo. Depois disso,
@@ -2571,7 +2574,8 @@ export default function Root(){
       setUser(deriveUser(session));
       setCheckingSession(false);
     });
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+      if(event==="PASSWORD_RECOVERY")setRecovering(true);
       setUser(deriveUser(session));
     });
     return ()=>subscription.unsubscribe();
@@ -2594,5 +2598,10 @@ export default function Root(){
     );
   }
   if(!user)return <AuthScreen onLogin={(email,name)=>setUser({email,name})}/>;
+  if(recovering)return <NewPasswordScreen onDone={()=>{
+    setRecovering(false);
+    // tira o "#...type=recovery" do endereço para um recarregar não pedir a senha de novo
+    if(window.location.hash)window.history.replaceState(null,"",window.location.pathname+window.location.search);
+  }}/>;
   return <MainApp user={user} setUser={handleSetUser}/>;
 }
