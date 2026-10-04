@@ -18,6 +18,33 @@ retomado.
   v1 do Life (`d6bca30`).
 - Vale o mesmo filtro do item de motion abaixo: o Finance fica mais contido
   que o Life, sem gamificação em metas ou saldo.
+- **Protótipo em revisão:** https://claude.ai/artifact/PVbbKMtz7Nmhy8ZiQu9fVt
+  (Início, novo lançamento, login, gráficos, três formatos de computador e a
+  lista do que muda, cada item marcado como correção ou decisão pendente).
+  Decidido até aqui: manter as 14 categorias atuais e o Investimento como
+  categoria; em Transações, o botão "Novo lançamento" fica abaixo do resumo
+  do mês, em versão só com contorno.
+
+---
+
+## ⏳ PENDENTE: previsto com data de fim ("Até") (04/10/2026)
+
+Pedido do Pedro. Hoje um previsto recorrente não tem início nem fim: vale
+para todo mês. As únicas saídas são ignorar um mês (`ignored[mês]`) ou
+excluir, e excluir apaga o item de todos os meses, inclusive dos passados.
+
+- **Proposta (no protótipo acima, aba Previstos):** campo opcional `until`
+  (chave de mês, no formato de `MONTHS_ARR`, ex. `"nov/26"`). O recorrente
+  conta no mês se não tiver `until` ou se o mês vier até ele. Os meses
+  anteriores ficam como estão, inclusive os pagos. Excluir passa a avisar que
+  apaga tudo e oferece encerrar no lugar.
+- **Onde mexer:** a regra "recorrente vale em qualquer mês" está espalhada,
+  em filtros como `p.recurring||p.month===mk` (cerca de 46 usos de
+  `.recurring` em `financialEngine.js` e `LacalleFinance.jsx`). Centralizar
+  num `PlannedStatus.appliesTo(item, mês)` e trocar todos os usos por ele,
+  senão alguma projeção continua contando o item encerrado.
+- **Em aberto:** o recorrente também não tem mês de início, então aparece em
+  meses anteriores ao cadastro. Não foi pedido; decidir junto.
 
 ---
 
