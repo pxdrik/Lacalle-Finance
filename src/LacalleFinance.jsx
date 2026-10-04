@@ -334,10 +334,13 @@ function MainApp({user,setUser}){
   const [simResult,setSimResult]=useState(null);
 
   const [toasts,setToasts]=useState([]);
-  const showToast=(msg,type="info")=>{
+  // `action` ({label,onClick}) põe um botão no aviso, como o "Desfazer"
+  // depois de excluir; com ação o aviso fica 6 s em vez de 3,8 s.
+  const dismissToast=id=>setToasts(p=>p.filter(t=>t.id!==id));
+  const showToast=(msg,type="info",{action}={})=>{
     const id=Date.now()+Math.random();
-    setToasts(p=>[...p,{id,msg,type}]);
-    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3800);
+    setToasts(p=>[...p,{id,msg,type,action}]);
+    setTimeout(()=>dismissToast(id),action?6000:3800);
   };
 
   const historyRef=useRef([]);
@@ -350,6 +353,17 @@ function MainApp({user,setUser}){
     const newH=[...historyRef.current.slice(-14),snap];
     historyRef.current=newH;
     setHistoryLen(newH.length);
+  };
+  // "Desfazer" do aviso: só vale se nada aconteceu depois da exclusão; senão
+  // desfaria outra coisa. Aí orienta a usar o desfazer do topo, passo a passo.
+  const undoIfLast=len=>{
+    if(historyRef.current.length!==len){showToast("Outra alteração aconteceu depois. Use o desfazer do topo, um passo de cada vez.","info");return;}
+    undo();
+    showToast("Desfeito.","success");
+  };
+  const deletedToast=what=>{
+    const len=historyRef.current.length;
+    showToast(`${what} foi para a lixeira.`,"info",{action:{label:"Desfazer",onClick:()=>undoIfLast(len)}});
   };
   const undo=()=>{
     if(!historyRef.current.length)return;
@@ -435,7 +449,7 @@ function MainApp({user,setUser}){
       if(status==="error")showToast("Falha ao salvar na nuvem. Toque no ícone de atualizar ao lado do status para tentar de novo.","error");
     },1200);
     return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};
-  },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,trash,onboardingDismissed,isLoaded]);
+  },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,trash,onboardingDismissed,isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps -- só os dados disparam o salvamento; as funções são lidas atuais
 
   // ---- BUG-02: ao esconder a aba, grava na hora o que ainda estava no
   // intervalo de espera (1,2 s), em vez de arriscar perder no fechamento.
@@ -938,6 +952,13 @@ function MainApp({user,setUser}){
     if(editTxSnapshotRef.current&&current!==editTxSnapshotRef.current)setConfirmDiscard("tx");
     else cancelEditTx();
   };
+  // As listas excluem no segundo toque (ConfirmIconButton); o painel de
+  // projeção continua passando pelo modal, que mostra o impacto no saldo.
+  const performDelete=req=>{
+    if(req.type==="wish")deleteWish(req.id);
+    else if(req.type==="planned")deletePlannedItem(req.id);
+    else if(req.type==="tx")deleteTx(req.id);
+  };
   const deleteTx=id=>{
     const item=transactions.find(x=>x.id===id);
     pushHistory();
@@ -948,7 +969,7 @@ function MainApp({user,setUser}){
     // deixá-lo com um número de parcelas que não existem mais — antes disso
     // o card do parcelamento mentia permanentemente sobre quanto ainda falta.
     if(item?.installmentId)setInstallments(p=>removeTxFromInstallments(p,item));
-    showToast("Transação removida.","info");
+    deletedToast("Lançamento");
   };
 
   const qaValRef=useRef(null);
@@ -1014,7 +1035,7 @@ function MainApp({user,setUser}){
     pushHistory();
     setWishes(p=>p.filter(x=>x.id!==id));
     if(item)moveToTrash("wish",item);
-    showToast("Meta excluída.","info");
+    deletedToast("Meta");
   };
   const toggleWishDone=id=>{pushHistory();setWishes(p=>p.map(x=>x.id===id?{...x,done:!x.done}:x));};
 
@@ -1109,7 +1130,7 @@ function MainApp({user,setUser}){
     pushHistory();
     setPlannedExpenses(p=>p.filter(x=>x.id!==id));
     if(item)moveToTrash("planned",item);
-    showToast("Previsto excluído.","info");
+    deletedToast("Previsto");
   };
   // ---- Marcar/desmarcar como pago, para um mês específico -------------------
   // Recebe o mês explicitamente (em vez de sempre usar `plannedMonth`, o mês
@@ -1642,13 +1663,14 @@ function MainApp({user,setUser}){
         }
       `}</style>
 
-      <div className="toast-wrap" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:300,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none",width:"100%",padding:"0 16px"}}>
+      <div className="toast-wrap" role="status" aria-live="polite" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:300,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none",width:"100%",padding:"0 16px"}}>
         {toasts.map(t=>{
           const Ic=t.type==="error"?AlertCircle:t.type==="success"?CheckCircle2:Info;
           const col=t.type==="error"?"#F87171":t.type==="success"?"#34D399":TX2;
           return(
             <div key={t.id} style={{background:"rgba(22,25,29,0.97)",backdropFilter:"blur(12px)",border:`1px solid ${BD2}`,color:TX,padding:"13px 18px",borderRadius:R_INPUT,fontSize:13,fontWeight:600,boxShadow:SH_LG,animation:`toastIn .3s ${EASE_OUT}`,maxWidth:380,display:"flex",alignItems:"center",gap:9}}>
-              <Ic size={16} color={col}/>{t.msg}
+              <Ic size={16} color={col} style={{flexShrink:0}}/><span style={{flex:1}}>{t.msg}</span>
+              {t.action&&<button type="button" className="touch-44" onClick={()=>{dismissToast(t.id);t.action.onClick();}} style={{pointerEvents:"auto",background:"none",border:"none",color:accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:"2px 4px",marginLeft:4,textDecoration:"underline",textUnderlineOffset:3}}>{t.action.label}</button>}
             </div>
           );
         })}
@@ -2411,7 +2433,7 @@ function MainApp({user,setUser}){
             fullCats={fullCats} viewTotals={viewTotals} filtered={filtered} groupedByDate={groupedByDate} editingTx={editingTx}
             setFilterType={setFilterType} setSearch={setSearch} setFilterMonth={setFilterMonth} setFilterCat={setFilterCat}
             onImportCSV={importCSV} onExportCSV={exportCSV} onClearAll={()=>setShowClearConfirm(true)}
-            onStartEditTx={startEditTx} onRequestDelete={setConfirmDelete}
+            onStartEditTx={startEditTx} onRequestDelete={performDelete}
           />
         </TabPanel>
         )}
@@ -2430,7 +2452,7 @@ function MainApp({user,setUser}){
             onShiftMonth={delta=>setPlannedMonth(m=>shiftMonth(m,delta))} onGoToday={()=>setPlannedMonth(monthKey(todayFn()))}
             onSave={savePlannedItem} onCancelForm={closePlannedForm} onTogglePaid={togglePlannedPaid}
             onToggleIgnored={togglePlannedIgnoredForMonth} onTransferToWish={openTransferToWish}
-            onStartEdit={startEditPlanned} onRequestDelete={setConfirmDelete} onToggleNotes={toggleNotes}
+            onStartEdit={startEditPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes}
           />
         </TabPanel>
         )}
@@ -2454,7 +2476,7 @@ function MainApp({user,setUser}){
             wishFormRef={wishFormRef} wishFormSnapshotRef={wishFormSnapshotRef}
             setWishSortBy={setWishSortBy} setShowWishForm={setShowWishForm} setEditingWish={setEditingWish} setWishForm={setWishForm}
             onSave={saveWish} onCancelForm={closeWishForm} onToggleDone={toggleWishDone}
-            onTransferToPlanned={openTransferToPlanned} onRequestDelete={setConfirmDelete} onToggleNotes={toggleNotes}
+            onTransferToPlanned={openTransferToPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes}
           />
         </TabPanel>
         )}

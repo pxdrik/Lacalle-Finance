@@ -1,5 +1,5 @@
 import { Upload, Download, Trash2, Search, CreditCard, Calendar, Pencil, X } from "lucide-react";
-import { Card, BtnGhost, AnimatedValue, CategoryIcon } from "./ui";
+import { Card, BtnGhost, AnimatedValue, CategoryIcon, ConfirmIconButton } from "./ui";
 import { TX, TX2, TX3, BD, CARD, R_BTN, R_INPUT, SH_SM, SI } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
 import { formatDayTitle, todayLocalISO } from "../lib/dates";
@@ -94,7 +94,7 @@ export default function TransactionsTab({
                   </div>
                   <div className="num" style={{ fontSize: 14, fontWeight: 700, color: isIn ? "#34D399" : "#F87171", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{isIn ? "+" : "-"}{fmt(t.val)}</div>
                   <button onClick={() => onStartEditTx(t)} title="Editar" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Pencil size={14} /></button>
-                  <button onClick={() => onRequestDelete({ type: "tx", id: t.id, label: t.desc })} title="Excluir" aria-label={`Excluir ${t.desc}`} className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Trash2 size={14} /></button>
+                  <ConfirmIconButton icon={Trash2} label={`Excluir ${t.desc}`} onConfirm={() => onRequestDelete({ type: "tx", id: t.id, label: t.desc })} />
                 </div>
               );
             })}

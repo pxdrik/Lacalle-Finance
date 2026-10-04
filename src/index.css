@@ -54,3 +54,12 @@ button, input, select, textarea {
     scroll-behavior: auto !important;
   }
 }
+
+/* Confirmação em dois toques (ConfirmIconButton, ui.jsx): a barra esvazia no
+   mesmo tempo em que o botão desarma. Com movimento reduzido ela fica parada,
+   cheia: esvaziar em 120ms mentiria sobre o tempo que ainda resta. */
+@keyframes disarm-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.disarm-bar { animation: disarm-drain var(--disarm-ms, 4000ms) linear forwards; transform-origin: left center; }
+@media (prefers-reduced-motion: reduce) {
+  .disarm-bar { animation: none !important; }
+}

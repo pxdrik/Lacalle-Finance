@@ -1,6 +1,6 @@
 import { Plus, Check, ArrowRightLeft, Pencil, Trash2, ChevronUp, ChevronDown, Sparkles } from "lucide-react";
-import { Card, Btn, BtnGhost, MoneyInput, ProgressBar, LinkifiedText, toDecimalStr, EmptyState } from "./ui";
-import { TX, TX2, TX3, BD, BD2, CARD, R_INPUT, R_CHIP, SI, SUCCESS_FILL } from "../lib/theme";
+import { Card, Btn, BtnGhost, MoneyInput, ProgressBar, LinkifiedText, toDecimalStr, EmptyState, ConfirmIconButton } from "./ui";
+import { TX, TX2, BD, BD2, CARD, R_INPUT, R_CHIP, SI, SUCCESS_FILL } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
 
 // Aba "Metas" (Desejos/Wishes) — extraída de LacalleFinance.jsx (Fase 2,
@@ -80,7 +80,7 @@ export default function WishesTab({
                 <span style={{ background: pColor + "22", color: pColor, fontSize: 11, padding: "4px 10px", borderRadius: R_CHIP, fontWeight: 700 }}>{w.priority}</span>
                 <button onClick={() => onTransferToPlanned(w)} title="Mover para Previstos" aria-label="Mover para Previstos" className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 8, padding: "5px 8px", color: TX2, cursor: "pointer" }}><ArrowRightLeft size={12} /></button>
                 <button onClick={() => { const snap = { name: w.name, price: toDecimalStr(w.price), saved: toDecimalStr(w.saved), priority: w.priority, monthsTarget: String(w.monthsTarget || ""), notes: w.notes || "" }; setEditingWish(w.id); setWishForm(snap); wishFormSnapshotRef.current = JSON.stringify(snap); setShowWishForm(true); }} title="Editar" aria-label="Editar" className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 8, padding: "5px 8px", color: TX2, cursor: "pointer" }}><Pencil size={12} /></button>
-                <button onClick={() => onRequestDelete({ type: "wish", id: w.id, label: w.name })} title="Excluir" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", padding: 4 }}><Trash2 size={14} /></button>
+                <ConfirmIconButton icon={Trash2} label={`Excluir ${w.name}`} onConfirm={() => onRequestDelete({ type: "wish", id: w.id, label: w.name })} />
               </div>
             </div>
             <ProgressBar pct={pct2} color={accent} height={7} />

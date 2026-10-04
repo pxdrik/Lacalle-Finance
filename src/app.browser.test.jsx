@@ -110,3 +110,31 @@ describe("tela de erro por seção", () => {
     await screen.findByText("Voltou");
   });
 });
+
+describe("excluir em dois toques e desfazer pelo aviso", () => {
+  beforeEach(async () => { h.storage = createFakeStorage({ tx: [tx(1, "Mercado")] }); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("o primeiro toque só arma; sair do botão desarma", async () => {
+    await openApp();
+    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    const btn = await screen.findByRole("button", { name: "Excluir Mercado" });
+    fireEvent.click(btn);
+    expect(btn.textContent).toBe("Excluir?");
+    fireEvent.blur(btn);
+    expect(screen.getByRole("button", { name: "Excluir Mercado" })).toBeTruthy();
+    expect(screen.getByText("Mercado")).toBeTruthy();
+  });
+
+  test("o segundo toque exclui; Desfazer no aviso devolve e não deixa cópia na lixeira", async () => {
+    await openApp();
+    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    const btn = await screen.findByRole("button", { name: "Excluir Mercado" });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    await waitFor(() => expect(h.storage.peek()?.tx?.length ?? 1).toBe(0), SAVE_WAIT);
+    expect(h.storage.peek().trash.length).toBe(1);
+    fireEvent.click(await screen.findByRole("button", { name: "Desfazer" }));
+    await waitFor(() => expect(h.storage.peek().tx.map(t => t.desc)).toEqual(["Mercado"]), SAVE_WAIT);
+    expect(h.storage.peek().trash.length).toBe(0);
+  });
+});

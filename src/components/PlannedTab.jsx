@@ -1,5 +1,5 @@
 import { Plus, ChevronLeft, ChevronRight, Repeat, Calendar, Check, Info, Eye, EyeOff, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
-import { Card, Btn, BtnGhost, MoneyInput, CategoryIcon, AnimatedValue, LinkifiedText, EmptyState } from "./ui";
+import { Card, Btn, BtnGhost, MoneyInput, CategoryIcon, AnimatedValue, LinkifiedText, EmptyState, ConfirmIconButton } from "./ui";
 import { TX, TX2, TX3, BD, BD2, CARD, R_INPUT, R_CHIP, SH_SM, SI, SUCCESS_FILL } from "../lib/theme";
 import { fmt, monthKey, MONTH_ORDER } from "../lib/financialEngine";
 
@@ -108,7 +108,7 @@ export default function PlannedTab({
                   {item.recurring && <button onClick={() => onToggleIgnored(item, plannedMonth)} title={isIgnored ? "Reativar este mês" : "Ignorar apenas este mês"} className="touch-44" style={{ background: "none", border: "none", color: isIgnored ? "#FBBF24" : TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}>{isIgnored ? <Eye size={14} /> : <EyeOff size={14} />}</button>}
                   <button onClick={() => onTransferToWish(item)} title="Mover para Metas" aria-label="Mover para Metas" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><ArrowRightLeft size={14} /></button>
                   <button onClick={() => onStartEdit(item)} title="Editar" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Pencil size={14} /></button>
-                  <button onClick={() => onRequestDelete({ type: "planned", id: item.id, label: item.desc })} title="Excluir" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", flexShrink: 0, padding: 4 }}><Trash2 size={14} /></button>
+                  <ConfirmIconButton icon={Trash2} label={`Excluir ${item.desc}`} onConfirm={() => onRequestDelete({ type: "planned", id: item.id, label: item.desc })} />
                 </div>
               </div>
               {item.notes && expandedNotes[notesKey] && (

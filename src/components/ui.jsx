@@ -48,6 +48,41 @@ export function Comparison({delta,formatMagnitude,label,whenZero="sem mudança",
   );
 }
 
+// ==================== Confirmação em dois toques ====================
+// Do LaCalle Life (use-armed.ts, confirm-button.tsx): o primeiro toque arma
+// e o botão passa a dizer o que vai acontecer ("Excluir?"); o segundo
+// executa. Desarma sozinho depois de DISARM_AFTER_MS, com uma barra que
+// esvazia no mesmo tempo, ou ao sair do botão. Substitui o modal "Excluir
+// X?" nas listas: menos interrupção, e o "Desfazer" aparece no aviso logo
+// depois, onde a ação aconteceu.
+export const DISARM_AFTER_MS = 4000;
+export function useArmed(ms = DISARM_AFTER_MS) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), ms);
+    return () => clearTimeout(t);
+  }, [armed, ms]);
+  return { armed, arm: () => setArmed(true), disarm: () => setArmed(false) };
+}
+export function ConfirmIconButton({ icon: Icon, label, confirmText = "Excluir?", onConfirm, iconSize = 14, style }) {
+  const { armed, arm, disarm } = useArmed();
+  return (
+    <button
+      type="button"
+      className="touch-44"
+      aria-label={armed ? `Toque de novo para confirmar: ${label}` : label}
+      title={armed ? "Toque de novo para confirmar" : label}
+      onClick={() => { if (armed) { disarm(); onConfirm(); } else arm(); }}
+      onBlur={disarm}
+      style={{ position: "relative", background: armed ? `${ERROR}1f` : "none", border: "none", borderRadius: R_CHIP, color: armed ? ERROR : TX3, cursor: "pointer", flexShrink: 0, padding: armed ? "4px 8px" : 4, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", ...style }}
+    >
+      {armed ? confirmText : <Icon size={iconSize} />}
+      {armed && <span aria-hidden="true" className="disarm-bar" style={{ "--disarm-ms": `${DISARM_AFTER_MS}ms`, position: "absolute", left: 6, right: 6, bottom: 2, height: 2, borderRadius: 2, background: ERROR }} />}
+    </button>
+  );
+}
+
 // ==================== Tabs ====================
 // role="tablist"/"tab" com aria-selected, aria-controls e roving tabindex —
 // a semântica que faltava (brandbook, seção 43). O visual é o `.nav-tab` que
