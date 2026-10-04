@@ -16,12 +16,11 @@
 // ============================================================================
 import { useMemo, useState } from "react";
 import {
-  X, Info, ChevronDown, ChevronRight, Pencil, Trash2, Check, EyeOff, Eye,
-  Repeat, ArrowRight, Wallet, Sparkles,
+  X, Info, ChevronDown, ChevronRight, Pencil, Trash2, Check, EyeOff, Eye, Repeat, ArrowRight
 } from "lucide-react";
 import { FinancialEngine, fmt } from "../lib/financialEngine";
 import { CategoryIcon, LineItemsList } from "./ui";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_LG, NUM_FONT, EASE_OUT } from "../lib/theme";
+import { CARD, BD, BD2, TX, TX2, TX3, HOVER, R_BTN, R_INPUT, R_CHIP, SH_LG, NUM_FONT, EASE_OUT } from "../lib/theme";
 
 const MONTH_NAME_SHORT = { jan: "jan", fev: "fev", mar: "mar", abr: "abr", mai: "mai", jun: "jun", jul: "jul", ago: "ago", set: "set", out: "out", nov: "nov", dez: "dez" };
 

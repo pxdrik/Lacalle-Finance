@@ -101,42 +101,30 @@ import { supabase, openedFromRecoveryLink } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
 import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
 import LogoSymbol from "./components/LogoSymbol";
-import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
+import { FinancialEngine, InsightEngine, fmt, monthKey, addMonthsStr, daysInMonth, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
 import InstallmentsTab from "./components/InstallmentsTab";
 import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile, Comparison, EmptyState, Tabs, TabPanel, DensityToggle } from "./components/ui";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE } from "./lib/theme";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, Tabs, TabPanel, DensityToggle } from "./components/ui";
 import { DensityProvider } from "./lib/density";
-import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
+import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
 import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
 import {
-  Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Gamepad2, UtensilsCrossed,
-  Car, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, Repeat, Undo2, Gift, Tag,
-  Settings, LogOut, Search, X, Plus, Pencil, Trash2, Check, ChevronLeft, ChevronRight, ChevronDown,
-  ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard,
-  Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Rocket,
-  Trophy, Lightbulb, ShieldCheck, Target, CalendarDays, Bell, Flag, Hourglass, Clock,
-  ArrowRightLeft, EyeOff, Eye
+  Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Package, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Check, ChevronDown, ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, Lightbulb, ShieldCheck, CalendarDays, Bell
 } from "lucide-react";
 
 const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
 const COLORS=["#60A5FA","#818CF8","#34D399","#FB7185","#FBBF24","#A78BFA","#FB923C","#38BDF8","#F472B6","#2DD4BF","#C084FC","#4ADE80","#FCD34D","#94A3B8"];
-const CAT_ICON_COMPONENTS={
-  "Lazer":Gamepad2,"Alimentação":UtensilsCrossed,"Transporte":Car,"Desejos":Sparkles,"Roupas":Shirt,
-  "Tecnologia":Laptop,"Saude / Cuidados Pessoais":HeartPulse,"Educação":GraduationCap,
-  "Salario / Entradas":Briefcase,"Outros":Package,"Investimento":TrendingUp,"Assinaturas":Repeat,
-  "Rembolsos":Undo2,"Presentes":Gift,
-};
 // MONTH_ORDER era uma lista fixa de datas hardcoded (jan/25 até jun/27) — ou
 // seja, tinha uma "data de validade": a partir de jun/2027 a funcionalidade
 // de "Previsto" não recorrente simplesmente pararia de encontrar mês na
@@ -186,15 +174,12 @@ const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounte
 const storageKey=email=>`ff6:${email.replace(/[^a-zA-Z0-9]/g,"_")}:v1`;
 
 // ==================== UTILS: datas ====================
-const WEEKDAYS_PT=["D","S","T","Q","Q","S","S"];
 const MONTH_NAMES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 // ==================== UTILS: links dentro de notas ====================
 // Campo `notes` (Desejos e Previstos) é hoje texto simples com detecção de
 // URLs. A estrutura foi pensada para evoluir para Markdown/checklist/tags/
 // anexos/comentários no futuro sem quebrar o formato salvo (string única).
-const URL_SPLIT_REGEX=/((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
-const URL_TEST_REGEX=/^(?:https?:\/\/|www\.)/i;
 
 // ============================================================================
 // FINANCIAL INTELLIGENCE ENGINE
@@ -255,6 +240,7 @@ function MainApp({user,setUser}){
   // Ref espelhando `busy`: o handler global de Esc é registrado com deps []
   // e enxergaria sempre o valor do primeiro render se lesse o state.
   const deleteAccountBusyRef=useRef(false);
+  const cancelEditTxRef=useRef(()=>{});
   const [expandedNotes,setExpandedNotes]=useState({});
   const [wishSortBy,setWishSortBy]=useState("progress");
   // Mesma ideia do sortedPlannedItemsForMonth: memoiza a ordenação da lista
@@ -268,7 +254,6 @@ function MainApp({user,setUser}){
     }
     return Math.min(100,b.saved/b.price*100)-Math.min(100,a.saved/a.price*100);
   }),[wishes,wishSortBy]);
-  const [showDetails,setShowDetails]=useState(false);
 
   const [plannedExpenses,setPlannedExpenses]=useState([]);
   const [plannedMonth,setPlannedMonth]=useState(monthKey(todayFn()));
@@ -325,7 +310,6 @@ function MainApp({user,setUser}){
   const [walletName,setWalletName]=useState("LaCalle Finance");
   const [onboardingDismissed,setOnboardingDismissed]=useState(false);
   const accent=(PALETTES[accentKey]||PALETTES.gold).base;
-  const accentDark=(PALETTES[accentKey]||PALETTES.gold).dark;
 
   // ---- Planejamento (estados) ----
   const [planTab,setPlanTab]=useState("geral");
@@ -575,7 +559,8 @@ function MainApp({user,setUser}){
         // O modal de apagar conta não fecha no meio da operação (evita a
         // pessoa achar que cancelou uma exclusão que já está em andamento).
         if(!deleteAccountBusyRef.current){setDeleteAccountOpen(false);setDeleteAccountPhrase("");}
-        cancelEditTx();
+        setProjectionDrawer(null);
+        cancelEditTxRef.current();
       }
     };
     window.addEventListener("keydown",handler);
@@ -822,7 +807,7 @@ function MainApp({user,setUser}){
     ];
   },[transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal,daysToEndOfMonth]);
 
-  const upcomingEvents=useMemo(()=>[...transactions].filter(t=>t.date>todayISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6).map(t=>({...t,...eventMeta(t)})),[transactions,todayISO,plannedById]);
+  const upcomingEvents=useMemo(()=>[...transactions].filter(t=>t.date>todayISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6).map(t=>({...t,...FinancialEngine.ForecastEngine.eventMeta(t,plannedById)})),[transactions,todayISO,plannedById]);
 
   // ---- Explicação dos indicadores: gera confiança mostrando como cada número foi calculado ----
   const MAIN_EXPLAIN={
@@ -993,6 +978,8 @@ function MainApp({user,setUser}){
     editTxSnapshotRef.current=JSON.stringify({type:t.type,desc:t.desc,val:toDecimalStr(t.val),cat:t.cat,date:t.date,form:t.form,fixed:t.fixed});
   };
   const cancelEditTx=()=>{setEditingTx(null);resetQuickAddForm();setQaType("Saída");setQaCat("Alimentação");};
+  // O atalho de Esc é registrado uma vez só; lê a versão atual por ref.
+  cancelEditTxRef.current=cancelEditTx;
   // Fecha o modal de editar lançamento, mas confirma antes se algo foi
   // realmente alterado (evita perder edição sem querer ao clicar fora ou no X).
   const requestCloseEditTx=()=>{
@@ -1373,7 +1360,7 @@ function MainApp({user,setUser}){
       let d;
       try{
         d=JSON.parse(ev.target.result);
-      }catch(err){
+      }catch{
         showToast("Arquivo inválido ou corrompido.","error");
         return;
       }
@@ -2205,7 +2192,6 @@ function MainApp({user,setUser}){
           const firstName=(user.name||"").split(" ")[0]||user.name;
           const proj30=cashFlowProjections.find(p=>p.days===30);
           const bestCats=catDataDisplay.slice(0,5);
-          const heroMonthLabel=(()=>{const mm={jan:"Janeiro",fev:"Fevereiro",mar:"Março",abr:"Abril",mai:"Maio",jun:"Junho",jul:"Julho",ago:"Agosto",set:"Setembro",out:"Outubro",nov:"Novembro",dez:"Dezembro"};return mm[currentMonthKeyReal.split("/")[0]]||currentMonthKeyReal;})();
           return(
           <div style={{display:"flex",flexDirection:"column",gap:26}}>
 
