@@ -28,6 +28,12 @@ jobs:
       - name: Testes (financialEngine + regressões)
         run: npm test
 
+      - name: Navegador para os testes de tela
+        run: npx playwright install --with-deps chromium
+
+      - name: Testes de navegador (tela, salvamento, geometria)
+        run: npm run test:browser
+
       - name: Build de produção
         run: npm run build
         env:

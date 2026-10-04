@@ -28,6 +28,41 @@ export const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const TRASH_TYPE_COLLECTION = { tx: "tx", wish: "wishes", installment: "inst", planned: "planned" };
 
 const isObj = v => v !== null && typeof v === "object" && !Array.isArray(v);
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const num = v => (typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN);
+const str = (v, fallback = "") => (typeof v === "string" ? v : v === undefined || v === null ? fallback : String(v));
+
+/**
+ * Conserta o que dá para consertar sem mudar o sentido (número guardado como
+ * texto, descrição ausente) e devolve null para o que quebraria as contas e
+ * as telas (data que não é data, valor que não é número). Dado lido do banco
+ * não obedece o tipo: um registro assim derrubava o app inteiro, porque os
+ * cálculos rodam antes de qualquer tela protegida.
+ */
+function repairRecord(coll, r) {
+  if (coll === "tx") {
+    const val = num(r.val);
+    if (!ISO_DAY.test(str(r.date)) || !Number.isFinite(val)) return null;
+    return { ...r, val, desc: str(r.desc), cat: str(r.cat, "Outros") || "Outros", type: r.type === "Entrada" ? "Entrada" : "Saída" };
+  }
+  if (coll === "planned") {
+    const val = num(r.val);
+    if (!Number.isFinite(val)) return null;
+    return { ...r, val, desc: str(r.desc), cat: str(r.cat, "Outros") || "Outros", recurring: !!r.recurring, paid: isObj(r.paid) ? r.paid : {}, ignored: isObj(r.ignored) ? r.ignored : {} };
+  }
+  if (coll === "inst") {
+    const totalVal = num(r.totalVal);
+    if (!Number.isFinite(totalVal) || !ISO_DAY.test(str(r.startDate))) return null;
+    return { ...r, totalVal, desc: str(r.desc), txIds: Array.isArray(r.txIds) ? r.txIds : [] };
+  }
+  if (coll === "wishes") {
+    const price = num(r.price), saved = r.saved === undefined ? 0 : num(r.saved);
+    if (!Number.isFinite(price) || !Number.isFinite(saved)) return null;
+    return { ...r, price, saved, name: str(r.name) };
+  }
+  if (coll === "trash") return isObj(r.item) ? r : null;
+  return r;
+}
 const ts = r => (typeof r?.updatedAt === "number" ? r.updatedAt : 0);
 const strip = r => { const { updatedAt: _u, ...rest } = r; return rest; };
 
@@ -46,6 +81,9 @@ export function emptyDoc() {
     customCats: [], name: undefined, accentKey: undefined, walletName: undefined, onboardingDismissed: false,
     tombstones: { tx: {}, wishes: {}, inst: {}, planned: {}, trash: {} },
     fieldsUpdatedAt: {},
+    // registros que não dá para mostrar sem quebrar as contas: guardados
+    // como vieram (nada é apagado), fora das telas e dos cálculos
+    quarantine: [],
   };
 }
 
@@ -58,10 +96,18 @@ export function normalizeDoc(raw) {
   const d = isObj(raw) ? raw : {};
   const out = emptyDoc();
   for (const [coll, key] of Object.entries(COLLECTIONS)) {
-    out[coll] = (Array.isArray(d[coll]) ? d[coll] : []).filter(r => isObj(r) && (typeof r[key] === "string" || typeof r[key] === "number"));
+    const list = [];
+    for (const r of Array.isArray(d[coll]) ? d[coll] : []) {
+      if (!isObj(r) || (typeof r[key] !== "string" && typeof r[key] !== "number")) continue;
+      const fixed = repairRecord(coll, r);
+      if (fixed) list.push(fixed);
+      else out.quarantine.push({ coll, record: r });
+    }
+    out[coll] = list;
     const t = isObj(d.tombstones) && isObj(d.tombstones[coll]) ? d.tombstones[coll] : {};
     for (const [id, when] of Object.entries(t)) if (typeof when === "number") out.tombstones[coll][id] = when;
   }
+  if (Array.isArray(d.quarantine)) out.quarantine.push(...d.quarantine.filter(q => isObj(q) && isObj(q.record)));
   out.customCats = Array.isArray(d.customCats) ? d.customCats.filter(c => typeof c === "string") : [];
   out.name = typeof d.name === "string" ? d.name : undefined;
   out.accentKey = typeof d.accentKey === "string" ? d.accentKey : undefined;
@@ -80,7 +126,7 @@ export function normalizeDoc(raw) {
  * apagados por engano.
  */
 export function stampChanges(seen, cur, now) {
-  const out = { ...emptyDoc(), tombstones: {}, fieldsUpdatedAt: { ...seen.fieldsUpdatedAt } };
+  const out = { ...emptyDoc(), tombstones: {}, fieldsUpdatedAt: { ...seen.fieldsUpdatedAt }, quarantine: seen.quarantine || [] };
   for (const [coll, key] of Object.entries(COLLECTIONS)) {
     const tomb = { ...(seen.tombstones[coll] || {}) };
     const seenMap = new Map(seen[coll].map(r => [String(r[key]), r]));
@@ -110,7 +156,9 @@ export function stampChanges(seen, cur, now) {
  * mesmo resultado. Lápide mais nova que o registro apaga o registro.
  */
 export function mergeDocs(a, b) {
-  const out = { ...emptyDoc(), tombstones: {}, fieldsUpdatedAt: {} };
+  const seenQ = new Set();
+  const quarantine = [...(a.quarantine || []), ...(b.quarantine || [])].filter(q => { const k = JSON.stringify(q); if (seenQ.has(k)) return false; seenQ.add(k); return true; });
+  const out = { ...emptyDoc(), tombstones: {}, fieldsUpdatedAt: {}, quarantine };
   for (const [coll, key] of Object.entries(COLLECTIONS)) {
     const tomb = { ...a.tombstones[coll] };
     for (const [id, when] of Object.entries(b.tombstones[coll] || {})) if (!(tomb[id] >= when)) tomb[id] = when;
@@ -147,5 +195,5 @@ export function sameContent(a, b) {
   for (const coll of Object.keys(COLLECTIONS)) {
     if (!deepEqual(a[coll], b[coll]) || !deepEqual(a.tombstones[coll], b.tombstones[coll])) return false;
   }
-  return FIELDS.every(f => deepEqual(a[f], b[f])) && deepEqual(a.fieldsUpdatedAt, b.fieldsUpdatedAt);
+  return FIELDS.every(f => deepEqual(a[f], b[f])) && deepEqual(a.fieldsUpdatedAt, b.fieldsUpdatedAt) && deepEqual(a.quarantine || [], b.quarantine || []);
 }

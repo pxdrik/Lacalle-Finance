@@ -22,3 +22,6 @@ dist
 # Supabase CLI local/temp files
 supabase/.temp
 supabase/.branches
+
+# capturas de falha dos testes de navegador
+src/__screenshots__/

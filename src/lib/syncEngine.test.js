@@ -188,3 +188,29 @@ describe("junção", () => {
     assert.deepEqual(d.wishes, []);
   });
 });
+
+describe("dado estragado na nuvem", () => {
+  test("número guardado como texto é consertado; data ou valor impossível vai para a quarentena, sem sumir", () => {
+    const d = normalizeDoc({ tx: [{ ...tx(1, "Texto"), val: "45.5" }, { ...tx(2, "Sem data"), date: 123 }, { ...tx(3, "Valor"), val: "abc" }] });
+    assert.deepEqual(ids(d), [1]);
+    assert.equal(d.tx[0].val, 45.5);
+    assert.deepEqual(d.quarantine.map(q => q.record.id).sort(), [2, 3]);
+  });
+
+  test("a quarentena é gravada de volta, não apagada", async () => {
+    const st = fakeStorage();
+    const seed = engine(st);
+    await seed.save(ui(await seed.load(), { tx: [tx(1, "Ok")] }));
+    // alguém grava um registro estragado direto no banco
+    const raw = JSON.parse((await st.get()).value);
+    raw.tx.push({ ...tx(2, "Estragado"), date: null });
+    await st.set("k", JSON.stringify(raw), (await st.get()).version);
+    const A = engine(st);
+    const a0 = await A.load();
+    await A.save(ui(a0, { tx: [...a0.tx, tx(3, "Novo")] }));
+    const final = st.peek();
+    assert.deepEqual(ids(final), [1, 3]);
+    assert.equal(final.quarantine.length, 1);
+    assert.equal(final.quarantine[0].record.id, 2);
+  });
+});
