@@ -5,7 +5,7 @@
 // conhece nada sobre transações, desejos, Supabase etc. Cada aba do app
 // importa daqui em vez de redefinir os mesmos componentes.
 // ============================================================================
-import { useState, useRef, useEffect, forwardRef } from "react";
+import { useState, useRef, useEffect, forwardRef, Component } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { sanitizeMoneyInput } from "../lib/money";
@@ -123,9 +123,31 @@ export function Tabs({ items, value, onChange, idPrefix, style }) {
 export function TabPanel({ id, idPrefix, children, style }) {
   return (
     <div id={tabPanelId(idPrefix, id)} role="tabpanel" aria-labelledby={tabId(idPrefix, id)} className="tab-panel-enter" style={style}>
-      {children}
+      <SectionBoundary>{children}</SectionBoundary>
     </div>
   );
+}
+
+// ==================== SectionBoundary ====================
+// Um registro estragado (um valor que não é número, por exemplo) derrubava o
+// app inteiro na renderização: tela em branco, sem saída. Com isto, só a
+// seção que quebrou mostra o aviso; o cabeçalho, a navegação e as outras
+// abas continuam funcionando. Mesmo princípio do ErrorBoundary do Life:
+// em volta de cada seção, nunca da página inteira.
+export class SectionBoundary extends Component {
+  constructor(props){ super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError(){ return { failed: true }; }
+  componentDidCatch(error, info){ console.error("LaCalle Finance — erro numa seção:", error, info?.componentStack); }
+  render(){
+    if(!this.state.failed) return this.props.children;
+    return (
+      <div role="alert" style={{ background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD, padding: 24, color: TX2, fontSize: 14, lineHeight: 1.5 }}>
+        <div style={{ color: TX, fontWeight: 700, marginBottom: 6 }}>Algo deu errado nesta parte.</div>
+        O resto do app continua funcionando e seus dados não foram apagados. Tente de novo; se continuar, exporte um backup pelo Perfil.
+        <div><BtnGhost onClick={() => this.setState({ failed: false })} style={{ marginTop: 14, paddingInline: 16, fontSize: 13 }}>Tentar de novo</BtnGhost></div>
+      </div>
+    );
+  }
 }
 
 // ==================== DensityToggle ====================

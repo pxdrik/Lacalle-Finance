@@ -116,6 +116,7 @@ import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
 import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
+import { formatDay } from "./lib/dates";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
@@ -2314,7 +2315,7 @@ function MainApp({user,setUser}){
                       <span style={{width:8,height:8,borderRadius:"50%",background:t.color,flexShrink:0}}/>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
-                        <div style={{fontSize:11,color:TX3,marginTop:2}}>{t.label} · {t.date}</div>
+                        <div style={{fontSize:11,color:TX3,marginTop:2}}>{t.label} · {formatDay(t.date,todayISO)}</div>
                       </div>
                       <div className="num" style={{fontSize:13,fontWeight:700,color:t.color,flexShrink:0}}>{fmt(t.val)}</div>
                     </div>

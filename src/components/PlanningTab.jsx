@@ -6,6 +6,7 @@ import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, 
 import { TX, TX2, TX3, BD, CARD, R_CHIP, R_CARD, R_INPUT, SI } from "../lib/theme";
 import { fmt, FinancialEngine, formatMonths } from "../lib/financialEngine";
 import { parseNum } from "../lib/validation";
+import { formatDay } from "../lib/dates";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
 
 const WEEKDAYS_PT = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -76,7 +77,7 @@ export default function PlanningTab({
                   <span style={{ textAlign: "right" }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: TX }}>{item.ev.desc}</span>{" "}
                     <span className="num" style={{ fontSize: 13, color: item.c, fontWeight: 700 }}>{fmt(item.ev.val)}</span>
-                    <div style={{ fontSize: 11, color: TX3 }}>{item.ev.date}</div>
+                    <div style={{ fontSize: 11, color: TX3 }}>{formatDay(item.ev.date, todayISO)}</div>
                   </span>
                 ) : <span style={{ fontSize: 12, color: TX3 }}>Nada agendado</span>}
               </div>
@@ -181,7 +182,7 @@ export default function PlanningTab({
                       <span style={{ width: 8, height: 8, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, color: TX, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.data.desc}</div>
-                        <div style={{ fontSize: 11, color: TX3 }}>{it.label}{it.kind === "tx" ? ` · ${it.data.date}` : ` · ${it.month} (sem dia definido)`}</div>
+                        <div style={{ fontSize: 11, color: TX3 }}>{it.label}{it.kind === "tx" ? ` · ${formatDay(it.data.date, todayISO)}` : ` · ${it.month} (sem dia definido)`}</div>
                       </div>
                       <div className="num" style={{ fontSize: 13, fontWeight: 700, color: it.color, flexShrink: 0 }}>{fmt(it.data.val)}</div>
                     </div>

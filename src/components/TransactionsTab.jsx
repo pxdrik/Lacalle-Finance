@@ -2,6 +2,7 @@ import { Upload, Download, Trash2, Search, CreditCard, Calendar, Pencil, X } fro
 import { Card, BtnGhost, AnimatedValue, CategoryIcon } from "./ui";
 import { TX, TX2, TX3, BD, CARD, R_BTN, R_INPUT, SH_SM, SI } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
+import { formatDayTitle, todayLocalISO } from "../lib/dates";
 
 const INV_TIPOS = ["Aporte", "Resgate", "Rendimento"];
 const INV_TIPO_COLORS = { "Aporte": "#3B82F6", "Resgate": "#FBBF24", "Rendimento": "#34D399" };
@@ -72,7 +73,7 @@ export default function TransactionsTab({
       })()}
       {groupedByDate.map(([date, txs]) => (
         <div key={date}>
-          <div style={{ fontSize: 11, color: TX3, fontWeight: 700, marginBottom: 10, paddingLeft: 2 }}>{date}</div>
+          <div style={{ fontSize: 11, color: TX3, fontWeight: 700, marginBottom: 10, paddingLeft: 2 }}>{formatDayTitle(date, todayLocalISO())}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[...txs].reverse().map(t => {
               const isIn = t.type === "Entrada"; const bEdited = editingTx === t.id;
