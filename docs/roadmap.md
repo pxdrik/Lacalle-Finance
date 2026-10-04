@@ -4,6 +4,23 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
+## ⏳ PENDENTE: trazer pontos do Lacalle Life para o Finance (04/10/2026)
+
+Decidido em 04/10/2026, para fazer depois. Ainda não há lista fechada de
+quais pontos do Life entram: a escolha é o primeiro passo quando o item for
+retomado.
+
+- **Protótipo antes de publicar.** Cada ponto escolhido vira protótipo e só
+  vai para o `main` (que publica direto no Netlify) depois de aprovado. O
+  protótipo parte dos componentes reais do Finance (`src/components/ui.jsx`,
+  `src/lib/theme.js`), não de um mockup genérico.
+- **Já portado, não repetir:** bounce de aba e press-scale do Motion System
+  v1 do Life (`d6bca30`).
+- Vale o mesmo filtro do item de motion abaixo: o Finance fica mais contido
+  que o Life, sem gamificação em metas ou saldo.
+
+---
+
 ## ⏳ PENDENTE — Motion System v1 (pesquisa entregue, sem código) — 07/09/2026
 
 Pesquisa de motion feita contra seis fontes (60fps.design, React Bits,
