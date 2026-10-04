@@ -115,6 +115,7 @@ import { parseNum, roundMoney, validateAmount, validateDate, validateText, valid
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
+import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
@@ -1221,13 +1222,7 @@ function MainApp({user,setUser}){
       const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
       if(lines.length===0){showToast("Arquivo vazio.","error");return;}
 
-      const parseLine=line=>{
-        if(line.includes("\t"))return line.split("\t").map(c=>c.trim().replace(/^"|"$/g,""));
-        const cols=[];let cur="",inQ=false;
-        for(const ch of line){if(ch==='"'){inQ=!inQ;}else if(ch===","&&!inQ){cols.push(cur.trim());cur="";}else cur+=ch;}
-        cols.push(cur.trim());
-        return cols.map(c=>c.replace(/^"|"$/g,""));
-      };
+      const parseLine=parseCsvLine;
       const norm=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
 
       const first=parseLine(lines[0]);
@@ -1264,35 +1259,19 @@ function MainApp({user,setUser}){
       dataLines.forEach((line,i)=>{
         const cols=parseLine(line);
         if(cols.length<2)return;
-        let date=cols[colIdx.date]||"";
-        let type=colIdx.type!==undefined?(cols[colIdx.type]||""):"";
-        let invTipo=colIdx.invTipo!==undefined?cols[colIdx.invTipo]:null;
-        let fixed=colIdx.fixed!==undefined?cols[colIdx.fixed]:"Variavel";
-        let cat=colIdx.cat!==undefined?(cols[colIdx.cat]||""):"";
-        let desc=colIdx.desc!==undefined?(cols[colIdx.desc]||""):"";
-        let valRaw=colIdx.valTratado!==undefined?cols[colIdx.valTratado]:cols[colIdx.val];
-        let val=parseNum(valRaw);
-        let form=colIdx.form!==undefined?(cols[colIdx.form]||"pix").toLowerCase():"pix";
+        // Mesmas regras do formulário (data que existe, valor com teto e
+        // arredondado, descrição com limite): ver lib/csv.js.
+        const parsed=csvRowToTx(cols,colIdx);
+        if(!parsed.ok){skipped++;return;}
+        const {date,type,fixed,rawCat,desc,val,form}=parsed.row;
+        let {invTipo}=parsed.row;
 
-        if(date.includes("/")){
-          const p=date.split("/");
-          if(p.length===3){
-            const yyyy=p[2].length===4?p[2]:`20${p[2]}`;
-            date=`${yyyy}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
-          }
-        }
-        if(!date||!desc||val===0){skipped++;return;}
-
-        type=type.toLowerCase().includes("entrada")?"Entrada":"Saída";
-        const rawCat=(cat||"").trim();
         let matchedCat=rawCat?(existingLower.get(rawCat.toLowerCase())||newCatsFound.get(rawCat.toLowerCase())):null;
         if(!matchedCat&&rawCat){matchedCat=rawCat;newCatsFound.set(rawCat.toLowerCase(),matchedCat);}
-        cat=matchedCat||"Outros";
-        if(!["pix","debito","credito","dinheiro","deposito"].includes(form))form="pix";
-        if(!INV_TIPOS.includes(invTipo))invTipo=null;
+        const cat=matchedCat||"Outros";
         if(cat==="Investimento"&&!invTipo)invTipo=type==="Saída"?"Aporte":"Resgate";
 
-        newTx.push({id:genId(),date,type,fixed:fixed||"Variavel",cat,desc,val,form,invTipo});
+        newTx.push({id:genId(),date,type,fixed,cat,desc,val,form,invTipo});
         imported++;
       });
 
@@ -1311,9 +1290,8 @@ function MainApp({user,setUser}){
 
   const exportCSV=()=>{
     try{
-      const header="Data,Tipo,InvTipo,Fixo/Variavel,Categoria,Descrição,Valor,Forma";
-      const rows=[...transactions].sort((a,b)=>a.date.localeCompare(b.date)).map(t=>[t.date,t.type,t.invTipo||"",t.fixed,t.cat,`"${t.desc}"`,t.val.toFixed(2),t.form].join(","));
-      const csv="\uFEFF"+[header,...rows].join("\n");
+      // Células entre aspas e protegidas contra fórmula (ver lib/csv.js).
+      const csv=buildTxCsv(transactions);
       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
       const url=URL.createObjectURL(blob);const a=document.createElement("a");
       a.href=url;a.download=`lacalle-finance_${filterMonth||"todos"}.csv`;
