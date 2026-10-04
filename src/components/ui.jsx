@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect, forwardRef } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
+import { sanitizeMoneyInput } from "../lib/money";
 import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA } from "../lib/theme";
 import { DENSITIES, useDensity } from "../lib/density";
 import LogoSymbol from "./LogoSymbol";
@@ -657,19 +658,10 @@ export function DecisionRow({d}){
 // numérico continua aparecendo no celular, mas quem manda no formato somos
 // nós: a vírgula é o separador decimal e o ponto digitado vira vírgula
 // automaticamente (quem tem o hábito antigo não precisa reaprender).
-// O valor guardado no state continua string ("1.234,56"); quem consome usa
-// parseNum, que já entendia os dois formatos.
-export const sanitizeDecimal=v=>{
-  let s=String(v??"").replace(/[^\d.,]/g,"");
-  // "1.234,56" (colado do banco/planilha): ponto é milhar, descarta.
-  // "1.5" (digitado no hábito antigo): ponto é decimal, vira vírgula.
-  if(s.includes(".")&&s.includes(","))s=s.replace(/\./g,"");
-  else s=s.replace(/\./g,",");
-  const i=s.indexOf(",");
-  if(i>=0)s=s.slice(0,i+1)+s.slice(i+1).replace(/,/g,"");
-  const [int,dec]=s.split(",");
-  return dec===undefined?int:`${int},${dec.slice(0,2)}`;
-};
+// O valor guardado no state continua string ("1234,56"); quem consome usa
+// parseNum. A regra (inclusive colar "1.234" do banco, que antes virava
+// R$ 1,23) mora em lib/money.js, com teste.
+export const sanitizeDecimal=sanitizeMoneyInput;
 // Número -> texto do campo (3.5 => "3,5"), para preencher formulários de edição.
 export const toDecimalStr=n=>(n===null||n===undefined||n==="")?"":String(n).replace(".",",");
 

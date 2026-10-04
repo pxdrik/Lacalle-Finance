@@ -9,6 +9,7 @@
 // Como financialEngine.js, este arquivo é JS puro (sem React), então dá para
 // testar isoladamente e reaproveitar em qualquer tela — ou num app nativo.
 // ============================================================================
+import { moneyTextToNumber } from "./money.js";
 
 // Teto de um lançamento individual. Não existe finança pessoal com uma única
 // transação acima disso; acima daqui é quase certamente erro de digitação
@@ -30,16 +31,10 @@ const yearsFromNow = n => {
 export const DATE_MIN = yearsFromNow(-10);
 export const DATE_MAX = yearsFromNow(10);
 
-// Converte o texto do campo (pt-BR: "1.234,56") em número.
-// Continua aceitando "1234.56" para não quebrar dados/hábitos antigos.
-export const parseNum = s => {
-  if (s === null || s === undefined || s === "") return 0;
-  let c = String(s).replace(/[R$\s]/g, "");
-  if (c.includes(",") && c.includes(".")) c = c.replace(/\./g, "").replace(",", ".");
-  else if (c.includes(",")) c = c.replace(",", ".");
-  const n = parseFloat(c);
-  return isNaN(n) ? 0 : Math.abs(n);
-};
+// Converte o texto do campo (pt-BR: "1.234,56") em número. A regra de
+// separadores mora em money.js, a mesma do campo de valor: "1.234" é mil
+// duzentos e trinta e quatro, "1234.56" do hábito antigo continua aceito.
+export const parseNum = s => moneyTextToNumber(s);
 
 // Dinheiro em ponto flutuante acumula erro (0.1+0.2 !== 0.3). Toda gravação de
 // valor passa por aqui para ficar com no máximo 2 casas — assim as somas do
