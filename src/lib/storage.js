@@ -19,10 +19,13 @@
 // ============================================================================
 import { supabase } from "./supabaseClient";
 
+// getSession lê a sessão guardada no aparelho; getUser ia até o servidor a
+// cada leitura e gravação só para descobrir o próprio id. Quem garante que
+// cada pessoa só lê e grava a própria linha é o RLS no banco, não este id.
 async function getUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Usuário não autenticado.");
-  return user.id;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error("Usuário não autenticado.");
+  return session.user.id;
 }
 
 export const storage = {

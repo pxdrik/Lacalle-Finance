@@ -114,6 +114,7 @@ import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
+import { createSyncEngine } from "./lib/syncEngine";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
 import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
 import { formatDay } from "./lib/dates";
@@ -341,10 +342,11 @@ function MainApp({user,setUser}){
 
   const historyRef=useRef([]);
   const [historyLen,setHistoryLen]=useState(0);
-  const isUndoingRef=useRef(false);
 
   const pushHistory=()=>{
-    const snap={tx:[...transactions],wishes:[...wishes],inst:[...installments],planned:[...plannedExpenses],customCats:[...customCats]};
+    // A lixeira entra no retrato: sem ela, desfazer uma exclusão deixava o
+    // item na lista E na lixeira, e "Restaurar" depois o duplicava.
+    const snap={tx:[...transactions],wishes:[...wishes],inst:[...installments],planned:[...plannedExpenses],customCats:[...customCats],trash:[...trash]};
     const newH=[...historyRef.current.slice(-14),snap];
     historyRef.current=newH;
     setHistoryLen(newH.length);
@@ -354,27 +356,27 @@ function MainApp({user,setUser}){
     const prev=historyRef.current[historyRef.current.length-1];
     historyRef.current=historyRef.current.slice(0,-1);
     setHistoryLen(historyRef.current.length);
-    isUndoingRef.current=true;
-    setTransactions(prev.tx);setWishes(prev.wishes);setInstallments(prev.inst);setPlannedExpenses(prev.planned||[]);setCustomCats(prev.customCats||[]);
+    // Sem "bandeira" que pula o salvamento: o desfazer é gravado na nuvem como
+    // qualquer outra mudança (antes a tela dizia "Sincronizado" e a nuvem
+    // continuava com o estado anterior).
+    setTransactions(prev.tx);setWishes(prev.wishes);setInstallments(prev.inst);setPlannedExpenses(prev.planned||[]);setCustomCats(prev.customCats||[]);if(prev.trash)setTrash(prev.trash);
   };
 
   const saveTimerRef=useRef(null);
-  const loadedAtRef=useRef(0);
-  const justLoadedRef=useRef(true);
-  // ---- Detecção de conflito entre abas/dispositivos ----
-  // Antes, salvar era sempre "quem salva por último apaga o resto" — sem
-  // nenhum aviso. Agora guardamos a "versão" (timestamp) dos dados que
-  // sabemos estar salvos na nuvem; antes de sobrescrever, conferimos se
-  // ninguém mudou isso por baixo do nosso pé (outra aba/outro aparelho). Se
-  // mudou, avisamos em vez de sobrescrever silenciosamente.
-  // `remoteVersionRef` guarda o `updated_at` que o BANCO controla (não o
-  // campo `updatedAt` de dentro do JSON, que é só um espelho pra exibição).
-  // É essa versão que o `storage.set` usa para detectar conflito de forma
-  // atômica — ver comentários em `src/lib/storage.js`.
-  const remoteVersionRef=useRef(null);
-  const isReloadingRef=useRef(false);
+  // ---- Carregar e salvar (lib/syncEngine.js) ----
+  // Um salvamento por vez, só quando o conteúdo mudou, e conflito entre
+  // aparelhos resolvido item por item: o mais recente vence (lib/sync.js).
+  const engineRef=useRef(null);
+  if(!engineRef.current)engineRef.current=createSyncEngine({storage,key:storageKey(user.email)});
+  const engine=engineRef.current;
+  const [loadError,setLoadError]=useState(null);
 
-  const applyRemoteData=d=>{
+  // O estado da tela no formato do documento salvo. Lido por ref pelos
+  // ouvintes registrados uma vez só (visibilidade, salvar agora).
+  const docRef=useRef(null);
+  docRef.current={tx:transactions,wishes,inst:installments,planned:plannedExpenses,trash,customCats,name:user.name,accentKey,walletName,onboardingDismissed};
+
+  const applyDoc=d=>{
     setTransactions(d.tx||[]);
     setWishes(d.wishes||[]);
     setInstallments(d.inst||[]);
@@ -385,134 +387,81 @@ function MainApp({user,setUser}){
     setOnboardingDismissed(!!d.onboardingDismissed);
     const cutoff=Date.now()-TRASH_RETENTION_DAYS*24*60*60*1000;
     setTrash((d.trash||[]).filter(t=>t.deletedAt>cutoff));
+    if(d.name&&d.name!==user.name)setUser(u=>({...u,name:d.name}));
   };
 
-  useEffect(()=>{
-    const load=async()=>{
-      setSyncStatus("loading");
-      try{
-        const r=await storage.get(storageKey(user.email));
-        if(r?.value){
-          const d=JSON.parse(r.value);
-          applyRemoteData(d);
-          if(d.name&&d.name!==user.name)setUser(u=>({...u,name:d.name}));
-        }
-        remoteVersionRef.current=r?.version??null;
-        setSyncStatus("saved");
-      }catch{
-        setSyncStatus("idle");
-      }
-      loadedAtRef.current=Date.now();
+  const loadData=async()=>{
+    setLoadError(null);
+    setSyncStatus("loading");
+    try{
+      applyDoc(await engine.load());
+      setSyncStatus("saved");
       setIsLoaded(true);
-    };
-    load();
-  },[user.email]);
-
-  // Recarrega a versão mais recente da nuvem (usado quando um conflito é
-  // detectado): a pessoa perde a edição não salva localmente, mas ganha a
-  // versão mais atual em vez de sobrescrevê-la sem querer.
-  const reloadFromRemote=async()=>{
-    try{
-      const r=await storage.get(storageKey(user.email));
-      isReloadingRef.current=true;
-      if(r?.value)applyRemoteData(JSON.parse(r.value));
-      remoteVersionRef.current=r?.version??null;
-      setSyncStatus("saved");
-      showToast("Dados atualizados com a versão mais recente da nuvem.","success");
-    }catch{
-      showToast("Não consegui recarregar os dados agora. Tente de novo.","error");
-    }
-  };
-
-  // Função de salvamento compartilhada entre o autosave (debounced) e o
-  // botão manual de "salvar agora" — evita duplicar a lógica de conflito.
-  //
-  // A detecção de conflito acontece dentro do próprio `storage.set`, como
-  // uma escrita condicional atômica no banco (UPDATE ... WHERE updated_at =
-  // versão esperada). Não há mais uma janela entre "checar" e "escrever".
-  // BUG-02: marca quando uma escrita já está em voo, pra quem for fazer um
-  // flush de emergência (ao esconder a aba) saber que não precisa — e não
-  // deve — disparar uma segunda chamada por cima da que já está em curso.
-  const saveInFlightRef=useRef(false);
-  const doSave=async()=>{
-    saveInFlightRef.current=true;
-    const newUpdatedAt=Date.now();
-    const payload=JSON.stringify({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,onboardingDismissed,updatedAt:newUpdatedAt});
-    const trySave=async()=>storage.set(storageKey(user.email),payload,remoteVersionRef.current);
-    try{
-      const result=await trySave();
-      if(!result)throw new Error("Sem resposta do armazenamento");
-      if(result.conflict){setSyncStatus("conflict");return "conflict";}
-      remoteVersionRef.current=result.version;
-      setSyncStatus("saved");
-      return "saved";
     }catch(e){
-      console.error("LaCalle Finance — erro ao salvar na nuvem:",e);
-      // ---- Uma nova tentativa automática antes de avisar o usuário: cobre
-      // falhas passageiras de rede/rate limit sem exigir ação manual. ----
-      try{
-        const retryResult=await trySave();
-        if(retryResult?.conflict){setSyncStatus("conflict");return "conflict";}
-        if(retryResult){remoteVersionRef.current=retryResult.version;setSyncStatus("saved");return "saved";}
-      }catch(e2){console.error("LaCalle Finance — nova tentativa de salvar também falhou:",e2);}
+      // Falha ao carregar não vira "conta vazia e sincronizada": a tela de
+      // carregamento mostra o erro e um botão para tentar de novo, e nada é
+      // gravado por cima do que está na nuvem.
+      console.error("LaCalle Finance — erro ao carregar:",e);
+      setLoadError(e);
       setSyncStatus("error");
-      return "error";
-    }finally{
-      saveInFlightRef.current=false;
     }
   };
-  // Espelha `doSave`/`syncStatus` em refs pra um listener registrado UMA vez
-  // (deps vazias, ver useEffect abaixo) sempre chamar a versão mais recente
-  // — sem precisar recriar/re-registrar o listener a cada render.
-  const doSaveRef=useRef(doSave);
-  doSaveRef.current=doSave;
+  useEffect(()=>{loadData();},[user.email]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Grava agora o estado atual da tela. Se a junção com a nuvem trouxe algo
+  // de outro aparelho, a tela adota (sem perder o que ainda não foi salvo).
+  const runSave=async()=>{
+    const r=await engine.save(docRef.current);
+    if(r.adopt){
+      applyDoc(engine.rebase(docRef.current));
+      showToast("Juntamos o que você fez em outro aparelho.","info");
+    }
+    if(r.status==="error"){setSyncStatus("error");return "error";}
+    setSyncStatus(engine.isBusy()||saveTimerRef.current?"saving":"saved");
+    return r.status;
+  };
+  const runSaveRef=useRef(runSave);
+  runSaveRef.current=runSave;
   const syncStatusRef=useRef(syncStatus);
   syncStatusRef.current=syncStatus;
 
   useEffect(()=>{
     if(!isLoaded)return;
-    if(justLoadedRef.current){justLoadedRef.current=false;setSyncStatus("saved");return;}
-    if(isUndoingRef.current){isUndoingRef.current=false;setSyncStatus("saved");return;}
-    if(isReloadingRef.current){isReloadingRef.current=false;setSyncStatus("saved");return;}
     setSyncStatus("saving");
     if(saveTimerRef.current)clearTimeout(saveTimerRef.current);
     saveTimerRef.current=setTimeout(async()=>{
       saveTimerRef.current=null;
-      const status=await doSave();
-      if(status==="error")showToast("Falha ao salvar na nuvem. Toque no ícone de atualizar ao lado de \"Sincronizado\" para tentar de novo.","error");
-      else if(status==="conflict")showToast("Esses dados foram atualizados em outra aba ou aparelho. Toque em \"Recarregar\" ao lado do status antes de continuar editando, pra não perder a versão mais recente.","error");
+      const status=await runSaveRef.current();
+      if(status==="error")showToast("Falha ao salvar na nuvem. Toque no ícone de atualizar ao lado do status para tentar de novo.","error");
     },1200);
     return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};
   },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,trash,onboardingDismissed,isLoaded]);
 
-  // ---- BUG-02: elimina a janela em que uma edição pendente (ainda dentro
-  // do debounce de 1200ms) se perde silenciosamente se o usuário fechar ou
-  // trocar de aba antes do autosave disparar.
-  //
-  // Por que `visibilitychange`→hidden, e não confiar só em `beforeunload`:
-  // uma vez que a página começou a ser destruída (unload), o navegador pode
-  // matar uma requisição de rede em andamento antes dela terminar — não dá
-  // pra "esperar uma promise" nesse momento com garantia nenhuma.
-  // `visibilitychange` para "hidden", por outro lado, dispara de forma
-  // confiável ao trocar de aba, minimizar ou iniciar o fechamento, e nesse
-  // instante a página AINDA não está sendo destruída — uma requisição
-  // disparada aqui tem chance real de completar. Por isso fazemos o flush
-  // aqui (proativamente), e usamos `beforeunload` só para avisar o usuário
-  // (diálogo nativo do navegador), nunca para tentar salvar.
+  // ---- BUG-02: ao esconder a aba, grava na hora o que ainda estava no
+  // intervalo de espera (1,2 s), em vez de arriscar perder no fechamento.
+  // `visibilitychange`→hidden dispara de forma confiável antes de a página
+  // ser destruída; `beforeunload` só avisa, nunca tenta salvar.
+  // Ao voltar para a aba, confere se outro aparelho gravou algo e junta.
   useEffect(()=>{
-    const flushIfPending=()=>{
-      if(!shouldFlushOnHide({visibilityState:document.visibilityState,syncStatus:syncStatusRef.current,saveInFlight:saveInFlightRef.current}))return;
-      if(saveTimerRef.current){clearTimeout(saveTimerRef.current);saveTimerRef.current=null;}
-      const status=doSaveRef.current();
-      if(status&&typeof status.catch==="function")status.catch(()=>{});
+    const onVisibility=async()=>{
+      if(shouldFlushOnHide({visibilityState:document.visibilityState,syncStatus:syncStatusRef.current,saveInFlight:engine.isBusy()})){
+        if(saveTimerRef.current){clearTimeout(saveTimerRef.current);saveTimerRef.current=null;}
+        runSaveRef.current().catch(()=>{});
+        return;
+      }
+      if(document.visibilityState==="visible"&&!saveTimerRef.current&&!engine.isBusy()){
+        try{
+          if(await engine.refresh()){
+            applyDoc(engine.rebase(docRef.current));
+            showToast("Atualizado com o que você fez em outro aparelho.","info");
+          }
+        }catch{/* sem rede agora; confere na próxima vez */}
+      }
     };
-    document.addEventListener("visibilitychange",flushIfPending);
+    document.addEventListener("visibilitychange",onVisibility);
     // Fallback: em navegadores/mobile onde `visibilitychange` não cobre a
     // navegação para fora do app (ex.: Safari iOS em alguns fluxos).
-    window.addEventListener("pagehide",flushIfPending);
-    // Só avisa — nunca tenta esperar uma promise durante o unload. O próprio
-    // diálogo nativo do navegador já dá tempo de sobra para o flush acima
-    // (disparado no `visibilitychange` que antecede este evento) terminar.
+    window.addEventListener("pagehide",onVisibility);
     const warnIfDirty=e=>{
       if(!shouldWarnBeforeUnload({syncStatus:syncStatusRef.current}))return;
       e.preventDefault();
@@ -521,18 +470,18 @@ function MainApp({user,setUser}){
     };
     window.addEventListener("beforeunload",warnIfDirty);
     return()=>{
-      document.removeEventListener("visibilitychange",flushIfPending);
-      window.removeEventListener("pagehide",flushIfPending);
+      document.removeEventListener("visibilitychange",onVisibility);
+      window.removeEventListener("pagehide",onVisibility);
       window.removeEventListener("beforeunload",warnIfDirty);
     };
-  },[]);
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const retrySave=async()=>{
+    if(saveTimerRef.current){clearTimeout(saveTimerRef.current);saveTimerRef.current=null;}
     setSyncStatus("saving");
-    const status=await doSave();
-    if(status==="saved")showToast("Salvo na nuvem!","success");
-    else if(status==="error")showToast("Ainda não consegui salvar na nuvem. Verifique sua conexão e tente novamente.","error");
-    else if(status==="conflict")showToast("Esses dados foram atualizados em outra aba ou aparelho. Toque em \"Recarregar\" para ver a versão mais recente.","error");
+    const status=await runSave();
+    if(status==="saved"||status==="unchanged")showToast("Salvo na nuvem!","success");
+    else showToast("Ainda não consegui salvar na nuvem. Verifique sua conexão e tente novamente.","error");
   };
 
 
@@ -1289,7 +1238,12 @@ function MainApp({user,setUser}){
   };
   const saveProfile=()=>{
     setProfileMsg("");
-    if(newName.trim())setUser(u=>({...u,name:newName.trim()}));
+    if(newName.trim()){
+      setUser(u=>({...u,name:newName.trim()}));
+      // O nome também vive na conta (user_metadata): sem isto, a renovação da
+      // sessão, mais ou menos de hora em hora, trazia o nome antigo de volta.
+      supabase.auth.updateUser({data:{name:newName.trim()}}).catch(()=>{});
+    }
     setProfileMsg("Salvo!");setTimeout(()=>setProfileMsg(""),2500);
   };
   // Exclusão definitiva da conta. Antes era um window.confirm — um único clique
@@ -1406,25 +1360,11 @@ function MainApp({user,setUser}){
     setTrash(newTrash);
     setPendingImport(null);
     setShowProfile(false);
-    (async()=>{
-      setSyncStatus("saving");
-      try{
-        const newUpdatedAt=Date.now();
-        const payload=JSON.stringify({tx:newTx,wishes:newWishes,inst:newInst,planned:newPlanned,customCats:newCustomCats,name:newUserName,accentKey:newAccentKey,walletName:newWalletName,trash:newTrash,updatedAt:newUpdatedAt});
-        // Importar um backup é uma substituição explícita e intencional —
-        // não deve ser barrada por conflito de concorrência, então usa
-        // `forceSet` (sobrescreve de propósito) em vez de `set`.
-        const result=await storage.forceSet(storageKey(user.email),payload);
-        if(!result)throw new Error("Sem resposta do armazenamento");
-        remoteVersionRef.current=result.version;
-        setSyncStatus("saved");
-        showToast("Backup importado e salvo na nuvem!","success");
-      }catch(err){
-        console.error("LaCalle Finance — erro ao salvar backup importado:",err);
-        setSyncStatus("error");
-        showToast("Importado, mas falhou ao salvar na nuvem. Use 'Salvar agora' no topo.","error");
-      }
-    })();
+    if(d.onboardingDismissed!==undefined)setOnboardingDismissed(!!d.onboardingDismissed);
+    // O salvamento automático grava a troca. Importar é "substituir tudo":
+    // o que não está no backup vira exclusão, e o que veio no backup ganha a
+    // hora de agora, então vence qualquer versão anterior em outro aparelho.
+    showToast("Backup importado. Salvando na nuvem...","success");
   };
   const openInstForm=()=>{setInstDraft(d=>({...d,startDate:todayFn()}));setShowInstForm(true);};
   const addInstallment=()=>{
@@ -1557,7 +1497,15 @@ function MainApp({user,setUser}){
     <div style={{background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif",gap:16}}>
       <div style={{background:"#111111",borderRadius:R_MODAL,width:54,height:54,display:"flex",alignItems:"center",justifyContent:"center"}}><LogoSymbol size={25} color="#FFFFFF"/></div>
       <div style={{color:TX,fontWeight:700,fontSize:17}}>LaCalle <span style={{color:GOLD}}>Finance</span></div>
-      <div style={{color:TX2,fontSize:13,display:"flex",alignItems:"center",gap:6}}><Loader2 size={14} className="spin"/>Carregando seus dados…</div>
+      {loadError?(
+        <div role="alert" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,maxWidth:320,textAlign:"center",padding:"0 20px"}}>
+          <div style={{color:TX,fontSize:14,fontWeight:600}}>Não consegui carregar seus dados.</div>
+          <div style={{color:TX2,fontSize:13,lineHeight:1.5}}>Pode ser a conexão. Nada foi apagado: seus dados continuam na nuvem.</div>
+          <Btn onClick={loadData} style={{paddingInline:22}}>Tentar de novo</Btn>
+        </div>
+      ):(
+        <div style={{color:TX2,fontSize:13,display:"flex",alignItems:"center",gap:6}}><Loader2 size={14} className="spin"/>Carregando seus dados…</div>
+      )}
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} .spin{animation:spin 1s linear infinite;}`}</style>
     </div>
   );
@@ -1717,7 +1665,6 @@ function MainApp({user,setUser}){
             {syncStatus==="saving"&&<><Loader2 size={11} className="spin" color={TX3}/><span className="sync-label" style={{fontSize:11,color:TX3}}>Salvando</span></>}
             {syncStatus==="saved"&&<><Cloud size={11} color={accent}/><span className="sync-label" style={{fontSize:11,color:TX2}}>Sincronizado</span><button onClick={retrySave} title="Salvar agora" className="touch-44" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:0,display:"flex"}}><RefreshCw size={11}/></button></>}
             {syncStatus==="error"&&<><AlertTriangle size={11} color="#FBBF24"/><span className="sync-label" style={{fontSize:11,color:"#FBBF24"}}>Erro</span><button onClick={retrySave} title="Tentar salvar de novo" className="touch-44" style={{background:"none",border:"none",color:"#FBBF24",cursor:"pointer",padding:0}}><RefreshCw size={11}/></button></>}
-            {syncStatus==="conflict"&&<><AlertTriangle size={11} color="#F87171"/><span className="sync-label" style={{fontSize:11,color:"#F87171"}} title="Esses dados foram alterados em outra aba ou aparelho">Dados desatualizados</span><button onClick={reloadFromRemote} title="Recarregar dados mais recentes" className="touch-44" style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:3,fontSize:11,fontWeight:600}}><RefreshCw size={11}/>Recarregar</button></>}
           </div>
         </div>
         <div className="hdr-actions">
@@ -2541,7 +2488,9 @@ export default function Root(){
     });
     const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(event==="PASSWORD_RECOVERY")setRecovering(true);
-      setUser(deriveUser(session));
+      // Renovar a sessão não troca o nome que já está na tela (o nome salvo
+      // no app vence o da conta, que pode estar desatualizado).
+      setUser(prev=>{const next=deriveUser(session);return prev&&next&&prev.email===next.email?{...next,name:prev.name}:next;});
     });
     return ()=>subscription.unsubscribe();
   },[]);
