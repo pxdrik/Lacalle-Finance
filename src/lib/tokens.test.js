@@ -16,13 +16,12 @@
 // ============================================================================
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   BG, CARD, C2, TX, TX2, TX3,
   GOLD,
   SUCCESS, WARNING, ERROR,
   ERROR_BG, SUCCESS_FILL,
+  MUTED, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, PALETTES, accentSurface, accentText, contrastRatio,
 } from "./theme.js";
 
 const WHITE = "#FFFFFF";
@@ -105,36 +104,37 @@ describe("theme.js — contraste dos tokens", () => {
 });
 
 /**
- * PALETTES (LacalleFinance.jsx) é a lista de accents que a pessoa escolhe no
- * perfil — cada uma vira `accent` no AccentContext e pinta o botão primário
- * (BG por cima, cf. Btn em ui.jsx). theme.js só documenta o contraste do
- * accent padrão (GOLD, também a primeira entrada de PALETTES); isto cobre as
- * outras seis opções e qualquer paleta futura, lendo o arquivo-fonte em vez
- * de duplicar as cores aqui — para não ficar testando um valor que a paleta
- * real já não usa mais.
+ * PALETTES (theme.js) é a lista de accents que a pessoa escolhe no perfil.
+ * Cada uma pinta o botão primário (BG por cima, cf. Btn em ui.jsx) e, desde
+ * a troca dos seletores feitos à mão por Segmented, o fundo tingido do item
+ * escolhido, com o texto em accentText(accent).
  */
-describe("PALETTES (LacalleFinance.jsx) — contraste do botão primário por accent", () => {
-  const source = readFileSync(
-    join(process.cwd(), "src/LacalleFinance.jsx"),
-    "utf8",
-  );
-  const block = /const PALETTES\s*=\s*\{([^;]*?)\};/s.exec(source);
-  assert.ok(block, "PALETTES não encontrado em LacalleFinance.jsx");
-
-  const palettes = new Map(
-    [...block[1].matchAll(/(\w+):\{name:"[^"]*",base:"(#[0-9a-fA-F]{6})"/g)].map(
-      ([, key, base]) => [key, base],
-    ),
-  );
-
-  assert.ok(palettes.size > 0, "nenhuma paleta foi extraída de PALETTES");
-
-  for (const [key, base] of palettes) {
+describe("PALETTES — contraste por accent", () => {
+  for (const [key, { base }] of Object.entries(PALETTES)) {
     test(`accent "${key}" (${base}): rótulo BG sobre o accent atinge 4.5:1`, () => {
-      assert.ok(
-        contrast(BG, base) >= 4.5,
-        `accent "${key}": BG sobre ${base} mede ${contrast(BG, base).toFixed(2)}:1, abaixo de 4.5:1`,
-      );
+      assert.ok(contrast(BG, base) >= 4.5, `BG sobre ${base} mede ${contrast(BG, base).toFixed(2)}:1`);
+    });
+    test(`accent "${key}": texto do item escolhido sobre o fundo tingido atinge 4.5:1`, () => {
+      const fg = accentText(base), bg = accentSurface(base);
+      assert.ok(contrast(fg, bg) >= 4.5, `${fg} sobre ${bg} mede ${contrast(fg, bg).toFixed(2)}:1`);
     });
   }
+});
+
+describe("seletores e filtros (Segmented) — superfícies de estado", () => {
+  const SEG = [
+    [SUCCESS, SUCCESS_SURFACE, "Entrada escolhida"],
+    [ERROR, DANGER_SURFACE, "Saída escolhida"],
+    [WARNING, WARNING_SURFACE, "selo de mudança (Descobertas)"],
+    [TX, MUTED, "opção neutra escolhida"],
+    [TX2, CARD, "opção não escolhida"],
+  ];
+  for (const [fg, bg, label] of SEG) {
+    test(`${label}: ${fg} sobre ${bg} atinge 4.5:1`, () => {
+      assert.ok(contrast(fg, bg) >= 4.5, `mede ${contrast(fg, bg).toFixed(2)}:1`);
+    });
+  }
+  test("a fórmula do app (contrastRatio) bate com a do teste", () => {
+    assert.equal(contrastRatio(TX, BG).toFixed(4), contrast(TX, BG).toFixed(4));
+  });
 });

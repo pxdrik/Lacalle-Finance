@@ -289,6 +289,41 @@ acima; é a mesma pendência, só repetida aqui por completude da auditoria.
 
 ---
 
+## Nova cara — a gramática do Life no Finance (04/10/2026)
+
+Implementada a partir do protótipo aprovado, na branch `melhorias-auditoria`.
+
+- **Toda tela abre igual:** `PageHeader` (ícone num quadrado `MUTED`, título,
+  uma linha de contexto, ações à direita). Seções fora do card com
+  `SectionTitle` em caixa alta pequena.
+- **Navegação:** barra lateral de 240px no computador, com dois grupos (Dia a
+  dia, Planejamento); no celular, 5 destinos embaixo e o resto no "Mais".
+- **Escolhido não é cor cheia com texto branco.** `Segmented` pinta o
+  escolhido com a superfície do estado (`SUCCESS_SURFACE`,
+  `DANGER_SURFACE`, `accentSurface`) e o texto na cor. Branco sobre verde,
+  vermelho ou Gold claros media de 1,67:1 a 2,77:1.
+- **Acento escolhido pela pessoa:** texto na cor do acento usa
+  `accentText(accent)`, que clareia até 4,75:1 sobre `accentSurface`. Azul,
+  roxo e rosa na cor cheia ficavam abaixo de 4,5:1. Isso responde à nota da
+  V1.2 abaixo: cada acento escolhível ganha o mesmo tratamento, por fórmula,
+  e `tokens.test.js` mede os sete.
+- **Formulários em folha** (`Modal align="sheet"`, sobre `<dialog>`), com
+  rótulo visível ligado a cada campo. Exclusão de item é em dois toques
+  (`useArmed`), com Desfazer no aviso.
+- **Totais do topo** (`Totals`): três colunas no computador; no celular o
+  primeiro ocupa a linha, porque em três colunas "R$ 1.705,90" já era cortado
+  com reticências de 320 a 375px.
+- **Gráficos em SVG** (`charts.jsx`): barras sólidas, sem degradê (o
+  brandbook reserva degradê para superfície), o mês atual com o valor
+  escrito, uma linha de resumo sempre visível e tabela para leitor de tela.
+  O recharts saiu (pacote de 1.046 KB para 662 KB).
+- **Marca:** a Proposta 02 (`FinanceMark`) no login e nas telas de carga; o
+  símbolo antigo fica só no `LaCalleReveal` da marca-mãe.
+- **Relatório em PDF** sai em papel branco e texto preto, sem os tokens do
+  escuro: é documento, não tela.
+
+---
+
 ## Lacunas conhecidas
 
 - **QA no navegador feito em 10/09/2026** (conta real do Pedro em produção),
@@ -296,22 +331,24 @@ acima; é a mesma pendência, só repetida aqui por completude da auditoria.
   acima. Ficou pendente só a largura real de celular (o navegador não
   redimensionou abaixo de desktop neste ambiente) e o teste de
   `prefers-reduced-motion` com a preferência do SO de fato ligada.
-- **Alvos de toque abaixo de 44×44 em praticamente toda lista** — achado real
-  desta sessão, com números medidos, não estimados. Ver seção própria acima.
-  Correção proposta (mesma técnica do Life, `touch-44`), ainda não
-  implementada — decisão do Pedro foi registrar primeiro, priorizar depois.
+- ~~**Alvos de toque abaixo de 44×44 em praticamente toda lista**~~ —
+  resolvido. `touch-44` existe em `index.css` e todo botão só de ícone passa
+  por `IconButton` (ui.jsx), que já o aplica. Onde havia vários ícones
+  colados, as áreas de 44px se sobrepunham e um toque em Editar podia cair em
+  Excluir: em Previstos e Metas cada linha ficou com uma ação direta e um
+  "..." que abre as outras numa folha (04/10/2026). A largura real de celular
+  é medida nos testes de navegador (320, 360, 375, 390 e 414px), não mais
+  só lida no código.
 - **"Economia este mês" sem ícone** — corrigido no código nesta sessão, ainda
   não publicado no Netlify.
 - **`R_BTN`, `R_INPUT`, alturas de controle** não foram conferidos linha a
   linha nesta leitura — só os raios de card/modal, que
   aparecem em `cardStyle`/`Modal` de forma centralizada e fácil de verificar.
   Uma auditoria de controles (botão, input, chip) fica pendente.
-- **Motion System do Life ganhou bounce de transição e encolher universal
-  no toque (17-18/09/2026), nenhum dos dois portado ainda** — ver
-  divergência 6. O Finance já tem duas escalas de encolhimento diferentes
-  e não alinhadas entre si (0.97 e 0.98), independente da decisão do Life.
-  Registrado primeiro, decisão de implementar fica pra depois, mesmo
-  padrão da divergência 5.
+- ~~**Motion System do Life ganhou bounce de transição e encolher universal
+  no toque, nenhum dos dois portado ainda**~~ — texto desatualizado: os dois
+  foram portados em `d6bca30` (ver divergência 6), com `PRESS_SCALE` único
+  em `theme.js` no lugar do 0.97 e do 0.98.
 - **Seis acentos escolhíveis** é uma decisão de produto que o Brand System
   V1.1 não prevê — não é lacuna do Finance, é lacuna do documento normativo,
   que hoje só descreve um acento fixo por submarca. Candidato a uma nota na

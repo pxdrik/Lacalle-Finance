@@ -83,6 +83,19 @@ Deno.serve(async (req) => {
 
     // Cliente com privilégio total (service_role) — só usado aqui dentro,
     // no servidor, pra de fato apagar a conta.
+    // Login recente obrigatório: uma sessão roubada é renovada sem senha, e
+    // a renovação não muda last_sign_in_at. Só quem entrou com a senha nos
+    // últimos 15 minutos apaga a conta. (Pedir a senha aqui esbarraria no
+    // CAPTCHA do Supabase, que barra login feito pelo servidor.)
+    const RECENT_LOGIN_MS = 15 * 60 * 1000;
+    const lastSignIn = user.last_sign_in_at ? Date.parse(user.last_sign_in_at) : 0;
+    if (!(Date.now() - lastSignIn <= RECENT_LOGIN_MS)) {
+      return new Response(JSON.stringify({ code: "reauth_required", error: "Por segurança, entre de novo com sua senha e apague a conta logo em seguida." }), {
+        status: 403,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL"),
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -99,7 +112,9 @@ Deno.serve(async (req) => {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message || "Erro ao apagar a conta." }), {
+    // O detalhe vai para o log da função, não para o navegador.
+    console.error("delete-account:", e);
+    return new Response(JSON.stringify({ error: "Erro ao apagar a conta. Nada foi apagado; tente de novo em instantes." }), {
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },
     });

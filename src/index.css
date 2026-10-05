@@ -44,6 +44,17 @@ button, input, select, textarea {
   height: max(100%, 2.75rem);
 }
 
+/* Totais do topo (ui.jsx, Totals). */
+.totals3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 560px) {
+  .totals3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .totals3 > :first-child { grid-column: 1 / -1; }
+}
+
 /* LaCalle Brand System — Reduced motion (pág. 40): obrigatório em todos os
    produtos. Com o movimento reduzido a interface continua compreensível;
    nenhuma informação pode depender exclusivamente da animação. */
@@ -53,4 +64,35 @@ button, input, select, textarea {
     transition-duration: 120ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Confirmação em dois toques (ConfirmIconButton, ui.jsx): a barra esvazia no
+   mesmo tempo em que o botão desarma. Com movimento reduzido ela fica parada,
+   cheia: esvaziar em 120ms mentiria sobre o tempo que ainda resta. */
+@keyframes disarm-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.disarm-bar { animation: disarm-drain var(--disarm-ms, 4000ms) linear forwards; transform-origin: left center; }
+@media (prefers-reduced-motion: reduce) {
+  .disarm-bar { animation: none !important; }
+}
+
+/* Modal (ui.jsx) sobre <dialog>: ocupa a tela inteira para que um clique fora
+   do cartão caia no próprio dialog (é assim que o "clique fora fecha" sabe
+   onde o gesto começou). Só vira flex quando aberto: fechado, o navegador
+   esconde. */
+.lc-dialog { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 20px; border: none; background: transparent; box-sizing: border-box; overflow: auto; }
+.lc-dialog[open] { display: flex; align-items: center; justify-content: center; }
+.lc-dialog-top[open] { align-items: flex-start; padding-top: 10vh; }
+.lc-dialog::backdrop { background: rgba(0, 0, 0, 0.72); animation: overlayIn .15s ease-out; }
+
+/* Folha que sobe de baixo (Modal align="sheet"). */
+.lc-dialog-sheet[open] { align-items: flex-end; padding: 0; }
+@keyframes sheetIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+/* Relatório mensal (MonthlyReport.jsx): fora da tela; na impressão, só ele. */
+.print-report { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; }
+  #root { display: none !important; }
+  .print-report { display: block !important; }
 }

@@ -18,7 +18,22 @@ import { validateDate, MAX_TX_VAL, MIN_TX_VAL, MAX_DESC_LEN, MAX_PARCELAS } from
 
 const TX_TYPES = ["Entrada", "Saída"];
 const TX_FIXED = ["Fixa", "Variavel"];
-const INV_TIPOS = ["Aporte", "Resgate"];
+// "Rendimento" é um tipo de investimento que o formulário grava desde sempre
+// (INV_TIPOS em LacalleFinance.jsx); ficar fora daqui fazia qualquer backup
+// com um rendimento lançado ser recusado inteiro.
+const INV_TIPOS = ["Aporte", "Resgate", "Rendimento"];
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+// O app grava o mês de um previsto como `monthKey` ("out/26", ver
+// financialEngine.js). A validação exigia "AAAA-MM", um formato que o app
+// nunca escreveu, então todo backup com um previsto de mês único era
+// recusado ao reimportar. "AAAA-MM" continua aceito por compatibilidade.
+const isMonthKey = v => {
+  if (typeof v !== "string") return false;
+  const m = /^([a-z]{3})\/(\d{2})$/.exec(v);
+  if (m) return MONTHS.includes(m[1]);
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+};
 
 const isPlainObject = v => v !== null && typeof v === "object" && !Array.isArray(v);
 const isNonEmptyString = (v, maxLen = Infinity) => typeof v === "string" && v.trim().length > 0 && v.length <= maxLen;
@@ -72,7 +87,7 @@ function checkTransaction(t, i) {
   const descErr = checkText(t.desc, `${p}.desc`, { maxLen: MAX_DESC_LEN }); if (descErr) errs.push(descErr);
   const amtErr = checkAmount(t.val, `${p}.val`); if (amtErr) errs.push(amtErr);
   if (!isNonEmptyString(t.cat, 60)) errs.push(err(`${p}.cat`, "categoria ausente/inválida"));
-  if (t.invTipo != null && !INV_TIPOS.includes(t.invTipo)) errs.push(err(`${p}.invTipo`, `precisa ser "Aporte" ou "Resgate"`));
+  if (t.invTipo != null && !INV_TIPOS.includes(t.invTipo)) errs.push(err(`${p}.invTipo`, `precisa ser "Aporte", "Resgate" ou "Rendimento"`));
   return errs;
 }
 
@@ -102,7 +117,11 @@ function checkPlanned(pl, i) {
   if (!isNonEmptyString(pl.cat, 60)) errs.push(err(`${p}.cat`, "categoria ausente/inválida"));
   if (typeof pl.recurring !== "boolean") errs.push(err(`${p}.recurring`, "precisa ser verdadeiro/falso"));
   if (!pl.recurring) {
-    if (typeof pl.month !== "string" || !/^\d{4}-\d{2}$/.test(pl.month)) errs.push(err(`${p}.month`, "precisa ser um mês AAAA-MM"));
+    if (!isMonthKey(pl.month)) errs.push(err(`${p}.month`, "precisa ser um mês (ex.: out/26)"));
+  }
+  // "começa em" e "Até" do recorrente: opcionais, mas se vierem são meses
+  for (const k of ["from", "until"]) {
+    if (pl[k] != null && !isMonthKey(pl[k])) errs.push(err(`${p}.${k}`, "precisa ser um mês (ex.: out/26)"));
   }
   return errs;
 }
@@ -118,6 +137,15 @@ function checkWish(w, i) {
     const savedErr = checkAmount(w.saved, `${p}.saved`, { allowZero: true }); if (savedErr) errs.push(savedErr);
   }
   return errs;
+}
+
+/**
+ * Monta o objeto de backup a partir do estado do app. Mora aqui, ao lado da
+ * validação, para o teste de ida e volta usar exatamente o mesmo formato que
+ * o botão "Exportar backup" grava.
+ */
+export function buildBackup({ tx, wishes, inst, planned, customCats, name, accentKey, walletName, trash, onboardingDismissed }, exportedAt = new Date().toISOString()) {
+  return { tx, wishes, inst, planned, customCats, name, accentKey, walletName, trash, onboardingDismissed, exportedAt };
 }
 
 /**

@@ -5,10 +5,11 @@
 // conhece nada sobre transações, desejos, Supabase etc. Cada aba do app
 // importa daqui em vez de redefinir os mesmos componentes.
 // ============================================================================
-import { useState, useRef, useEffect, forwardRef } from "react";
-import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
+import { useState, useRef, useEffect, forwardRef, Component } from "react";
+import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus, AlertTriangle } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA } from "../lib/theme";
+import { sanitizeMoneyInput } from "../lib/money";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA, MUTED, SUCCESS_SURFACE, DANGER_SURFACE, ERROR_BG, accentSurface, accentText, C2, WARNING_SURFACE } from "../lib/theme";
 import { DENSITIES, useDensity } from "../lib/density";
 import LogoSymbol from "./LogoSymbol";
 
@@ -44,6 +45,181 @@ export function Comparison({delta,formatMagnitude,label,whenZero="sem mudança",
     <span style={{display:"inline-flex",alignItems:"center",gap:4,color,...style}}>
       <Icon size={13} aria-hidden="true"/><span style={VISUALLY_HIDDEN}>{delta>0?"subiu":"desceu"}:</span>{sign}{formatMagnitude(Math.abs(delta))} {label}
     </span>
+  );
+}
+
+// ==================== Confirmação em dois toques ====================
+// Do LaCalle Life (use-armed.ts, confirm-button.tsx): o primeiro toque arma
+// e o botão passa a dizer o que vai acontecer ("Excluir?"); o segundo
+// executa. Desarma sozinho depois de DISARM_AFTER_MS, com uma barra que
+// esvazia no mesmo tempo, ou ao sair do botão. Substitui o modal "Excluir
+// X?" nas listas: menos interrupção, e o "Desfazer" aparece no aviso logo
+// depois, onde a ação aconteceu.
+export const DISARM_AFTER_MS = 4000;
+export function useArmed(ms = DISARM_AFTER_MS) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), ms);
+    return () => clearTimeout(t);
+  }, [armed, ms]);
+  return { armed, arm: () => setArmed(true), disarm: () => setArmed(false) };
+}
+export function ConfirmIconButton({ icon: Icon, label, confirmText = "Excluir?", onConfirm, iconSize = 14, style }) {
+  const { armed, arm, disarm } = useArmed();
+  return (
+    <button
+      type="button"
+      className="touch-44"
+      aria-label={armed ? `Toque de novo para confirmar: ${label}` : label}
+      title={armed ? "Toque de novo para confirmar" : label}
+      onClick={() => { if (armed) { disarm(); onConfirm(); } else arm(); }}
+      onBlur={disarm}
+      style={{ position: "relative", background: armed ? `${ERROR}1f` : "none", border: "none", borderRadius: R_CHIP, color: armed ? ERROR : TX3, cursor: "pointer", flexShrink: 0, padding: armed ? "4px 8px" : 4, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", ...style }}
+    >
+      {armed ? confirmText : <Icon size={iconSize} />}
+      {armed && <span aria-hidden="true" className="disarm-bar" style={{ "--disarm-ms": `${DISARM_AFTER_MS}ms`, position: "absolute", left: 6, right: 6, bottom: 2, height: 2, borderRadius: 2, background: ERROR }} />}
+    </button>
+  );
+}
+
+// ==================== Segmented ====================
+// O seletor de opções (Entrada/Saída, filtros, ordenação, sub-abas) que
+// estava copiado à mão em seis lugares, quase sempre com texto branco sobre a
+// cor cheia (de 1,67:1 a 2,77:1). Aqui o escolhido ganha um fundo escuro do
+// mesmo tom e o texto na cor (padrão do LaCalle Life), com contraste coberto
+// por tokens.test.js. `tone` por opção: "in" (verde), "out" (vermelho),
+// "accent" (cor escolhida pela pessoa) ou nada (neutro).
+// `scroll`: muitas opções (sub-abas do Planejamento) rolam de lado em vez de espremer.
+export function Segmented({ options, value, onChange, ariaLabel, size = "md", scroll = false, style }) {
+  const accent = useAccent();
+  const h = size === "sm" ? 32 : 38;
+  const tones = {
+    in: { background: SUCCESS_SURFACE, color: SUCCESS },
+    out: { background: DANGER_SURFACE, color: ERROR },
+    accent: { background: accentSurface(accent), color: accentText(accent) },
+    neutral: { background: MUTED, color: TX },
+  };
+  return (
+    <div role="group" aria-label={ariaLabel} style={{ display: "flex", gap: 4, padding: 3, border: `1px solid ${BD}`, borderRadius: R_BTN, background: CARD, ...(scroll ? { overflowX: "auto", scrollbarWidth: "none" } : {}), ...style }}>
+      {options.map(o => {
+        const on = o.value === value;
+        const Icon = o.icon;
+        return (
+          <button key={String(o.value)} type="button" aria-pressed={on} onClick={() => onChange(o.value)} className="touch-44"
+            style={{ flex: scroll ? "0 0 auto" : 1, minWidth: 0, height: h, border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, paddingInline: 10, transition: `background .15s ${EASE_OUT}, color .15s ${EASE_OUT}`, ...(on ? tones[o.tone || "neutral"] : { background: "transparent", color: TX2 }) }}>
+            {Icon && <Icon size={14} aria-hidden="true" />}{o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ==================== IconButton / BtnDanger / Field ====================
+/** Botão só de ícone: nome acessível obrigatório e área de toque de 44px. */
+export function IconButton({ icon: Icon, label, onClick, size = 14, color = TX3, style, ...rest }) {
+  return (
+    <button type="button" aria-label={label} title={label} onClick={onClick} className="touch-44" {...rest}
+      style={{ background: "none", border: "none", color, cursor: "pointer", padding: 4, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: R_CHIP, ...style }}>
+      <Icon size={size} aria-hidden="true" />
+    </button>
+  );
+}
+/** Ação destrutiva sem volta (apagar tudo, apagar conta): fundo ERROR_BG, branco mede 4,83:1. */
+export const BtnDanger = ({ style, ...props }) => (
+  <button type="button" {...props} style={{ flex: 1, padding: "12px", borderRadius: R_BTN, border: "none", cursor: props.disabled ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700, background: props.disabled ? `${ERROR_BG}40` : ERROR_BG, color: "white", ...style }} />
+);
+/** Rótulo visível ligado ao campo, e a mensagem de erro ligada por aria-describedby. */
+export function Field({ id, label, error, hint, children, style }) {
+  const describedBy = error ? `${id}-err` : hint ? `${id}-hint` : undefined;
+  return (
+    <div style={style}>
+      <label htmlFor={id} style={{ display: "block", fontSize: 12, color: TX2, fontWeight: 500, marginBottom: 6 }}>{label}</label>
+      {typeof children === "function" ? children({ id, "aria-describedby": describedBy, "aria-invalid": !!error || undefined }) : children}
+      {error ? <div id={`${id}-err`} role="alert" style={{ fontSize: 12, color: ERROR, marginTop: 6 }}>{error}</div>
+        : hint ? <div id={`${id}-hint`} style={{ fontSize: 12, color: TX3, marginTop: 6 }}>{hint}</div> : null}
+    </div>
+  );
+}
+
+// ==================== useIncrementalReveal ====================
+// Lista longa aparece em blocos conforme a pessoa rola (padrão do LaCalle
+// Life, use-incremental-reveal.ts): um sentinela no fim da lista, observado
+// com 400px de folga, libera mais `step` itens. Não é um virtualizador: com
+// centenas a poucos milhares de linhas, desenhar em blocos basta e não muda
+// a rolagem nem a busca do navegador. `resetKey` volta ao primeiro bloco
+// (ao trocar de filtro).
+export function useIncrementalReveal(total, { step = 40, resetKey } = {}) {
+  const [count, setCount] = useState(step);
+  const sentinelRef = useRef(null);
+  useEffect(() => { setCount(step); }, [resetKey, step]);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || count >= total || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) setCount(c => c + step); }, { rootMargin: "400px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [count, total, step]);
+  return { visible: Math.min(count, total), sentinelRef };
+}
+
+// ==================== PageHeader ====================
+// Toda tela abre do mesmo jeito (PageHeader do LaCalle Life): ícone num
+// quadrado discreto, título e uma linha de contexto; ações à direita.
+export function PageHeader({ icon: Icon, title, subtitle, actions }) {
+  const accent = useAccent();
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+      <span aria-hidden="true" style={{ marginTop: 2, width: 36, height: 36, borderRadius: R_CHIP, background: MUTED, color: accentText(accent), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon size={18} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h1 style={{ margin: 0, fontSize: 24, lineHeight: 1.25, letterSpacing: "-0.02em", fontWeight: 700, color: TX }}>{title}</h1>
+        {subtitle && <p style={{ margin: "4px 0 0", fontSize: 13, color: TX2 }}>{subtitle}</p>}
+      </div>
+      {actions && <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{actions}</div>}
+    </div>
+  );
+}
+
+/**
+ * Os três totais do topo de Transações e Previstos. Três colunas no
+ * computador; no celular o primeiro ocupa a linha toda e os outros dois
+ * dividem a de baixo (em três colunas de 320 a 414px, "R$ 1.705,90" já não
+ * cabia e virava "R$ 1.705,...").
+ */
+export function Totals({ items }) {
+  return (
+    <div className="totals3">
+      {items.map(c => (
+        <Card key={c.l} style={{ padding: 12, boxShadow: "none", minWidth: 0 }}>
+          <div className="num" style={{ fontSize: 14, fontWeight: 600, color: c.c, whiteSpace: "nowrap" }}>{c.count ? c.v : <AnimatedValue value={c.v} />}</div>
+          <div style={{ fontSize: 11, color: TX3, marginTop: 2 }}>{c.l}</div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/** Linha das folhas de opções ("..."): ícone, título e uma dica opcional. */
+export function MenuRow({ icon: Icon, title, hint, onClick, danger }) {
+  return (
+    <button type="button" onClick={onClick} className="more-row">
+      <Icon size={20} aria-hidden="true" color={danger ? ERROR : TX2} />
+      <span style={{ flex: 1 }}>
+        <span className="more-t" style={danger ? { color: ERROR } : undefined}>{title}</span>
+        {hint && <span className="more-h">{hint}</span>}
+      </span>
+    </button>
+  );
+}
+
+/** Título de seção fora do card (Section compact do Life), com ação opcional à direita. */
+export function SectionTitle({ children, action, style }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 10, ...style }}>
+      <h2 style={{ margin: 0, fontSize: 12, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: TX3 }}>{children}</h2>
+      {action}
+    </div>
   );
 }
 
@@ -121,10 +297,32 @@ export function Tabs({ items, value, onChange, idPrefix, style }) {
 /** O painel de uma aba — `aria-labelledby` fecha o par com o botão que o abriu. */
 export function TabPanel({ id, idPrefix, children, style }) {
   return (
-    <div id={tabPanelId(idPrefix, id)} role="tabpanel" aria-labelledby={tabId(idPrefix, id)} className="tab-panel-enter" style={style}>
-      {children}
+    <div id={tabPanelId(idPrefix, id)} role="region" aria-labelledby={tabId(idPrefix, id)} className="tab-panel-enter" style={style}>
+      <SectionBoundary>{children}</SectionBoundary>
     </div>
   );
+}
+
+// ==================== SectionBoundary ====================
+// Um registro estragado (um valor que não é número, por exemplo) derrubava o
+// app inteiro na renderização: tela em branco, sem saída. Com isto, só a
+// seção que quebrou mostra o aviso; o cabeçalho, a navegação e as outras
+// abas continuam funcionando. Mesmo princípio do ErrorBoundary do Life:
+// em volta de cada seção, nunca da página inteira.
+export class SectionBoundary extends Component {
+  constructor(props){ super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError(){ return { failed: true }; }
+  componentDidCatch(error, info){ console.error("LaCalle Finance — erro numa seção:", error, info?.componentStack); }
+  render(){
+    if(!this.state.failed) return this.props.children;
+    return (
+      <div role="alert" style={{ background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD, padding: 24, color: TX2, fontSize: 14, lineHeight: 1.5 }}>
+        <div style={{ color: TX, fontWeight: 700, marginBottom: 6 }}>Algo deu errado nesta parte.</div>
+        O resto do app continua funcionando e seus dados não foram apagados. Tente de novo; se continuar, exporte um backup pelo Perfil.
+        <div><BtnGhost onClick={() => this.setState({ failed: false })} style={{ marginTop: 14, paddingInline: 16, fontSize: 13 }}>Tentar de novo</BtnGhost></div>
+      </div>
+    );
+  }
 }
 
 // ==================== DensityToggle ====================
@@ -271,28 +469,42 @@ export function StatTile({label,value,color=TX,caption,size=16,textAlign}){
 //   2) selecionar texto de dentro do modal e soltar o mouse fora também
 //      disparava o fechamento, perdendo o que estava preenchido.
 // Guardando o alvo do mousedown, só fecha quem realmente começou o gesto fora.
-export const Modal=({onClose,children,maxWidth=420,align="center",zIndex=170,padding=28,scroll=true,contentStyle,label})=>{
-  const pressedOnOverlay=useRef(false);
+// Sobre o <dialog> nativo (showModal), como o Dialog do LaCalle Life: o
+// navegador prende o foco dentro do modal, devolve o foco a quem abriu, põe
+// o resto da página fora do alcance do teclado e do leitor de tela, e o Esc
+// vira o evento "cancel". A página de trás para de rolar enquanto ele está
+// aberto. Modais abertos depois ficam por cima (top layer), sem zIndex.
+// Sem `onClose` (importar backup, por exemplo), Esc e clique fora não fecham.
+// `align="sheet"`: folha que sobe de baixo (menu "Mais", novo lançamento).
+export const Modal=({onClose,children,maxWidth=420,align="center",padding=28,scroll=true,contentStyle,label})=>{
+  const ref=useRef(null);
+  const pressedOnBackdrop=useRef(false);
+  useEffect(()=>{
+    const d=ref.current;
+    if(d&&!d.open){try{d.showModal();}catch{/* já aberto */}}
+    const prevOverflow=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    return()=>{document.body.style.overflow=prevOverflow;if(d?.open)d.close();};
+  },[]);
   return(
-    <div
-      role="presentation"
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex,display:"flex",alignItems:align==="top"?"flex-start":"center",justifyContent:"center",padding:align==="top"?"10vh 20px 20px":20,animation:"overlayIn .15s ease-out"}}
-      onMouseDown={e=>{pressedOnOverlay.current=e.target===e.currentTarget;}}
+    <dialog
+      ref={ref}
+      aria-label={label}
+      className={`lc-dialog${align==="top"?" lc-dialog-top":align==="sheet"?" lc-dialog-sheet":""}`}
+      onCancel={e=>{e.preventDefault();onClose?.();}}
+      onMouseDown={e=>{pressedOnBackdrop.current=e.target===e.currentTarget;}}
       onMouseUp={e=>{
-        if(pressedOnOverlay.current&&e.target===e.currentTarget)onClose?.();
-        pressedOnOverlay.current=false;
+        if(pressedOnBackdrop.current&&e.target===e.currentTarget)onClose?.();
+        pressedOnBackdrop.current=false;
       }}
     >
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
         onMouseDown={e=>e.stopPropagation()}
-        style={{background:CARD,border:`1px solid ${BD2}`,borderRadius:R_MODAL,padding,width:"100%",maxWidth,...(scroll?{maxHeight:"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:`modalIn .2s ${EASE_OUT}`,...contentStyle}}
+        style={{background:align==="sheet"?C2:CARD,border:`1px solid ${BD2}`,borderRadius:align==="sheet"?`${R_MODAL}px ${R_MODAL}px 0 0`:R_MODAL,padding,width:"100%",maxWidth,boxSizing:"border-box",...(scroll?{maxHeight:align==="sheet"?"90vh":"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:align==="sheet"?`sheetIn .35s ${EASE_OUT}`:`modalIn .2s ${EASE_OUT}`,color:TX,textAlign:"left",...(align==="sheet"?{paddingBottom:`calc(${padding}px + env(safe-area-inset-bottom))`}:{}),...contentStyle}}
       >
         {children}
       </div>
-    </div>
+    </dialog>
   );
 };
 
@@ -418,21 +630,6 @@ export function LaCalleReveal({duration=1000,hold=250,onDone}){
       <div style={{opacity:phase==="out"?0:1,transform:phase==="out"?"scale(0.85)":"scale(1)",transition:`opacity 200ms ${EASE_OUT}, transform 200ms ${EASE_OUT}`}}>
         <LogoSymbol size={64} color="#FFFFFF"/>
       </div>
-    </div>
-  );
-}
-
-export function ChartTooltip({active,payload,label}){
-  if(!active||!payload||!payload.length)return null;
-  return(
-    <div style={{background:"rgba(22,25,29,0.96)",backdropFilter:"blur(12px)",borderRadius:R_BTN,padding:"13px 17px",boxShadow:SH_MD,border:`1px solid ${BD2}`}}>
-      {label&&<div style={{fontSize:11,color:TX2,marginBottom:6,fontWeight:600,letterSpacing:"0.02em"}}>{label}</div>}
-      {payload.map((p,i)=>(
-        <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:TX,fontWeight:600,marginTop:i>0?4:0}}>
-          <span style={{width:7,height:7,borderRadius:"50%",background:p.color||p.fill,flexShrink:0}}/>
-          <span style={{color:TX2,fontWeight:500}}>{p.name}:</span> <span style={{fontFamily:NUM_FONT}}>{fmt(p.value)}</span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -564,41 +761,53 @@ export const DECISION_STATUS_COLOR={ok:SUCCESS,atencao:WARNING,critico:ERROR,neu
 // → por que aconteceu (reason) → "principais responsáveis" (transações reais,
 // visível sem precisar abrir nada) → recomendação → "Como cheguei a essa
 // conclusão" (expansível: cálculo linha a linha + checklist de dados usados).
+// Selo de cada tipo de descoberta: ícone e palavra (antes, um emoji e a cor
+// pintando o número inteiro e uma faixa no topo do card).
+const INSIGHT_TONE={
+  atencao:{icon:AlertTriangle,bg:DANGER_SURFACE,fg:ERROR},
+  mudanca:{icon:TrendingUp,bg:WARNING_SURFACE,fg:WARNING},
+  oportunidade:{icon:Lightbulb,bg:SUCCESS_SURFACE,fg:SUCCESS},
+  conquista:{icon:Check,bg:MUTED,fg:TX},
+};
 export function InsightCard({item,index=0,action}){
   const [expanded,setExpanded]=useState(false);
+  const accent=useAccent();
   const bd=item.breakdown||{};
   const lineItems=bd.lineItems||[];
   const calcRows=bd.calcRows||[];
+  const tone=INSIGHT_TONE[item.category]||INSIGHT_TONE.conquista;
+  const ToneIcon=tone.icon;
+  const smallTitle={fontSize:11,fontWeight:500,color:TX3,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:9};
   return(
-    <div className="fc-card insight-card-anim" style={{...cardStyle,padding:24,borderTop:`3px solid ${item.categoryColor}`,animationDelay:`${index*80}ms`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:8}}>
-        <span style={{fontSize:10.5,fontWeight:700,color:item.categoryColor,display:"flex",alignItems:"center",gap:5,letterSpacing:"0.03em",textTransform:"uppercase"}}>{item.categoryEmoji} {item.categoryLabel}</span>
-        <span style={{fontSize:10,color:TX3,fontWeight:600,whiteSpace:"nowrap"}}>{CONFIDENCE_LABEL[item.confidence]||""}</span>
+    <div className="fc-card insight-card-anim" style={{...cardStyle,boxShadow:"none",padding:20,animationDelay:`${index*80}ms`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:8}}>
+        <span style={{display:"inline-flex",alignItems:"center",gap:5,borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:600,background:tone.bg,color:tone.fg}}><ToneIcon size={12} aria-hidden="true"/>{item.categoryLabel}</span>
+        <span style={{fontSize:11,color:TX3,whiteSpace:"nowrap"}}>{CONFIDENCE_LABEL[item.confidence]||""}</span>
       </div>
-      <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:14,lineHeight:1.3,letterSpacing:"-0.01em"}}>{item.title}</div>
-      <HeroNumberAnimated heroNumber={item.heroNumber} color={item.categoryColor}/>
-      {item.comparison&&<ComparisonBar {...item.comparison} color={item.categoryColor}/>}
-      <div style={{fontSize:12.5,color:TX2,lineHeight:1.55,marginTop:item.comparison?12:14}}>{item.explanation}</div>
-      {item.reason&&<div style={{fontSize:11.5,color:TX3,lineHeight:1.5,marginTop:6}}>{item.reason}</div>}
+      <div style={{fontSize:15,fontWeight:600,color:TX,marginBottom:12,lineHeight:1.35,letterSpacing:"-0.01em"}}>{item.title}</div>
+      <HeroNumberAnimated heroNumber={item.heroNumber} color={TX}/>
+      {item.comparison&&<ComparisonBar {...item.comparison} color={tone.fg===TX?accent:tone.fg}/>}
+      <div style={{fontSize:13,color:TX2,lineHeight:1.55,marginTop:item.comparison?12:14}}>{item.explanation}</div>
+      {item.reason&&<div style={{fontSize:12,color:TX3,lineHeight:1.5,marginTop:6}}>{item.reason}</div>}
       {lineItems.length>0&&(
         <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${BD}`}}>
-          <div style={{fontSize:10,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:9}}>Principais responsáveis</div>
-          <LineItemsList items={lineItems} accentColor={item.categoryColor}/>
+          <div style={smallTitle}>Principais responsáveis</div>
+          <LineItemsList items={lineItems} accentColor={tone.fg===TX?TX3:tone.fg}/>
         </div>
       )}
       {item.recommendation&&(
-        <div style={{marginTop:16,padding:"12px 14px",background:`${item.categoryColor}12`,border:`1px solid ${item.categoryColor}2a`,borderRadius:R_BTN,display:"flex",alignItems:"flex-start",gap:9}}>
-          <Lightbulb size={13} color={item.categoryColor} style={{flexShrink:0,marginTop:1}}/>
-          <div style={{fontSize:12,color:TX,fontWeight:600,lineHeight:1.5}}>{item.recommendation}</div>
+        <div style={{marginTop:14,display:"flex",alignItems:"flex-start",gap:8}}>
+          <Lightbulb size={14} color={TX3} aria-hidden="true" style={{flexShrink:0,marginTop:2}}/>
+          <div style={{fontSize:13,color:TX,lineHeight:1.5}}>{item.recommendation}</div>
         </div>
       )}
       {action&&(
-        <button onClick={action.onClick} style={{marginTop:16,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:`${item.categoryColor}1a`,border:`1px solid ${item.categoryColor}45`,color:item.categoryColor,borderRadius:R_BTN,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer",transition:`filter .15s ${EASE_OUT}`}}>
+        <BtnGhost onClick={action.onClick} style={{marginTop:14,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,fontSize:13,color:TX}}>
           {action.label}<ArrowRight size={14}/>
-        </button>
+        </BtnGhost>
       )}
-      <button onClick={()=>setExpanded(p=>!p)} style={{marginTop:14,background:"none",border:"none",color:TX3,fontSize:11,fontWeight:600,cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4}}>
-        <Info size={11}/>Como cheguei a essa conclusão{expanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}
+      <button type="button" onClick={()=>setExpanded(p=>!p)} aria-expanded={expanded} className="touch-44" style={{position:"relative",marginTop:14,background:"none",border:"none",color:TX2,fontSize:12,cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,textDecoration:"underline",textUnderlineOffset:4}}>
+        Como cheguei a essa conclusão{expanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}
       </button>
       {expanded&&(
         <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${BD}`,display:"flex",flexDirection:"column",gap:14}}>
@@ -657,19 +866,10 @@ export function DecisionRow({d}){
 // numérico continua aparecendo no celular, mas quem manda no formato somos
 // nós: a vírgula é o separador decimal e o ponto digitado vira vírgula
 // automaticamente (quem tem o hábito antigo não precisa reaprender).
-// O valor guardado no state continua string ("1.234,56"); quem consome usa
-// parseNum, que já entendia os dois formatos.
-export const sanitizeDecimal=v=>{
-  let s=String(v??"").replace(/[^\d.,]/g,"");
-  // "1.234,56" (colado do banco/planilha): ponto é milhar, descarta.
-  // "1.5" (digitado no hábito antigo): ponto é decimal, vira vírgula.
-  if(s.includes(".")&&s.includes(","))s=s.replace(/\./g,"");
-  else s=s.replace(/\./g,",");
-  const i=s.indexOf(",");
-  if(i>=0)s=s.slice(0,i+1)+s.slice(i+1).replace(/,/g,"");
-  const [int,dec]=s.split(",");
-  return dec===undefined?int:`${int},${dec.slice(0,2)}`;
-};
+// O valor guardado no state continua string ("1234,56"); quem consome usa
+// parseNum. A regra (inclusive colar "1.234" do banco, que antes virava
+// R$ 1,23) mora em lib/money.js, com teste.
+export const sanitizeDecimal=sanitizeMoneyInput;
 // Número -> texto do campo (3.5 => "3,5"), para preencher formulários de edição.
 export const toDecimalStr=n=>(n===null||n===undefined||n==="")?"":String(n).replace(".",",");
 

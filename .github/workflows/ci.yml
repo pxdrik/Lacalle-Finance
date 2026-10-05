@@ -22,8 +22,20 @@ jobs:
 
       - run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Testes (financialEngine + regressões)
         run: npm test
+
+      - name: Testes de banco (RLS no PGlite, com as migrações)
+        run: npm run test:db
+
+      - name: Navegador para os testes de tela
+        run: npx playwright install --with-deps chromium
+
+      - name: Testes de navegador (tela, salvamento, geometria)
+        run: npm run test:browser
 
       - name: Build de produção
         run: npm run build

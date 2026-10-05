@@ -12,6 +12,23 @@
 // ============================================================================
 
 const MONTHS_ARR=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+// Posição absoluta de um mês ("out/26" → 2026*12+9), para ordenar e andar
+// mês a mês sem limite. Antes tudo usava MONTH_ORDER.indexOf, uma janela de
+// 12 meses para trás e 36 para frente calculada ao abrir o app: um mês fora
+// dela virava -1, então quem tivesse mais de um ano de histórico via filtros
+// e o resumo mensal fora de ordem. -1 continua significando "mês inválido".
+export const monthIndex=mk=>{
+  const m=/^([a-z]{3})\/(\d{2})$/.exec(String(mk??""));
+  if(!m)return -1;
+  const mi=MONTHS_ARR.indexOf(m[1]);
+  return mi<0?-1:(2000+Number(m[2]))*12+mi;
+};
+export const monthAt=idx=>{
+  if(!Number.isInteger(idx)||idx<0)return undefined;
+  return `${MONTHS_ARR[idx%12]}/${String(Math.floor(idx/12)).slice(2)}`;
+};
+// Só para preencher seletores de mês na tela (12 para trás, 36 para frente).
+// Para ordenar ou comparar, use monthIndex.
 const MONTH_ORDER=(()=>{
   const arr=[];
   const d=new Date();
@@ -80,6 +97,19 @@ export const PlannedStatus={
   isPaid:(item,month)=>!!item.paid?.[month],
   isIgnored:(item,month)=>!!item.ignored?.[month],
   isPending:(item,month)=>!PlannedStatus.isPaid(item,month)&&!PlannedStatus.isIgnored(item,month),
+  // O previsto conta neste mês? Lugar único da regra (antes eram nove
+  // cópias de "p.recurring||p.month===mk"). Um recorrente conta de `from`
+  // (o mês em que começa) até `until` (o último mês, o "Até"); sem `from`,
+  // como os cadastrados antes desta regra, vale desde sempre; sem `until`,
+  // vale para sempre.
+  appliesTo:(item,month)=>{
+    if(!item.recurring)return item.month===month;
+    const i=monthIndex(month);
+    if(i<0)return false;
+    if(item.from&&i<monthIndex(item.from))return false;
+    if(item.until&&i>monthIndex(item.until))return false;
+    return true;
+  },
 };
 
 // ---- Direção financeira de uma transação ------------------------------------
@@ -161,8 +191,8 @@ export const monthProgress=(todayISO,refMonthKey)=>{
   if(isNaN(dt.getTime()))return{isComplete:true,dayOfMonth:31,daysInMonth:31,elapsedRatio:1};
   const totalDays=daysInMonth(dt.getFullYear(),dt.getMonth());
   const day=dayOfMonthOf(todayISO)||1;
-  const curIdx=MONTH_ORDER.indexOf(monthKey(todayISO));
-  const refIdx=MONTH_ORDER.indexOf(refMonthKey);
+  const curIdx=monthIndex(monthKey(todayISO));
+  const refIdx=monthIndex(refMonthKey);
   // Um mês anterior ao corrente já fechou — comparação plena é legítima.
   if(refIdx>=0&&curIdx>=0&&refIdx<curIdx)return{isComplete:true,dayOfMonth:totalDays,daysInMonth:totalDays,elapsedRatio:1};
   return{isComplete:day>=totalDays,dayOfMonth:day,daysInMonth:totalDays,elapsedRatio:totalDays>0?day/totalDays:1};
@@ -184,10 +214,10 @@ export const FinancialEngine=(()=>{
   // gastar"; e somava salário por descrição, contando em dobro quando ele mudava
   // de nome (ex.: "Conexa" vs "Salario Conexa"). Média mensal resolve os dois.
   const typicalMonthly=(transactions,currentMonthKey)=>{
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const inByIdx={},outByIdx={};
     transactions.forEach(t=>{
-      const idx=MONTH_ORDER.indexOf(monthKey(t.date));
+      const idx=monthIndex(monthKey(t.date));
       if(idx<0||idx>=currentIdx||currentIdx-idx>6)return; // só meses fechados recentes
       if(isEntradaReal(t))inByIdx[idx]=(inByIdx[idx]||0)+t.val;
       else if(isSaidaReal(t))outByIdx[idx]=(outByIdx[idx]||0)+t.val;
@@ -212,10 +242,10 @@ export const FinancialEngine=(()=>{
   // conta, Aporte conta como saída, Resgate abate) — a soma de todas as
   // categorias bate exatamente com o avgOut de typicalMonthly.
   const typicalMonthlyByCategory=(transactions,currentMonthKey)=>{
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const sumByIdxCat={};
     transactions.forEach(t=>{
-      const idx=MONTH_ORDER.indexOf(monthKey(t.date));
+      const idx=monthIndex(monthKey(t.date));
       if(idx<0||idx>=currentIdx||currentIdx-idx>6)return;
       let delta=0;
       if(isSaidaReal(t))delta=t.val;
@@ -266,6 +296,20 @@ export const FinancialEngine=(()=>{
       const totalOut=nI+ap-re;
       return{totalIn,totalOut,balance:totalIn-totalOut};
     },
+    // Patrimônio (saldo + líquido investido, a mesma conta do Início) no fim
+    // de cada um dos `n` meses que terminam em `endMonthKey`. Só o realizado:
+    // quem chama passa as transações com data <= hoje.
+    // ponytail: refaz as contas para cada mês (O(n·meses)); acumular numa
+    // passada só se o histórico ficar grande a ponto de pesar.
+    patrimonyByMonth(tx,endMonthKey,n=12){
+      const end=monthIndex(endMonthKey);
+      const byIdx=tx.map(t=>[monthIndex(monthKey(t.date)),t]);
+      return Array.from({length:n},(_,i)=>{
+        const idx=end-n+1+i;
+        const upTo=byIdx.filter(([m])=>m<=idx).map(([,t])=>t);
+        return{month:monthAt(idx),value:this.totals(upTo).balance+this.investmentNet(upTo),hasData:upTo.length>0};
+      });
+    },
     monthlySummary(tx){
       const m={};
       tx.forEach(t=>{
@@ -275,7 +319,7 @@ export const FinancialEngine=(()=>{
         else{if(t.type==="Entrada")m[mk].in+=t.val;else m[mk].out+=t.val;}
       });
       Object.values(m).forEach(r=>r.balance=r.in-r.out);
-      return Object.values(m).sort((a,b)=>MONTH_ORDER.indexOf(a.month)-MONTH_ORDER.indexOf(b.month));
+      return Object.values(m).sort((a,b)=>monthIndex(a.month)-monthIndex(b.month));
     },
     // ---- Projeção simétrica de saldo -----------------------------------------
     // Estima o saldo daqui a `daysAhead` dias combinando o saldo atual com o que
@@ -288,8 +332,8 @@ export const FinancialEngine=(()=>{
     projectionAtDetailed({transactions,plannedExpenses,balance,todayISO,currentMonthKey,daysAhead}){
       const endDate=addDaysStr(todayISO,daysAhead);
       const endMk=monthKey(endDate);
-      let idxCur=MONTH_ORDER.indexOf(currentMonthKey);
-      let idxEnd=MONTH_ORDER.indexOf(endMk);
+      let idxCur=monthIndex(currentMonthKey);
+      let idxEnd=monthIndex(endMk);
       if(idxEnd<idxCur)idxEnd=idxCur;
       const {avgIn,avgOut}=typicalMonthly(transactions,currentMonthKey);
       const avgByCat=typicalMonthlyByCategory(transactions,currentMonthKey);
@@ -297,7 +341,7 @@ export const FinancialEngine=(()=>{
       let incTotal=0,outTotal=0;
       const incomeItems=[],outItems=[],plannedItems=[];
       for(let i=idxCur;i<=idxEnd;i++){
-        const mk=MONTH_ORDER[i];
+        const mk=monthAt(i);
         const isCur=i===idxCur;
         // Já realizado neste mês (data <= hoje): já está embutido no saldo atual.
         const alreadyIn=isCur?sumIf(t=>isEntradaReal(t)&&monthKey(t.date)===mk&&t.date<=todayISO):0;
@@ -307,7 +351,7 @@ export const FinancialEngine=(()=>{
         const futOutTx=transactions.filter(t=>(isSaidaReal(t)||isAporte(t))&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
         const futIn=sumVal(futInTx);
         const futOut=sumVal(futOutTx)-sumIf(t=>isResgate(t)&&monthKey(t.date)===mk&&t.date>todayISO&&t.date<=endDate);
-        const plannedList=plannedExpenses.filter(p=>p.recurring?PlannedStatus.isPending(p,mk):(p.month===mk&&PlannedStatus.isPending(p,mk)));
+        const plannedList=plannedExpenses.filter(p=>PlannedStatus.appliesTo(p,mk)&&PlannedStatus.isPending(p,mk));
         const plannedPending=plannedList.reduce((s,p)=>s+p.val,0);
         // Total esperado do mês = o maior entre a média típica e o já conhecido.
         const fullIn=Math.max(avgIn,alreadyIn+futIn);
@@ -337,7 +381,7 @@ export const FinancialEngine=(()=>{
     },
     freeBalance({transactions,plannedExpenses,balance,todayISO,currentMonthKey}){
       const futureOut=transactions.filter(t=>t.date>todayISO&&t.type==="Saída"&&t.cat!=="Investimento").reduce((s,t)=>s+t.val,0);
-      const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKey).reduce((s,p)=>s+(PlannedStatus.isPending(p,currentMonthKey)?p.val:0),0);
+      const plannedPending=plannedExpenses.filter(p=>PlannedStatus.appliesTo(p,currentMonthKey)).reduce((s,p)=>s+(PlannedStatus.isPending(p,currentMonthKey)?p.val:0),0);
       return balance-futureOut-plannedPending;
     },
   };
@@ -436,7 +480,7 @@ export const FinancialEngine=(()=>{
   };
 
   const BudgetAnalyzer={
-    itemsForMonth(plannedExpenses,month){return plannedExpenses.filter(p=>p.recurring||p.month===month);},
+    itemsForMonth(plannedExpenses,month){return plannedExpenses.filter(p=>PlannedStatus.appliesTo(p,month));},
     stats(items,month){
       let total=0,paid=0,ignored=0;
       items.forEach(p=>{
@@ -450,19 +494,19 @@ export const FinancialEngine=(()=>{
       let total=0;
       transactions.forEach(t=>{if(t.installmentId&&monthKey(t.date)===month&&t.date>=todayISO)total+=t.val;});
       plannedExpenses.forEach(p=>{
-        if(p.recurring){if(PlannedStatus.isPending(p,month))total+=p.val;}
-        else if(p.month===month&&PlannedStatus.isPending(p,month))total+=p.val;
+        if(PlannedStatus.appliesTo(p,month)&&PlannedStatus.isPending(p,month))total+=p.val;
       });
       return total;
     },
     committedNextMonths({transactions,plannedExpenses,currentMonthKey,todayISO,count}){
-      const idx=MONTH_ORDER.indexOf(currentMonthKey);
+      const idx=monthIndex(currentMonthKey);
       let total=0;
-      for(let i=0;i<count;i++){const mk=MONTH_ORDER[idx+i];if(mk)total+=BudgetAnalyzer.committedForMonth({transactions,plannedExpenses,month:mk,todayISO});}
+      for(let i=0;i<count;i++){const mk=monthAt(idx+i);if(mk)total+=BudgetAnalyzer.committedForMonth({transactions,plannedExpenses,month:mk,todayISO});}
       return total;
     },
     subscriptions(plannedExpenses,month){
-      const recurring=plannedExpenses.filter(p=>p.recurring);
+      // assinaturas em vigor neste mês (as encerradas pelo "Até" saem do total)
+      const recurring=plannedExpenses.filter(p=>p.recurring&&PlannedStatus.appliesTo(p,month));
       if(recurring.length===0)return null;
       const total=sumVal(recurring);
       const biggest=[...recurring].sort((a,b)=>b.val-a.val)[0];
@@ -604,7 +648,7 @@ export const FinancialEngine=(()=>{
       plannedExpenses.forEach(p=>{
         const relevantMonths=p.recurring?[currentMonthKey,nextMonthKey]:[p.month];
         relevantMonths.forEach(mk=>{
-          if(!mk||!PlannedStatus.isPending(p,mk))return;
+          if(!mk||!PlannedStatus.appliesTo(p,mk)||!PlannedStatus.isPending(p,mk))return;
           const bk=mk===currentMonthKey?"mes":mk===nextMonthKey?"prox_mes":null;
           if(bk)b[bk].push({kind:"planned",data:p,color:p.recurring?"#A78BFA":"#EF4444",label:p.recurring?"Assinatura":"Conta",month:mk});
         });
@@ -632,7 +676,7 @@ export const FinancialEngine=(()=>{
       const dayOfMonth=todayDateObj.getDate();
       if(todayMonthDays-dayOfMonth<=5){
         plannedExpenses.forEach(p=>{
-          const isRelevant=p.recurring||p.month===currentMonthKey;
+          const isRelevant=PlannedStatus.appliesTo(p,currentMonthKey);
           if(isRelevant&&PlannedStatus.isPending(p,currentMonthKey))list.push({type:"previsto",text:`${p.desc} ainda não foi paga este mês.`});
         });
       }
@@ -663,7 +707,7 @@ export const FinancialEngine=(()=>{
       if(monthTx.length===0&&plannedExpenses.length===0&&avgIn===0&&avgOut===0)return null;
       const inSoFar=sumVal(monthTx.filter(isEntradaReal));
       const outSoFar=sumVal(monthTx.filter(isSaidaReal))+sumVal(monthTx.filter(isAporte))-sumVal(monthTx.filter(isResgate));
-      const plannedList=plannedExpenses.filter(p=>(p.recurring||p.month===currentMonthKey)&&PlannedStatus.isPending(p,currentMonthKey));
+      const plannedList=plannedExpenses.filter(p=>PlannedStatus.appliesTo(p,currentMonthKey)&&PlannedStatus.isPending(p,currentMonthKey));
       const plannedPending=plannedList.reduce((s,p)=>s+p.val,0);
       const inc=Math.max(avgIn,inSoFar);
       const out=Math.max(avgOut,outSoFar+plannedPending);
@@ -926,7 +970,7 @@ export const InsightEngine=(()=>{
   // por último, que foi exatamente como nascia o texto errado). Movimentação
   // interna (investimento) fica fora: não é hábito de consumo nem de renda.
   const buildDescMemory=(transactions,currentMonthKey)=>{
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const rawGroups={};
     transactions.forEach(t=>{
       const flow=flowOf(t);
@@ -952,7 +996,7 @@ export const InsightEngine=(()=>{
     return clusters.map(cl=>{
       const txs=[...cl.txs].sort((a,b)=>a.date.localeCompare(b.date));
       const monthsPresent=[...new Set(txs.map(t=>monthKey(t.date)))];
-      const monthIdxs=monthsPresent.map(mk=>MONTH_ORDER.indexOf(mk)).filter(i=>i>=0);
+      const monthIdxs=monthsPresent.map(mk=>monthIndex(mk)).filter(i=>i>=0);
       if(monthIdxs.length===0)return null;
       const firstIdx=Math.min(...monthIdxs);
       const lastIdx=Math.max(...monthIdxs);
@@ -986,7 +1030,7 @@ export const InsightEngine=(()=>{
 
   // ---- Ciclo de vida das categorias: ativa / inativa / emergente ----
   const buildCategoryLifecycle=(transactions,currentMonthKey)=>{
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const byCat={};
     transactions.forEach(t=>{
       if(t.type!=="Saída"||t.cat==="Investimento")return;
@@ -995,7 +1039,7 @@ export const InsightEngine=(()=>{
       byCat[t.cat].monthly[mk]=(byCat[t.cat].monthly[mk]||0)+t.val;
     });
     return Object.entries(byCat).map(([cat,d])=>{
-      const idxs=Object.keys(d.monthly).map(mk=>MONTH_ORDER.indexOf(mk)).filter(i=>i>=0);
+      const idxs=Object.keys(d.monthly).map(mk=>monthIndex(mk)).filter(i=>i>=0);
       if(idxs.length===0)return null;
       const lastIdx=Math.max(...idxs);
       const firstIdx=Math.min(...idxs);
@@ -1003,7 +1047,7 @@ export const InsightEngine=(()=>{
       let status="ativa";
       if(gap>=3)status="inativa";
       else if(idxs.length<=2&&firstIdx>=currentIdx-1)status="emergente";
-      const lastMonthKey=Object.keys(d.monthly).find(mk=>MONTH_ORDER.indexOf(mk)===lastIdx);
+      const lastMonthKey=Object.keys(d.monthly).find(mk=>monthIndex(mk)===lastIdx);
       return{cat,firstIdx,lastIdx,gap,status,monthsCount:idxs.length,lastVal:lastMonthKey?d.monthly[lastMonthKey]:0};
     }).filter(Boolean);
   };
@@ -1029,7 +1073,7 @@ export const InsightEngine=(()=>{
   const catWeightedAvg=(catMonthly,currentIdx)=>{
     let wsum=0,vsum=0,n=0;
     Object.entries(catMonthly).forEach(([mk,val])=>{
-      const idx=MONTH_ORDER.indexOf(mk);
+      const idx=monthIndex(mk);
       if(idx<0||idx>=currentIdx)return;
       const gap=currentIdx-idx;
       if(gap>6)return;
@@ -1065,7 +1109,7 @@ export const InsightEngine=(()=>{
   // ---- Tendências: mês atual vs média ponderada recente ----
   const genTrends=ctx=>{
     const{transactions,currentMonthKey,catMonthly,catMonthlyToDate,monthProg}=ctx;
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const monthLabel=monthNameMap[currentMonthKey.split("/")[0]]||currentMonthKey;
     const out=[];
     // Mês em andamento -> base recortada no mesmo dia em todos os meses, e o
@@ -1161,7 +1205,7 @@ export const InsightEngine=(()=>{
   // ---- Mudanças de comportamento: hábito cancelado, novo hábito, substituição ----
   const genBehaviorChanges=ctx=>{
     const{descMemory,catLifecycle,currentMonthKey}=ctx;
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const out=[];
     const discontinued=descMemory.filter(m=>m.isHabitLike&&m.status==="inativo");
     const emergent=descMemory.filter(m=>m.status==="emergente"||(m.isHabitLike&&m.firstIdx>=currentIdx-2));
@@ -1173,7 +1217,7 @@ export const InsightEngine=(()=>{
       // receita perdida por um gasto novo não é "troca de hábito", é outra
       // coisa — e o texto de troca não descreveria isso corretamente.
       const match=emergent.find(e=>e.cat===d.cat&&e.key!==d.key&&e.flow===d.flow&&e.firstIdx>=d.lastIdx&&e.firstIdx<=d.lastIdx+2);
-      const monthLabel=monthNameMap[(MONTH_ORDER[d.lastIdx]||"").split("/")[0]]||MONTH_ORDER[d.lastIdx]||"";
+      const monthLabel=monthNameMap[(monthAt(d.lastIdx)||"").split("/")[0]]||monthAt(d.lastIdx)||"";
       if(match){
         out.push({
           category:"mudanca",priority:"media",
@@ -1373,8 +1417,8 @@ export const InsightEngine=(()=>{
     const dayOfMonth=parseInt(todayISO.split("-")[2],10);
     const daysInMonth=new Date(parseInt(todayISO.slice(0,4)),parseInt(todayISO.slice(5,7)),0).getDate();
     if(daysInMonth-dayOfMonth>=5){
-      const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
-      const prevMk=MONTH_ORDER[currentIdx-1];
+      const currentIdx=monthIndex(currentMonthKey);
+      const prevMk=monthAt(currentIdx-1);
       Object.entries(catMonthly).forEach(([cat,monthly])=>{
         const cur=monthly[currentMonthKey]||0;
         const prev=prevMk?(monthly[prevMk]||0):0;
@@ -1409,7 +1453,7 @@ export const InsightEngine=(()=>{
   const genOpportunities=ctx=>{
     const{cashFlowProjections,reservaMeses,reservaFinanceira,avgMonthlyOut,enhancedWishes,avgMonthlySavings,currentMonthKey,transactions,summary,plannedExpenses,balance,todayISO}=ctx;
     const out=[];
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const proj30=cashFlowProjections.find(p=>p.days===30);
     const investedThisMonth=transactions.some(t=>t.cat==="Investimento"&&(t.invTipo==="Aporte"||(!t.invTipo&&t.type==="Saída"))&&monthKey(t.date)===currentMonthKey);
     if(proj30&&proj30.value>0&&!investedThisMonth){
@@ -1489,7 +1533,7 @@ export const InsightEngine=(()=>{
         }
       }
     }
-    const closed=summary.filter(m=>MONTH_ORDER.indexOf(m.month)<currentIdx).slice(-4);
+    const closed=summary.filter(m=>monthIndex(m.month)<currentIdx).slice(-4);
     if(closed.length>=3){
       const incomes=closed.map(m=>m.in);
       const outs=closed.map(m=>m.out);
@@ -1550,7 +1594,7 @@ export const InsightEngine=(()=>{
   const genInvestmentInsights=ctx=>{
     const{transactions,currentMonthKey,investmentParticipacao,invNet,patrimonio}=ctx;
     const out=[];
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const aporteByMonth={};
     transactions.forEach(t=>{
       if(t.cat==="Investimento"&&(t.invTipo==="Aporte"||(!t.invTipo&&t.type==="Saída"))){
@@ -1559,10 +1603,10 @@ export const InsightEngine=(()=>{
       }
     });
     let streak=0;
-    for(let i=currentIdx;i>=0;i--){if(aporteByMonth[MONTH_ORDER[i]]){streak++;}else break;}
+    for(let i=currentIdx;i>=0;i--){if(aporteByMonth[monthAt(i)]){streak++;}else break;}
     if(streak>=3){
       const streakMonths=[];
-      for(let i=currentIdx;i>currentIdx-streak;i--)streakMonths.push({label:MONTH_ORDER[i],value:aporteByMonth[MONTH_ORDER[i]]||0,tag:"aporte"});
+      for(let i=currentIdx;i>currentIdx-streak;i--)streakMonths.push({label:monthAt(i),value:aporteByMonth[monthAt(i)]||0,tag:"aporte"});
       out.push({
         category:"mudanca",priority:"baixa",
         title:"Hábito de investir consolidado",
@@ -1602,9 +1646,9 @@ export const InsightEngine=(()=>{
   const genCashFlowAndNetWorth=ctx=>{
     const{summary,currentMonthKey,patrimonio,monthProg}=ctx;
     const out=[];
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const curEntry=summary.find(m=>m.month===currentMonthKey);
-    const closed=summary.filter(m=>MONTH_ORDER.indexOf(m.month)<currentIdx).slice(-4);
+    const closed=summary.filter(m=>monthIndex(m.month)<currentIdx).slice(-4);
     if(closed.length>=3){
       const balances=closed.map(m=>m.balance);
       const rising=balances.every((v,i)=>i===0||v>=balances[i-1]-0.01);
@@ -1651,7 +1695,7 @@ export const InsightEngine=(()=>{
       if(curEntry.balance>0&&curEntry.balance>bestPrev){
         out.push({
           category:"conquista",priority:"alta",
-          title:"Novo recorde de saldo mensal! 🎉",
+          title:"Novo recorde de saldo mensal",
           heroNumber:{value:patrimonio,format:"currency",sign:"+"},
           explanation:`Este mês seu saldo fechou em ${fmt(curEntry.balance)} — o melhor resultado dos últimos ${closed.length+1} meses (recorde anterior: ${fmt(bestPrev)}).`,
           reason:"Nenhum dos meses recentes teve um saldo tão bom quanto este.",
@@ -1735,7 +1779,7 @@ export const InsightEngine=(()=>{
   // ---- Resumo do mês: estatísticas de destaque + narrativa curta (máx. 2 frases) ----
   const generateSummary=ctx=>{
     const{transactions,currentMonthKey,summary,enhancedWishes,plannedStats,patrimonio,todayISO}=ctx;
-    const currentIdx=MONTH_ORDER.indexOf(currentMonthKey);
+    const currentIdx=monthIndex(currentMonthKey);
     const curEntry=summary.find(m=>m.month===currentMonthKey);
     if(!curEntry)return null;
     // Mesma regra temporal dos insights: com o mês em andamento o saldo
@@ -1746,7 +1790,7 @@ export const InsightEngine=(()=>{
     const descMemory=buildDescMemory(transactions,currentMonthKey);
     const monthName=monthNameMap[currentMonthKey.split("/")[0]]||currentMonthKey;
 
-    const closed=summary.filter(m=>MONTH_ORDER.indexOf(m.month)<currentIdx).slice(-6);
+    const closed=summary.filter(m=>monthIndex(m.month)<currentIdx).slice(-6);
     const histAvgBalance=closed.length?closed.reduce((s,m)=>s+m.balance,0)/closed.length:null;
     const bestPrev=closed.length?Math.max(...closed.map(m=>m.balance)):null;
 

@@ -115,3 +115,65 @@ export const DATA_POSITIVE = "#34D399";
 export const DATA_NEGATIVE = "#F87171";
 export const DATA_NEUTRAL = TX2;
 export const DATA_COMPARISON = BD2;
+
+// ---- Superfícies de estado (padrão do LaCalle Life) ------------------------
+// Seletor e filtro escolhidos não pintam a cor cheia com texto branco por
+// cima (branco sobre verde, vermelho ou Gold claros media de 1,67:1 a
+// 2,77:1). Pintam um fundo escuro do mesmo tom, com o texto na cor cheia.
+export const MUTED = "#22272C";           // neutro escolhido / hover
+export const SUCCESS_SURFACE = "#1A332E"; // verde sobre isto: 7,02:1
+export const DANGER_SURFACE = "#362529";  // vermelho sobre isto: 5,22:1
+export const WARNING_SURFACE = "#36301E"; // amarelo sobre isto
+
+// ---- Contraste e mistura de cor ------------------------------------------
+// Fórmula WCAG de verdade (luminância relativa), usada aqui para derivar o
+// tom de texto de cada accent e nos testes para conferir todos os pares.
+function hexToLinear(hex) {
+  return [1, 3, 5].map(at => {
+    const v = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+}
+export function contrastRatio(a, b) {
+  const lum = h => { const [r, g, bl] = hexToLinear(h); return 0.2126 * r + 0.7152 * g + 0.0722 * bl; };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+/** `fg` misturada sobre `bg` na proporção `t` (0 a 1), em #RRGGBB. */
+export function mixHex(fg, bg, t) {
+  return "#" + [1, 3, 5].map(at => {
+    const v = Math.round(Number.parseInt(fg.slice(at, at + 2), 16) * t + Number.parseInt(bg.slice(at, at + 2), 16) * (1 - t));
+    return v.toString(16).padStart(2, "0");
+  }).join("").toUpperCase();
+}
+
+// ---- Accent escolhido pela pessoa ------------------------------------------
+// As sete opções do perfil. Gold é a identidade do Finance e o padrão de
+// conta nova (Brand System V2); as outras seis são personalização.
+export const PALETTES = {
+  gold: { name: "Gold", base: "#D4A017", dark: "#8A640C" },
+  blue: { name: "Azul", base: "#3B82F6", dark: "#2563EB" },
+  teal: { name: "Teal", base: "#2DD4BF", dark: "#14B8A6" },
+  purple: { name: "Roxo", base: "#8B5CF6", dark: "#7C3AED" },
+  pink: { name: "Rosa", base: "#EC4899", dark: "#DB2777" },
+  orange: { name: "Laranja", base: "#FBBF24", dark: "#FBBF24" },
+  green: { name: "Verde", base: "#34D399", dark: "#16A34A" },
+};
+
+/** Fundo tingido do accent: 14% sobre o card, mesma conta do accent-surface do Life. */
+export const accentSurface = accent => mixHex(accent, CARD, 0.14);
+
+/**
+ * Tom do accent para TEXTO sobre o fundo tingido. Azul, roxo e rosa na cor
+ * cheia ficam abaixo de 4,5:1 ali (4,04, 3,61 e 4,28); então o tom clareia
+ * em direção ao branco até passar de 4,75:1. Mesmo princípio do accent-700
+ * do Life no escuro. Accents que já passam ficam como são.
+ */
+export function accentText(accent) {
+  const surface = accentSurface(accent);
+  for (let t = 0; t <= 1.0001; t += 0.05) {
+    const c = mixHex("#FFFFFF", accent, t);
+    if (contrastRatio(c, surface) >= 4.75) return c;
+  }
+  return TX;
+}

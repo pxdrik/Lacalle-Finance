@@ -96,46 +96,39 @@
  *   HOOKS (useMemo abaixo) -> src/hooks/use{Transactions,Goals,Insights,...}.js
  *   COMPONENTES DE UI      -> src/components/{Dashboard,Calendar,Timeline,...}.jsx
  */
-import { useState, useMemo, useEffect, useRef } from "react";
-import { supabase } from "./lib/supabaseClient";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { supabase, openedFromRecoveryLink } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
-import AuthScreen from "./components/AuthScreen";
-import LogoSymbol from "./components/LogoSymbol";
-import { FinancialEngine, InsightEngine, fmt, monthKey, addDaysStr, addMonthsStr, daysInMonth, formatMonths, diffDays, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
+import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
+import { FinancialEngine, InsightEngine, fmt, monthKey, addMonthsStr, daysInMonth, MONTH_ORDER, MONTHS_ARR, PlannedStatus, monthIndex, monthAt } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
+import { Signature, FinanceMark } from "./components/Brand";
+import { IncomeExpenseChart, TrendChart } from "./components/charts";
 import InstallmentsTab from "./components/InstallmentsTab";
 import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, C2, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, ERROR_BG, SUCCESS_FILL, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, LinkifiedText, LedgerRows, LineItemsList, DataUsedChecklist, HeroNumberAnimated, ComparisonBar, InsightCard, DecisionRow, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, StatTile, Comparison, EmptyState, Tabs, TabPanel, DensityToggle } from "./components/ui";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR } from "./lib/theme";
+import { Card, Modal, CategoryIcon, AnimatedValue, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, TabPanel, DensityToggle, Segmented, IconButton, PageHeader, SectionTitle, Field } from "./components/ui";
 import { DensityProvider } from "./lib/density";
-import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_DESC_LEN, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
+import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
-import { validateBackup } from "./lib/backupValidation";
+import MonthlyReport from "./components/MonthlyReport";
+import { buildMonthlyReport } from "./lib/report";
+import { createSyncEngine, localCopy, hasPendingLocalCopy, clearLocalCopies } from "./lib/syncEngine";
+import { validateBackup, buildBackup } from "./lib/backupValidation";
+import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
+import { formatDay } from "./lib/dates";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, AreaChart, Area, CartesianGrid } from "recharts";
 import {
-  Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Gamepad2, UtensilsCrossed,
-  Car, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, Repeat, Undo2, Gift, Tag,
-  Settings, LogOut, Search, X, Plus, Pencil, Trash2, Check, ChevronLeft, ChevronRight, ChevronDown,
-  ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard,
-  Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Rocket,
-  Trophy, Lightbulb, ShieldCheck, Target, CalendarDays, Bell, Flag, Hourglass, Clock,
-  ArrowRightLeft, EyeOff, Eye
+  TrendingUp, CreditCard, Calendar, Sparkles, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, CloudOff, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, CalendarDays, Bell, Target, MoreHorizontal, ChevronRight
 } from "lucide-react";
 
 const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
 const COLORS=["#60A5FA","#818CF8","#34D399","#FB7185","#FBBF24","#A78BFA","#FB923C","#38BDF8","#F472B6","#2DD4BF","#C084FC","#4ADE80","#FCD34D","#94A3B8"];
-const CAT_ICON_COMPONENTS={
-  "Lazer":Gamepad2,"Alimentação":UtensilsCrossed,"Transporte":Car,"Desejos":Sparkles,"Roupas":Shirt,
-  "Tecnologia":Laptop,"Saude / Cuidados Pessoais":HeartPulse,"Educação":GraduationCap,
-  "Salario / Entradas":Briefcase,"Outros":Package,"Investimento":TrendingUp,"Assinaturas":Repeat,
-  "Rembolsos":Undo2,"Presentes":Gift,
-};
 // MONTH_ORDER era uma lista fixa de datas hardcoded (jan/25 até jun/27) — ou
 // seja, tinha uma "data de validade": a partir de jun/2027 a funcionalidade
 // de "Previsto" não recorrente simplesmente pararia de encontrar mês na
@@ -143,20 +136,11 @@ const CAT_ICON_COMPONENTS={
 // dispositivo: sempre 12 meses pra trás e 36 meses pra frente a partir de
 // hoje, recalculada a cada carregamento do app — nunca fica velha.
 const INV_TIPOS=["Aporte","Resgate","Rendimento"];
-const INV_TIPO_COLORS={"Aporte":"#3B82F6","Resgate":"#FBBF24","Rendimento":"#34D399"};
 const INV_TIPO_ICONS={"Aporte":PiggyBank,"Resgate":Undo2,"Rendimento":TrendingUp};
 // "gold" é a identidade fixa do Finance (Brand System V2, 10/09/2026) e o
 // padrão pra conta nova — as outras seis continuam existindo como
 // personalização por conta, não como identidade do produto.
-const PALETTES={
-  gold:{name:"Gold",base:"#D4A017",dark:"#8A640C"},
-  blue:{name:"Azul",base:"#3B82F6",dark:"#2563EB"},
-  teal:{name:"Teal",base:"#2DD4BF",dark:"#14B8A6"},
-  purple:{name:"Roxo",base:"#8B5CF6",dark:"#7C3AED"},
-  pink:{name:"Rosa",base:"#EC4899",dark:"#DB2777"},
-  orange:{name:"Laranja",base:"#FBBF24",dark:"#FBBF24"},
-  green:{name:"Verde",base:"#34D399",dark:"#16A34A"},
-};
+// PALETTES (as sete cores do perfil) mora em lib/theme.js, com o teste de contraste.
 // parseNum/DATE_MIN/DATE_MAX agora vêm de lib/validation.js (fonte única,
 // compartilhada com as validações de formulário e coberta por testes).
 // Gerador de ID: Date.now() sozinho pode colidir se dois itens forem criados
@@ -185,15 +169,12 @@ const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounte
 const storageKey=email=>`ff6:${email.replace(/[^a-zA-Z0-9]/g,"_")}:v1`;
 
 // ==================== UTILS: datas ====================
-const WEEKDAYS_PT=["D","S","T","Q","Q","S","S"];
 const MONTH_NAMES_FULL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 // ==================== UTILS: links dentro de notas ====================
 // Campo `notes` (Desejos e Previstos) é hoje texto simples com detecção de
 // URLs. A estrutura foi pensada para evoluir para Markdown/checklist/tags/
 // anexos/comentários no futuro sem quebrar o formato salvo (string única).
-const URL_SPLIT_REGEX=/((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
-const URL_TEST_REGEX=/^(?:https?:\/\/|www\.)/i;
 
 // ============================================================================
 // FINANCIAL INTELLIGENCE ENGINE
@@ -215,6 +196,7 @@ function MainApp({user,setUser}){
   const [revealActive,setRevealActive]=useState(true);
   const [syncStatus,setSyncStatus]=useState("loading");
   const [tab,setTab]=useState("dashboard");
+  const [showMore,setShowMore]=useState(false);
   const [transactions,setTransactions]=useState([]);
   const [wishes,setWishes]=useState([]);
   const [installments,setInstallments]=useState([]);
@@ -228,6 +210,11 @@ function MainApp({user,setUser}){
   const [qaDate,setQaDate]=useState(todayFn);const [qaForm,setQaForm]=useState("pix");
   const [qaFixed,setQaFixed]=useState("Variavel");const [qaExpanded,setQaExpanded]=useState(false);const [qaRepeat,setQaRepeat]=useState("none");
   const [showClearConfirm,setShowClearConfirm]=useState(false);
+  // Relatório mensal: `reportPick` é o mês escolhido na janelinha (null = fechada);
+  // `printingReport` monta o relatório e abre a impressão (MonthlyReport.jsx).
+  const [reportPick,setReportPick]=useState(null);
+  const [printingReport,setPrintingReport]=useState(null);
+  const closeReport=useCallback(()=>setPrintingReport(null),[]);
   const [showWishForm,setShowWishForm]=useState(false);const [editingWish,setEditingWish]=useState(null);
   const [wishForm,setWishForm]=useState({name:"",price:"",saved:"",priority:"Média",monthsTarget:"",notes:""});
   const wishFormSnapshotRef=useRef(null);
@@ -254,25 +241,30 @@ function MainApp({user,setUser}){
   // Ref espelhando `busy`: o handler global de Esc é registrado com deps []
   // e enxergaria sempre o valor do primeiro render se lesse o state.
   const deleteAccountBusyRef=useRef(false);
+  const cancelEditTxRef=useRef(()=>{});
   const [expandedNotes,setExpandedNotes]=useState({});
-  const [wishSortBy,setWishSortBy]=useState("progress");
+  // A ordem escolhida fica neste aparelho (conveniência de tela, não dado da conta).
+  const [wishSortBy,setWishSortByState]=useState(()=>{try{return localStorage.getItem("lf.wishSort")||"progress";}catch{return"progress";}});
+  const setWishSortBy=v=>{setWishSortByState(v);try{localStorage.setItem("lf.wishSort",v);}catch{/* sem armazenamento local */}};
   // Mesma ideia do sortedPlannedItemsForMonth: memoiza a ordenação da lista
   // de Desejos em vez de reordenar a cada render do componente.
-  const sortedWishes=useMemo(()=>[...wishes].sort((a,b)=>{
+  // "manual" usa o campo `order` de cada meta (e não a posição no array):
+  // assim mudar a ordem carimba updatedAt e passa pela regra do mais recente.
+  const sortedWishes=useMemo(()=>wishes.map((w,i)=>[w,i]).sort(([a,ia],[b,ib])=>{
     if(!!a.done!==!!b.done)return a.done?1:-1;
+    if(wishSortBy==="manual")return(a.order??ia)-(b.order??ib);
     if(wishSortBy==="priority"){
       const order={"Alta":0,"Média":1,"Baixa":2};
       const diff=(order[a.priority]??1)-(order[b.priority]??1);
       if(diff!==0)return diff;
     }
     return Math.min(100,b.saved/b.price*100)-Math.min(100,a.saved/a.price*100);
-  }),[wishes,wishSortBy]);
-  const [showDetails,setShowDetails]=useState(false);
+  }).map(([w])=>w),[wishes,wishSortBy]);
 
   const [plannedExpenses,setPlannedExpenses]=useState([]);
   const [plannedMonth,setPlannedMonth]=useState(monthKey(todayFn()));
   const [showPlannedForm,setShowPlannedForm]=useState(false);const [editingPlanned,setEditingPlanned]=useState(null);
-  const [plannedForm,setPlannedForm]=useState({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:monthKey(todayFn()),notes:""});
+  const [plannedForm,setPlannedForm]=useState({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:monthKey(todayFn()),from:monthKey(todayFn()),hasUntil:false,until:monthKey(todayFn()),notes:""});
   const plannedFormSnapshotRef=useRef(null);
 
   // ---- Lixeira (trash) ----
@@ -324,7 +316,6 @@ function MainApp({user,setUser}){
   const [walletName,setWalletName]=useState("LaCalle Finance");
   const [onboardingDismissed,setOnboardingDismissed]=useState(false);
   const accent=(PALETTES[accentKey]||PALETTES.gold).base;
-  const accentDark=(PALETTES[accentKey]||PALETTES.gold).dark;
 
   // ---- Planejamento (estados) ----
   const [planTab,setPlanTab]=useState("geral");
@@ -347,48 +338,69 @@ function MainApp({user,setUser}){
   const [simResult,setSimResult]=useState(null);
 
   const [toasts,setToasts]=useState([]);
-  const showToast=(msg,type="info")=>{
+  // `action` ({label,onClick}) põe um botão no aviso, como o "Desfazer"
+  // depois de excluir; com ação o aviso fica 6 s em vez de 3,8 s.
+  const dismissToast=id=>setToasts(p=>p.filter(t=>t.id!==id));
+  const showToast=(msg,type="info",{action}={})=>{
     const id=Date.now()+Math.random();
-    setToasts(p=>[...p,{id,msg,type}]);
-    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3800);
+    setToasts(p=>[...p,{id,msg,type,action}]);
+    setTimeout(()=>dismissToast(id),action?6000:3800);
   };
 
   const historyRef=useRef([]);
   const [historyLen,setHistoryLen]=useState(0);
-  const isUndoingRef=useRef(false);
 
   const pushHistory=()=>{
-    const snap={tx:[...transactions],wishes:[...wishes],inst:[...installments],planned:[...plannedExpenses],customCats:[...customCats]};
+    // A lixeira entra no retrato: sem ela, desfazer uma exclusão deixava o
+    // item na lista E na lixeira, e "Restaurar" depois o duplicava.
+    const snap={tx:[...transactions],wishes:[...wishes],inst:[...installments],planned:[...plannedExpenses],customCats:[...customCats],trash:[...trash]};
     const newH=[...historyRef.current.slice(-14),snap];
     historyRef.current=newH;
     setHistoryLen(newH.length);
+  };
+  // "Desfazer" do aviso: só vale se nada aconteceu depois da exclusão; senão
+  // desfaria outra coisa. Aí orienta a usar o desfazer do topo, passo a passo.
+  const undoIfLast=len=>{
+    if(historyRef.current.length!==len){showToast("Outra alteração aconteceu depois. Use o desfazer do topo, um passo de cada vez.","info");return;}
+    undo();
+    showToast("Desfeito.","success");
+  };
+  const deletedToast=what=>{
+    const len=historyRef.current.length;
+    showToast(`${what} foi para a lixeira.`,"info",{action:{label:"Desfazer",onClick:()=>undoIfLast(len)}});
   };
   const undo=()=>{
     if(!historyRef.current.length)return;
     const prev=historyRef.current[historyRef.current.length-1];
     historyRef.current=historyRef.current.slice(0,-1);
     setHistoryLen(historyRef.current.length);
-    isUndoingRef.current=true;
-    setTransactions(prev.tx);setWishes(prev.wishes);setInstallments(prev.inst);setPlannedExpenses(prev.planned||[]);setCustomCats(prev.customCats||[]);
+    // Sem "bandeira" que pula o salvamento: o desfazer é gravado na nuvem como
+    // qualquer outra mudança (antes a tela dizia "Sincronizado" e a nuvem
+    // continuava com o estado anterior).
+    setTransactions(prev.tx);setWishes(prev.wishes);setInstallments(prev.inst);setPlannedExpenses(prev.planned||[]);setCustomCats(prev.customCats||[]);if(prev.trash)setTrash(prev.trash);
   };
 
   const saveTimerRef=useRef(null);
-  const loadedAtRef=useRef(0);
-  const justLoadedRef=useRef(true);
-  // ---- Detecção de conflito entre abas/dispositivos ----
-  // Antes, salvar era sempre "quem salva por último apaga o resto" — sem
-  // nenhum aviso. Agora guardamos a "versão" (timestamp) dos dados que
-  // sabemos estar salvos na nuvem; antes de sobrescrever, conferimos se
-  // ninguém mudou isso por baixo do nosso pé (outra aba/outro aparelho). Se
-  // mudou, avisamos em vez de sobrescrever silenciosamente.
-  // `remoteVersionRef` guarda o `updated_at` que o BANCO controla (não o
-  // campo `updatedAt` de dentro do JSON, que é só um espelho pra exibição).
-  // É essa versão que o `storage.set` usa para detectar conflito de forma
-  // atômica — ver comentários em `src/lib/storage.js`.
-  const remoteVersionRef=useRef(null);
-  const isReloadingRef=useRef(false);
+  // ---- Carregar e salvar (lib/syncEngine.js) ----
+  // Um salvamento por vez, só quando o conteúdo mudou, e conflito entre
+  // aparelhos resolvido item por item: o mais recente vence (lib/sync.js).
+  const engineRef=useRef(null);
+  // `local`: cópia no aparelho para o modo sem rede (lib/syncEngine.js). Sem
+  // localStorage (bloqueado), o app segue só com a nuvem, como antes.
+  if(!engineRef.current){
+    let local=null;
+    try{local=localCopy(storageKey(user.email));}catch{/* sem armazenamento local */}
+    engineRef.current=createSyncEngine({storage,key:storageKey(user.email),local});
+  }
+  const engine=engineRef.current;
+  const [loadError,setLoadError]=useState(null);
 
-  const applyRemoteData=d=>{
+  // O estado da tela no formato do documento salvo. Lido por ref pelos
+  // ouvintes registrados uma vez só (visibilidade, salvar agora).
+  const docRef=useRef(null);
+  docRef.current={tx:transactions,wishes,inst:installments,planned:plannedExpenses,trash,customCats,name:user.name,accentKey,walletName,onboardingDismissed};
+
+  const applyDoc=d=>{
     setTransactions(d.tx||[]);
     setWishes(d.wishes||[]);
     setInstallments(d.inst||[]);
@@ -399,134 +411,84 @@ function MainApp({user,setUser}){
     setOnboardingDismissed(!!d.onboardingDismissed);
     const cutoff=Date.now()-TRASH_RETENTION_DAYS*24*60*60*1000;
     setTrash((d.trash||[]).filter(t=>t.deletedAt>cutoff));
+    if(d.name&&d.name!==user.name)setUser(u=>({...u,name:d.name}));
   };
 
-  useEffect(()=>{
-    const load=async()=>{
-      setSyncStatus("loading");
-      try{
-        const r=await storage.get(storageKey(user.email));
-        if(r?.value){
-          const d=JSON.parse(r.value);
-          applyRemoteData(d);
-          if(d.name&&d.name!==user.name)setUser(u=>({...u,name:d.name}));
-        }
-        remoteVersionRef.current=r?.version??null;
-        setSyncStatus("saved");
-      }catch{
-        setSyncStatus("idle");
-      }
-      loadedAtRef.current=Date.now();
+  const loadData=async()=>{
+    setLoadError(null);
+    setSyncStatus("loading");
+    try{
+      applyDoc(await engine.load());
+      setSyncStatus("saved");
       setIsLoaded(true);
-    };
-    load();
-  },[user.email]);
-
-  // Recarrega a versão mais recente da nuvem (usado quando um conflito é
-  // detectado): a pessoa perde a edição não salva localmente, mas ganha a
-  // versão mais atual em vez de sobrescrevê-la sem querer.
-  const reloadFromRemote=async()=>{
-    try{
-      const r=await storage.get(storageKey(user.email));
-      isReloadingRef.current=true;
-      if(r?.value)applyRemoteData(JSON.parse(r.value));
-      remoteVersionRef.current=r?.version??null;
-      setSyncStatus("saved");
-      showToast("Dados atualizados com a versão mais recente da nuvem.","success");
-    }catch{
-      showToast("Não consegui recarregar os dados agora. Tente de novo.","error");
-    }
-  };
-
-  // Função de salvamento compartilhada entre o autosave (debounced) e o
-  // botão manual de "salvar agora" — evita duplicar a lógica de conflito.
-  //
-  // A detecção de conflito acontece dentro do próprio `storage.set`, como
-  // uma escrita condicional atômica no banco (UPDATE ... WHERE updated_at =
-  // versão esperada). Não há mais uma janela entre "checar" e "escrever".
-  // BUG-02: marca quando uma escrita já está em voo, pra quem for fazer um
-  // flush de emergência (ao esconder a aba) saber que não precisa — e não
-  // deve — disparar uma segunda chamada por cima da que já está em curso.
-  const saveInFlightRef=useRef(false);
-  const doSave=async()=>{
-    saveInFlightRef.current=true;
-    const newUpdatedAt=Date.now();
-    const payload=JSON.stringify({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,onboardingDismissed,updatedAt:newUpdatedAt});
-    const trySave=async()=>storage.set(storageKey(user.email),payload,remoteVersionRef.current);
-    try{
-      const result=await trySave();
-      if(!result)throw new Error("Sem resposta do armazenamento");
-      if(result.conflict){setSyncStatus("conflict");return "conflict";}
-      remoteVersionRef.current=result.version;
-      setSyncStatus("saved");
-      return "saved";
     }catch(e){
-      console.error("LaCalle Finance — erro ao salvar na nuvem:",e);
-      // ---- Uma nova tentativa automática antes de avisar o usuário: cobre
-      // falhas passageiras de rede/rate limit sem exigir ação manual. ----
-      try{
-        const retryResult=await trySave();
-        if(retryResult?.conflict){setSyncStatus("conflict");return "conflict";}
-        if(retryResult){remoteVersionRef.current=retryResult.version;setSyncStatus("saved");return "saved";}
-      }catch(e2){console.error("LaCalle Finance — nova tentativa de salvar também falhou:",e2);}
+      // Falha ao carregar não vira "conta vazia e sincronizada": a tela de
+      // carregamento mostra o erro e um botão para tentar de novo, e nada é
+      // gravado por cima do que está na nuvem.
+      console.error("LaCalle Finance — erro ao carregar:",e);
+      setLoadError(e);
       setSyncStatus("error");
-      return "error";
-    }finally{
-      saveInFlightRef.current=false;
     }
   };
-  // Espelha `doSave`/`syncStatus` em refs pra um listener registrado UMA vez
-  // (deps vazias, ver useEffect abaixo) sempre chamar a versão mais recente
-  // — sem precisar recriar/re-registrar o listener a cada render.
-  const doSaveRef=useRef(doSave);
-  doSaveRef.current=doSave;
+  useEffect(()=>{loadData();},[user.email]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Grava agora o estado atual da tela. Se a junção com a nuvem trouxe algo
+  // de outro aparelho, a tela adota (sem perder o que ainda não foi salvo).
+  const runSave=async()=>{
+    const r=await engine.save(docRef.current);
+    if(r.adopt){
+      applyDoc(engine.rebase(docRef.current));
+      showToast("Juntamos o que você fez em outro aparelho.","info");
+    }
+    if(r.status==="error"||r.status==="offline"){setSyncStatus(r.status);return r.status;}
+    setSyncStatus(engine.isBusy()||saveTimerRef.current?"saving":"saved");
+    return r.status;
+  };
+  const runSaveRef=useRef(runSave);
+  runSaveRef.current=runSave;
   const syncStatusRef=useRef(syncStatus);
   syncStatusRef.current=syncStatus;
 
   useEffect(()=>{
     if(!isLoaded)return;
-    if(justLoadedRef.current){justLoadedRef.current=false;setSyncStatus("saved");return;}
-    if(isUndoingRef.current){isUndoingRef.current=false;setSyncStatus("saved");return;}
-    if(isReloadingRef.current){isReloadingRef.current=false;setSyncStatus("saved");return;}
     setSyncStatus("saving");
     if(saveTimerRef.current)clearTimeout(saveTimerRef.current);
     saveTimerRef.current=setTimeout(async()=>{
       saveTimerRef.current=null;
-      const status=await doSave();
-      if(status==="error")showToast("Falha ao salvar na nuvem. Toque no ícone de atualizar ao lado de \"Sincronizado\" para tentar de novo.","error");
-      else if(status==="conflict")showToast("Esses dados foram atualizados em outra aba ou aparelho. Toque em \"Recarregar\" ao lado do status antes de continuar editando, pra não perder a versão mais recente.","error");
+      const status=await runSaveRef.current();
+      if(status==="error")showToast("Falha ao salvar na nuvem. Toque no ícone de atualizar ao lado do status para tentar de novo.","error");
     },1200);
     return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};
-  },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,trash,onboardingDismissed,isLoaded]);
+  },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,trash,onboardingDismissed,isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps -- só os dados disparam o salvamento; as funções são lidas atuais
 
-  // ---- BUG-02: elimina a janela em que uma edição pendente (ainda dentro
-  // do debounce de 1200ms) se perde silenciosamente se o usuário fechar ou
-  // trocar de aba antes do autosave disparar.
-  //
-  // Por que `visibilitychange`→hidden, e não confiar só em `beforeunload`:
-  // uma vez que a página começou a ser destruída (unload), o navegador pode
-  // matar uma requisição de rede em andamento antes dela terminar — não dá
-  // pra "esperar uma promise" nesse momento com garantia nenhuma.
-  // `visibilitychange` para "hidden", por outro lado, dispara de forma
-  // confiável ao trocar de aba, minimizar ou iniciar o fechamento, e nesse
-  // instante a página AINDA não está sendo destruída — uma requisição
-  // disparada aqui tem chance real de completar. Por isso fazemos o flush
-  // aqui (proativamente), e usamos `beforeunload` só para avisar o usuário
-  // (diálogo nativo do navegador), nunca para tentar salvar.
+  // ---- BUG-02: ao esconder a aba, grava na hora o que ainda estava no
+  // intervalo de espera (1,2 s), em vez de arriscar perder no fechamento.
+  // `visibilitychange`→hidden dispara de forma confiável antes de a página
+  // ser destruída; `beforeunload` só avisa, nunca tenta salvar.
+  // Ao voltar para a aba, confere se outro aparelho gravou algo e junta.
   useEffect(()=>{
-    const flushIfPending=()=>{
-      if(!shouldFlushOnHide({visibilityState:document.visibilityState,syncStatus:syncStatusRef.current,saveInFlight:saveInFlightRef.current}))return;
-      if(saveTimerRef.current){clearTimeout(saveTimerRef.current);saveTimerRef.current=null;}
-      const status=doSaveRef.current();
-      if(status&&typeof status.catch==="function")status.catch(()=>{});
+    const onVisibility=async()=>{
+      if(shouldFlushOnHide({visibilityState:document.visibilityState,syncStatus:syncStatusRef.current,saveInFlight:engine.isBusy()})){
+        if(saveTimerRef.current){clearTimeout(saveTimerRef.current);saveTimerRef.current=null;}
+        runSaveRef.current().catch(()=>{});
+        return;
+      }
+      if(document.visibilityState==="visible"&&!saveTimerRef.current&&!engine.isBusy()){
+        try{
+          if(await engine.refresh()){
+            applyDoc(engine.rebase(docRef.current));
+            showToast("Atualizado com o que você fez em outro aparelho.","info");
+          }
+        }catch{/* sem rede agora; confere na próxima vez */}
+      }
     };
-    document.addEventListener("visibilitychange",flushIfPending);
+    document.addEventListener("visibilitychange",onVisibility);
+    // Voltou a conexão: envia o que ficou guardado no aparelho.
+    const onOnline=()=>{if(syncStatusRef.current==="offline"||syncStatusRef.current==="error")runSaveRef.current().catch(()=>{});};
+    window.addEventListener("online",onOnline);
     // Fallback: em navegadores/mobile onde `visibilitychange` não cobre a
     // navegação para fora do app (ex.: Safari iOS em alguns fluxos).
-    window.addEventListener("pagehide",flushIfPending);
-    // Só avisa — nunca tenta esperar uma promise durante o unload. O próprio
-    // diálogo nativo do navegador já dá tempo de sobra para o flush acima
-    // (disparado no `visibilitychange` que antecede este evento) terminar.
+    window.addEventListener("pagehide",onVisibility);
     const warnIfDirty=e=>{
       if(!shouldWarnBeforeUnload({syncStatus:syncStatusRef.current}))return;
       e.preventDefault();
@@ -535,18 +497,20 @@ function MainApp({user,setUser}){
     };
     window.addEventListener("beforeunload",warnIfDirty);
     return()=>{
-      document.removeEventListener("visibilitychange",flushIfPending);
-      window.removeEventListener("pagehide",flushIfPending);
+      document.removeEventListener("visibilitychange",onVisibility);
+      window.removeEventListener("pagehide",onVisibility);
       window.removeEventListener("beforeunload",warnIfDirty);
+      window.removeEventListener("online",onOnline);
     };
-  },[]);
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const retrySave=async()=>{
+    if(saveTimerRef.current){clearTimeout(saveTimerRef.current);saveTimerRef.current=null;}
     setSyncStatus("saving");
-    const status=await doSave();
-    if(status==="saved")showToast("Salvo na nuvem!","success");
-    else if(status==="error")showToast("Ainda não consegui salvar na nuvem. Verifique sua conexão e tente novamente.","error");
-    else if(status==="conflict")showToast("Esses dados foram atualizados em outra aba ou aparelho. Toque em \"Recarregar\" para ver a versão mais recente.","error");
+    const status=await runSave();
+    if(status==="saved"||status==="unchanged")showToast("Salvo na nuvem!","success");
+    else if(status==="offline")showToast("Ainda sem conexão. O que você fez está guardado neste aparelho e vai para a nuvem quando a internet voltar.","info");
+    else showToast("Ainda não consegui salvar na nuvem. Verifique sua conexão e tente novamente.","error");
   };
 
 
@@ -574,7 +538,8 @@ function MainApp({user,setUser}){
         // O modal de apagar conta não fecha no meio da operação (evita a
         // pessoa achar que cancelou uma exclusão que já está em andamento).
         if(!deleteAccountBusyRef.current){setDeleteAccountOpen(false);setDeleteAccountPhrase("");}
-        cancelEditTx();
+        setProjectionDrawer(null);
+        cancelEditTxRef.current();
       }
     };
     window.addEventListener("keydown",handler);
@@ -587,7 +552,7 @@ function MainApp({user,setUser}){
   // forma útil e só sujavam o seletor.
   const months=useMemo(()=>{
     const s=new Set(transactions.map(t=>monthKey(t.date)).filter(k=>k!=="???"));
-    return[...s].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+    return[...s].sort((a,b)=>monthIndex(a)-monthIndex(b));
   },[transactions]);
   const filtered=useMemo(()=>{let tx=filterMonth?transactions.filter(t=>monthKey(t.date)===filterMonth):transactions;if(filterCat)tx=tx.filter(t=>t.cat===filterCat);if(filterType)tx=tx.filter(t=>t.type===filterType);if(search.trim())tx=tx.filter(t=>t.desc.toLowerCase().includes(search.toLowerCase()));return tx;},[transactions,filterMonth,filterCat,filterType,search]);
 
@@ -652,6 +617,12 @@ function MainApp({user,setUser}){
 
   const fixedVarSplit=useMemo(()=>FinancialEngine.ExpenseAnalyzer.fixedVarSplit(realized),[realized]);
   const patrimonioLiquido=balance+invNet;
+  // Evolução do patrimônio no Início: até 12 meses, a partir do primeiro com lançamento.
+  const patrimonySeries=useMemo(()=>{
+    const all=FinancialEngine.CashFlowAnalyzer.patrimonyByMonth(realized,monthKey(todayISO));
+    const start=all.findIndex(p=>p.hasData);
+    return start<0?[]:all.slice(start);
+  },[realized,todayISO]);
   const savingsRate=FinancialEngine.IncomeAnalyzer.savingsRate(balance,totalIn);
   const committedIncome=FinancialEngine.IncomeAnalyzer.committedRatio(totalIn,totalOut);
   const reservaFinanceira=useMemo(()=>wishes.reduce((s,w)=>s+(w.saved||0),0),[wishes]);
@@ -671,8 +642,8 @@ function MainApp({user,setUser}){
   const txByDate=useMemo(()=>FinancialEngine.ForecastEngine.groupByDate(transactions),[transactions]);
 
   const nextMonthKeyReal=useMemo(()=>{
-    const idx=MONTH_ORDER.indexOf(currentMonthKeyReal);
-    return idx>=0&&idx+1<MONTH_ORDER.length?MONTH_ORDER[idx+1]:currentMonthKeyReal;
+    const idx=monthIndex(currentMonthKeyReal);
+    return idx>=0?monthAt(idx+1):currentMonthKeyReal;
   },[currentMonthKeyReal]);
 
   const committedNextMonth=useMemo(()=>FinancialEngine.BudgetAnalyzer.committedForMonth({transactions,plannedExpenses,month:nextMonthKeyReal,todayISO}),[transactions,plannedExpenses,nextMonthKeyReal,todayISO]);
@@ -805,7 +776,7 @@ function MainApp({user,setUser}){
   const freeBalance=useMemo(()=>FinancialEngine.CashFlowAnalyzer.freeBalance({transactions,plannedExpenses,balance,todayISO,currentMonthKey:currentMonthKeyReal}),[transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal]);
   const freeBalanceBreakdown=useMemo(()=>{
     const futureOut=transactions.filter(t=>t.date>todayISO&&t.type==="Saída"&&t.cat!=="Investimento").reduce((s,t)=>s+t.val,0);
-    const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKeyReal).reduce((s,p)=>s+(PlannedStatus.isPending(p,currentMonthKeyReal)?p.val:0),0);
+    const plannedPending=plannedExpenses.filter(p=>PlannedStatus.appliesTo(p,currentMonthKeyReal)).reduce((s,p)=>s+(PlannedStatus.isPending(p,currentMonthKeyReal)?p.val:0),0);
     return{futureOut,plannedPending};
   },[transactions,plannedExpenses,todayISO,currentMonthKeyReal]);
 
@@ -821,7 +792,7 @@ function MainApp({user,setUser}){
     ];
   },[transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal,daysToEndOfMonth]);
 
-  const upcomingEvents=useMemo(()=>[...transactions].filter(t=>t.date>todayISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6).map(t=>({...t,...eventMeta(t)})),[transactions,todayISO,plannedById]);
+  const upcomingEvents=useMemo(()=>[...transactions].filter(t=>t.date>todayISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6).map(t=>({...t,...FinancialEngine.ForecastEngine.eventMeta(t,plannedById)})),[transactions,todayISO,plannedById]);
 
   // ---- Explicação dos indicadores: gera confiança mostrando como cada número foi calculado ----
   const MAIN_EXPLAIN={
@@ -882,19 +853,28 @@ function MainApp({user,setUser}){
 
   // ---- Ações rápidas (Home) ----
   const qaDescRef=useRef(null);
+  // Novo lançamento numa folha que sobe de baixo, de qualquer tela (antes o
+  // formulário morava no topo de Transações e as ações rápidas do Início
+  // levavam até lá).
+  const [showNewTx,setShowNewTx]=useState(false);
+  const openNewTx=(type="despesa")=>quickAction(type);
+  const closeNewTx=()=>{
+    if(qaDesc.trim()||qaVal){setConfirmDiscard("newtx");return;}
+    setShowNewTx(false);
+  };
   const quickAction=type=>{
     if(type==="meta"){
       setTab("wishes");setEditingWish(null);setWishForm({name:"",price:"",saved:"",priority:"Média",monthsTarget:"",notes:""});setShowWishForm(true);
       return;
     }
-    setTab("transactions");
+    setShowNewTx(true);
     setEditingTx(null);
     resetQuickAddForm();
     if(type==="receita"){setQaType("Entrada");setQaCat("Salario / Entradas");}
     else if(type==="despesa"){setQaType("Saída");setQaCat("Alimentação");}
     else if(type==="resgate"){setQaCat("Investimento");setQaInvTipo("Resgate");setQaExpanded(true);}
     else if(type==="investimento"){setQaCat("Investimento");setQaInvTipo("Aporte");setQaExpanded(true);}
-    setTimeout(()=>{qaDescRef.current?.focus();},80);
+    setTimeout(()=>{qaValRef.current?.focus();},380);
   };
 
   const toggleNotes=key=>setExpandedNotes(p=>({...p,[key]:!p[key]}));
@@ -904,6 +884,8 @@ function MainApp({user,setUser}){
     const q=searchQuery.trim().toLowerCase();
     if(!q)return null;
     return{
+      // txTotal: quantos casaram, para o "Ver todos" (a lista mostra só 6)
+      txTotal:transactions.filter(t=>t.desc.toLowerCase().includes(q)).length,
       txRes:transactions.filter(t=>t.desc.toLowerCase().includes(q)).slice(0,6),
       catRes:fullCats.filter(c=>c.toLowerCase().includes(q)).slice(0,6),
       wishRes:wishes.filter(w=>w.name.toLowerCase().includes(q)||(w.notes||"").toLowerCase().includes(q)).slice(0,6),
@@ -916,6 +898,7 @@ function MainApp({user,setUser}){
 
   const closeSearch=()=>{setShowSearch(false);setSearchQuery("");};
   const goToTx=t=>{setTab("transactions");setSearch(t.desc);closeSearch();};
+  const goToAllTx=()=>{setTab("transactions");setSearch(searchQuery.trim());closeSearch();};
   const goToCat=c=>{setTab("transactions");setFilterCat(c);closeSearch();};
   const goToWish=()=>{setTab("wishes");closeSearch();};
   const goToPlanned=p=>{setTab("planned");if(!p.recurring&&p.month)setPlannedMonth(p.month);closeSearch();};
@@ -959,7 +942,11 @@ function MainApp({user,setUser}){
         setTransactions(p=>[...newTxs,...p]);
       }
       resetQuickAddForm();
-      showToast(editingTx!==null?"Lançamento atualizado!":"Lançamento adicionado!","success");
+      if(editingTx===null){
+        setShowNewTx(false);
+        const len=historyRef.current.length;
+        showToast("Lançamento adicionado.","success",{action:{label:"Desfazer",onClick:()=>undoIfLast(len)}});
+      }else showToast("Lançamento atualizado.","success");
     }catch(e){
       // Falha inesperada durante o commit: libera o lock na hora em vez de
       // deixar o botão travado até o fim do cooldown sem nenhuma transação
@@ -992,6 +979,8 @@ function MainApp({user,setUser}){
     editTxSnapshotRef.current=JSON.stringify({type:t.type,desc:t.desc,val:toDecimalStr(t.val),cat:t.cat,date:t.date,form:t.form,fixed:t.fixed});
   };
   const cancelEditTx=()=>{setEditingTx(null);resetQuickAddForm();setQaType("Saída");setQaCat("Alimentação");};
+  // O atalho de Esc é registrado uma vez só; lê a versão atual por ref.
+  cancelEditTxRef.current=cancelEditTx;
   // Fecha o modal de editar lançamento, mas confirma antes se algo foi
   // realmente alterado (evita perder edição sem querer ao clicar fora ou no X).
   const requestCloseEditTx=()=>{
@@ -999,6 +988,13 @@ function MainApp({user,setUser}){
     const current=JSON.stringify({type:qaType,desc:qaDesc,val:qaVal,cat:qaCat,date:qaDate,form:qaForm,fixed:qaFixed});
     if(editTxSnapshotRef.current&&current!==editTxSnapshotRef.current)setConfirmDiscard("tx");
     else cancelEditTx();
+  };
+  // As listas excluem no segundo toque (ConfirmIconButton); o painel de
+  // projeção continua passando pelo modal, que mostra o impacto no saldo.
+  const performDelete=req=>{
+    if(req.type==="wish")deleteWish(req.id);
+    else if(req.type==="planned")deletePlannedItem(req.id);
+    else if(req.type==="tx")deleteTx(req.id);
   };
   const deleteTx=id=>{
     const item=transactions.find(x=>x.id===id);
@@ -1010,23 +1006,12 @@ function MainApp({user,setUser}){
     // deixá-lo com um número de parcelas que não existem mais — antes disso
     // o card do parcelamento mentia permanentemente sobre quanto ainda falta.
     if(item?.installmentId)setInstallments(p=>removeTxFromInstallments(p,item));
-    showToast("Transação removida.","info");
+    deletedToast("Lançamento");
   };
 
   const qaValRef=useRef(null);
   const plannedValRef=useRef(null);
 
-  // ---- Scroll automático até o formulário ao abrir (Adicionar OU Editar) ----
-  // Sem isso, ao clicar em "Editar" num item lá embaixo da lista, o formulário
-  // abre no topo da seção e fica fora da área visível.
-  const wishFormRef=useRef(null);
-  const plannedFormRef=useRef(null);
-  useEffect(()=>{
-    if(showWishForm)requestAnimationFrame(()=>wishFormRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
-  },[showWishForm]);
-  useEffect(()=>{
-    if(showPlannedForm)requestAnimationFrame(()=>plannedFormRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
-  },[showPlannedForm]);
   const applyFrequent=item=>{
     setQaDesc(item.desc);
     setQaVal(toDecimalStr(item.val));
@@ -1076,7 +1061,19 @@ function MainApp({user,setUser}){
     pushHistory();
     setWishes(p=>p.filter(x=>x.id!==id));
     if(item)moveToTrash("wish",item);
-    showToast("Meta excluída.","info");
+    deletedToast("Meta");
+  };
+  // Sobe ou desce uma meta na lista que está na tela; a partir daí a lista
+  // fica em "Minha ordem", começando da ordem que a pessoa estava vendo.
+  const moveWish=(id,dir)=>{
+    const list=[...sortedWishes];
+    const i=list.findIndex(w=>w.id===id),j=i+dir;
+    if(i<0||j<0||j>=list.length||!!list[i].done!==!!list[j].done)return;
+    [list[i],list[j]]=[list[j],list[i]];
+    const pos=new Map(list.map((w,k)=>[w.id,k]));
+    pushHistory();
+    setWishes(p=>p.map(w=>w.order===pos.get(w.id)?w:{...w,order:pos.get(w.id)}));
+    setWishSortBy("manual");
   };
   const toggleWishDone=id=>{pushHistory();setWishes(p=>p.map(x=>x.id===id?{...x,done:!x.done}:x));};
 
@@ -1092,12 +1089,13 @@ function MainApp({user,setUser}){
     if(!form.recurring&&!form.month){showToast("Escolha o mês previsto para concluir a transferência.","error");return;}
     pushHistory();
     const payload=wishToPlannedPayload(item,form);
+    if(payload.recurring)payload.from=plannedMonth; // começa no mês que está sendo visto
     // remoção da origem e criação no destino no mesmo lote de atualização,
     // sobre o mesmo snapshot de histórico -> operação atômica (undo desfaz as duas juntas)
     setPlannedExpenses(p=>[...p,{...payload,id:genId()}]);
     setWishes(p=>p.filter(x=>x.id!==item.id));
     setTransferWish(null);
-    showToast("✅ Item movido para Previstos.","success");
+    showToast("Item movido para Previstos.","success");
   };
 
   // ---- Transferência Previsto -> Desejo ----
@@ -1110,7 +1108,7 @@ function MainApp({user,setUser}){
     setWishes(p=>[...p,{...payload,id:genId()}]);
     setPlannedExpenses(p=>p.filter(x=>x.id!==transferPlanned.id));
     setTransferPlanned(null);
-    showToast("✅ Item movido para Metas.","success");
+    showToast("Item movido para Metas.","success");
   };
 
   // Converte "jul/26" + dia em ISO. O dia é limitado ao último dia REAL do mês
@@ -1128,10 +1126,9 @@ function MainApp({user,setUser}){
     return `${year}-${String(mIdx+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
   };
   const shiftMonth=(mk,delta)=>{
-    let idx=MONTH_ORDER.indexOf(mk);
-    if(idx<0)idx=MONTH_ORDER.indexOf(monthKey(todayFn()));
-    const ni=Math.max(0,Math.min(MONTH_ORDER.length-1,idx+delta));
-    return MONTH_ORDER[ni];
+    let idx=monthIndex(mk);
+    if(idx<0)idx=monthIndex(monthKey(todayFn()));
+    return monthAt(idx+delta);
   };
   const savePlannedItem=()=>{
     const err=firstError([
@@ -1140,8 +1137,12 @@ function MainApp({user,setUser}){
       validateText(plannedForm.notes,{label:"nota",required:false,maxLen:MAX_NOTES_LEN}),
     ]);
     if(err){showToast(err,"error");return;}
+    const rec=plannedForm.recurring;
+    if(rec&&plannedForm.hasUntil&&plannedForm.from&&monthIndex(plannedForm.until)<monthIndex(plannedForm.from)){showToast("O último mês precisa ser igual ou depois do mês em que começa.","error");return;}
     pushHistory();
-    const base={desc:plannedForm.desc.trim(),val:roundMoney(parseNum(plannedForm.val)),cat:plannedForm.cat,form:plannedForm.form,recurring:plannedForm.recurring,month:plannedForm.recurring?null:plannedForm.month,notes:plannedForm.notes||""};
+    // Recorrente: `from` é o mês em que começa a contar e `until` o último
+    // (o "Até"). Ver PlannedStatus.appliesTo em lib/financialEngine.js.
+    const base={desc:plannedForm.desc.trim(),val:roundMoney(parseNum(plannedForm.val)),cat:plannedForm.cat,form:plannedForm.form,recurring:rec,month:rec?null:plannedForm.month,from:rec?(plannedForm.from||null):null,until:rec&&plannedForm.hasUntil?plannedForm.until:null,notes:plannedForm.notes||""};
     if(editingPlanned!==null){
       setPlannedExpenses(p=>p.map(x=>x.id===editingPlanned?{...x,...base}:x));
       setEditingPlanned(null);
@@ -1149,7 +1150,7 @@ function MainApp({user,setUser}){
       setPlannedExpenses(p=>[...p,{...base,id:genId(),paid:{},ignored:{}}]);
     }
     setShowPlannedForm(false);
-    setPlannedForm({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:plannedMonth,notes:""});
+    setPlannedForm({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:plannedMonth,from:plannedMonth,hasUntil:false,until:plannedMonth,notes:""});
     showToast("Previsto salvo!","success");
   };
   // Fecha o formulário de Previsto, mas confirma antes se algo foi digitado/
@@ -1161,7 +1162,8 @@ function MainApp({user,setUser}){
   };
   const startEditPlanned=item=>{
     setEditingPlanned(item.id);
-    const snap={desc:item.desc,val:toDecimalStr(item.val),cat:item.cat,form:item.form,recurring:item.recurring,month:item.month||plannedMonth,notes:item.notes||""};
+    // `from` vazio = "desde sempre" (recorrentes cadastrados antes desta regra)
+    const snap={desc:item.desc,val:toDecimalStr(item.val),cat:item.cat,form:item.form,recurring:item.recurring,month:item.month||plannedMonth,from:item.recurring?(item.from||""):plannedMonth,hasUntil:!!item.until,until:item.until||plannedMonth,notes:item.notes||""};
     setPlannedForm(snap);
     plannedFormSnapshotRef.current=JSON.stringify(snap);
     setShowPlannedForm(true);
@@ -1171,7 +1173,7 @@ function MainApp({user,setUser}){
     pushHistory();
     setPlannedExpenses(p=>p.filter(x=>x.id!==id));
     if(item)moveToTrash("planned",item);
-    showToast("Previsto excluído.","info");
+    deletedToast("Previsto");
   };
   // ---- Marcar/desmarcar como pago, para um mês específico -------------------
   // Recebe o mês explicitamente (em vez de sempre usar `plannedMonth`, o mês
@@ -1206,10 +1208,18 @@ function MainApp({user,setUser}){
     setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,ignored:{...x.ignored,[month]:isIgnored?undefined:true}}:x));
     return!isIgnored;
   };
+  // ---- Encerrar um recorrente: conta até `month` e some depois; os meses anteriores ficam ----
+  const endPlannedAt=(item,month)=>{
+    pushHistory();
+    setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,until:month}:x));
+    const len=historyRef.current.length;
+    showToast(`"${item.desc}" conta até ${month}.`,"info",{action:{label:"Desfazer",onClick:()=>undoIfLast(len)}});
+  };
   // ---- Transforma um previsto de "só este mês" em recorrente todo mês ----
   const makePlannedRecurring=item=>{
     pushHistory();
-    setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,recurring:true,month:null}:x));
+    // passa a contar a partir do mês em que estava previsto
+    setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,recurring:true,month:null,from:x.month||null}:x));
     showToast(`"${item.desc}" agora é recorrente (todo mês).`,"success");
   };
 
@@ -1221,13 +1231,7 @@ function MainApp({user,setUser}){
       const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
       if(lines.length===0){showToast("Arquivo vazio.","error");return;}
 
-      const parseLine=line=>{
-        if(line.includes("\t"))return line.split("\t").map(c=>c.trim().replace(/^"|"$/g,""));
-        const cols=[];let cur="",inQ=false;
-        for(const ch of line){if(ch==='"'){inQ=!inQ;}else if(ch===","&&!inQ){cols.push(cur.trim());cur="";}else cur+=ch;}
-        cols.push(cur.trim());
-        return cols.map(c=>c.replace(/^"|"$/g,""));
-      };
+      const parseLine=parseCsvLine;
       const norm=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
 
       const first=parseLine(lines[0]);
@@ -1264,35 +1268,19 @@ function MainApp({user,setUser}){
       dataLines.forEach((line,i)=>{
         const cols=parseLine(line);
         if(cols.length<2)return;
-        let date=cols[colIdx.date]||"";
-        let type=colIdx.type!==undefined?(cols[colIdx.type]||""):"";
-        let invTipo=colIdx.invTipo!==undefined?cols[colIdx.invTipo]:null;
-        let fixed=colIdx.fixed!==undefined?cols[colIdx.fixed]:"Variavel";
-        let cat=colIdx.cat!==undefined?(cols[colIdx.cat]||""):"";
-        let desc=colIdx.desc!==undefined?(cols[colIdx.desc]||""):"";
-        let valRaw=colIdx.valTratado!==undefined?cols[colIdx.valTratado]:cols[colIdx.val];
-        let val=parseNum(valRaw);
-        let form=colIdx.form!==undefined?(cols[colIdx.form]||"pix").toLowerCase():"pix";
+        // Mesmas regras do formulário (data que existe, valor com teto e
+        // arredondado, descrição com limite): ver lib/csv.js.
+        const parsed=csvRowToTx(cols,colIdx);
+        if(!parsed.ok){skipped++;return;}
+        const {date,type,fixed,rawCat,desc,val,form}=parsed.row;
+        let {invTipo}=parsed.row;
 
-        if(date.includes("/")){
-          const p=date.split("/");
-          if(p.length===3){
-            const yyyy=p[2].length===4?p[2]:`20${p[2]}`;
-            date=`${yyyy}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
-          }
-        }
-        if(!date||!desc||val===0){skipped++;return;}
-
-        type=type.toLowerCase().includes("entrada")?"Entrada":"Saída";
-        const rawCat=(cat||"").trim();
         let matchedCat=rawCat?(existingLower.get(rawCat.toLowerCase())||newCatsFound.get(rawCat.toLowerCase())):null;
         if(!matchedCat&&rawCat){matchedCat=rawCat;newCatsFound.set(rawCat.toLowerCase(),matchedCat);}
-        cat=matchedCat||"Outros";
-        if(!["pix","debito","credito","dinheiro","deposito"].includes(form))form="pix";
-        if(!INV_TIPOS.includes(invTipo))invTipo=null;
+        const cat=matchedCat||"Outros";
         if(cat==="Investimento"&&!invTipo)invTipo=type==="Saída"?"Aporte":"Resgate";
 
-        newTx.push({id:genId(),date,type,fixed:fixed||"Variavel",cat,desc,val,form,invTipo});
+        newTx.push({id:genId(),date,type,fixed,cat,desc,val,form,invTipo});
         imported++;
       });
 
@@ -1311,9 +1299,8 @@ function MainApp({user,setUser}){
 
   const exportCSV=()=>{
     try{
-      const header="Data,Tipo,InvTipo,Fixo/Variavel,Categoria,Descrição,Valor,Forma";
-      const rows=[...transactions].sort((a,b)=>a.date.localeCompare(b.date)).map(t=>[t.date,t.type,t.invTipo||"",t.fixed,t.cat,`"${t.desc}"`,t.val.toFixed(2),t.form].join(","));
-      const csv="\uFEFF"+[header,...rows].join("\n");
+      // Células entre aspas e protegidas contra fórmula (ver lib/csv.js).
+      const csv=buildTxCsv(transactions);
       const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
       const url=URL.createObjectURL(blob);const a=document.createElement("a");
       a.href=url;a.download=`lacalle-finance_${filterMonth||"todos"}.csv`;
@@ -1323,7 +1310,12 @@ function MainApp({user,setUser}){
   };
   const saveProfile=()=>{
     setProfileMsg("");
-    if(newName.trim())setUser(u=>({...u,name:newName.trim()}));
+    if(newName.trim()){
+      setUser(u=>({...u,name:newName.trim()}));
+      // O nome também vive na conta (user_metadata): sem isto, a renovação da
+      // sessão, mais ou menos de hora em hora, trazia o nome antigo de volta.
+      supabase.auth.updateUser({data:{name:newName.trim()}}).catch(()=>{});
+    }
     setProfileMsg("Salvo!");setTimeout(()=>setProfileMsg(""),2500);
   };
   // Exclusão definitiva da conta. Antes era um window.confirm — um único clique
@@ -1351,7 +1343,17 @@ function MainApp({user,setUser}){
         // vez de sair da tela achando que a conta sumiu quando na verdade
         // só a sessão local caiu e a conta real continua existindo.
         const{error}=await supabase.functions.invoke("delete-account");
-        if(error)throw error;
+        if(error){
+          // A função só apaga com login recente (ver supabase/functions/delete-account).
+          const body=await error.context?.json?.().catch(()=>null);
+          if(body?.code==="reauth_required"){
+            deleteAccountBusyRef.current=false;
+            setDeleteAccountBusy(false);
+            showToast("Por segurança, entre de novo com sua senha e apague a conta logo em seguida.","info",{action:{label:"Sair e entrar",onClick:()=>setUser(null)}});
+            return;
+          }
+          throw error;
+        }
         deleteAccountBusyRef.current=false;
         setDeleteAccountBusy(false);
         closeDeleteAccount();
@@ -1379,7 +1381,7 @@ function MainApp({user,setUser}){
   };
   const exportAllBackup=()=>{
     try{
-      const data={tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,exportedAt:new Date().toISOString()};
+      const data=buildBackup({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,onboardingDismissed});
       const json=JSON.stringify(data,null,2);
       const blob=new Blob([json],{type:"application/json"});
       const url=URL.createObjectURL(blob);const a=document.createElement("a");
@@ -1395,7 +1397,7 @@ function MainApp({user,setUser}){
       let d;
       try{
         d=JSON.parse(ev.target.result);
-      }catch(err){
+      }catch{
         showToast("Arquivo inválido ou corrompido.","error");
         return;
       }
@@ -1440,25 +1442,11 @@ function MainApp({user,setUser}){
     setTrash(newTrash);
     setPendingImport(null);
     setShowProfile(false);
-    (async()=>{
-      setSyncStatus("saving");
-      try{
-        const newUpdatedAt=Date.now();
-        const payload=JSON.stringify({tx:newTx,wishes:newWishes,inst:newInst,planned:newPlanned,customCats:newCustomCats,name:newUserName,accentKey:newAccentKey,walletName:newWalletName,trash:newTrash,updatedAt:newUpdatedAt});
-        // Importar um backup é uma substituição explícita e intencional —
-        // não deve ser barrada por conflito de concorrência, então usa
-        // `forceSet` (sobrescreve de propósito) em vez de `set`.
-        const result=await storage.forceSet(storageKey(user.email),payload);
-        if(!result)throw new Error("Sem resposta do armazenamento");
-        remoteVersionRef.current=result.version;
-        setSyncStatus("saved");
-        showToast("Backup importado e salvo na nuvem!","success");
-      }catch(err){
-        console.error("LaCalle Finance — erro ao salvar backup importado:",err);
-        setSyncStatus("error");
-        showToast("Importado, mas falhou ao salvar na nuvem. Use 'Salvar agora' no topo.","error");
-      }
-    })();
+    if(d.onboardingDismissed!==undefined)setOnboardingDismissed(!!d.onboardingDismissed);
+    // O salvamento automático grava a troca. Importar é "substituir tudo":
+    // o que não está no backup vira exclusão, e o que veio no backup ganha a
+    // hora de agora, então vence qualquer versão anterior em outro aparelho.
+    showToast("Backup importado. Salvando na nuvem...","success");
   };
   const openInstForm=()=>{setInstDraft(d=>({...d,startDate:todayFn()}));setShowInstForm(true);};
   const addInstallment=()=>{
@@ -1510,13 +1498,13 @@ function MainApp({user,setUser}){
   // Btn/BtnGhost agora vêm de ../components/ui (usam AccentContext internamente)
 
   const renderFrequentPicks=(onPick)=>(
-    <div style={{marginBottom:16}}>
-      <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:TX2,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Repeat size={12}/>Frequentes</div>
-      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
+    <div>
+      <div id="freq-label" style={{fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Frequentes</div>
+      <div role="group" aria-labelledby="freq-label" style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
         {frequentTx.map((item,i)=>(
-          <button key={i} onClick={()=>onPick(item)} className="chip-btn" style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:2,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"9px 13px",cursor:"pointer",minWidth:112}}>
-            <span style={{fontSize:12,fontWeight:600,color:TX,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:140,display:"flex",alignItems:"center",gap:5}}><CategoryIcon cat={item.cat} size={12}/>{item.desc}</span>
-            <span className="num" style={{fontSize:12,color:TX2,fontVariantNumeric:"tabular-nums"}}>{fmt(item.val)}</span>
+          <button key={i} type="button" onClick={()=>onPick(item)} style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:2,background:"transparent",border:`1px solid ${BD}`,borderRadius:R_BTN,padding:"8px 12px",cursor:"pointer",minWidth:104,textAlign:"left"}}>
+            <span style={{fontSize:13,fontWeight:500,color:TX,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:150}}>{item.desc}</span>
+            <span className="num" style={{fontSize:12,color:TX3}}>{fmt(item.val)}</span>
           </button>
         ))}
       </div>
@@ -1524,74 +1512,79 @@ function MainApp({user,setUser}){
   );
 
   const renderTxForm=()=>(
-    <>
-      {!isEditing&&frequentTx.length>0&&renderFrequentPicks(applyFrequent)}
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {qaCat!=="Investimento"?(
-        <div style={{display:"flex",marginBottom:16,borderRadius:R_INPUT,overflow:"hidden",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`}}>
-          {["Saída","Entrada"].map(t=>(
-            <button key={t} onClick={()=>setQaType(t)} style={{flex:1,padding:"11px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:qaType===t?(t==="Saída"?"#F87171":"#34D399"):"transparent",color:qaType===t?"white":TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              {t==="Saída"?<ArrowDownCircle size={15}/>:<ArrowUpCircle size={15}/>}{t}
-            </button>
-          ))}
-        </div>
+        <Segmented ariaLabel="Tipo de lançamento" value={qaType} onChange={setQaType}
+          options={[{value:"Saída",label:"Saída",icon:ArrowDownCircle,tone:"out"},{value:"Entrada",label:"Entrada",icon:ArrowUpCircle,tone:"in"}]}/>
       ):(
-        <div style={{display:"flex",marginBottom:16,borderRadius:R_INPUT,overflow:"hidden",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`}}>
-          {INV_TIPOS.map(t=>{const Ic=INV_TIPO_ICONS[t];return(
-            <button key={t} onClick={()=>setQaInvTipo(t)} style={{flex:1,padding:"11px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:qaInvTipo===t?INV_TIPO_COLORS[t]:"transparent",color:qaInvTipo===t?"white":TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              <Ic size={14}/>{t}
+        // Aporte tira dinheiro da conta (vermelho); resgate e rendimento trazem (verde).
+        <Segmented ariaLabel="Tipo de investimento" value={qaInvTipo} onChange={setQaInvTipo}
+          options={INV_TIPOS.map(t=>({value:t,label:t,icon:INV_TIPO_ICONS[t],tone:t==="Aporte"?"out":"in"}))}/>
+      )}
+      {/* Valor primeiro, em número grande: é o que mais importa num lançamento. */}
+      <Field id="qa-val" label="Valor">{p=>(
+        <div className="amt-field">
+          <span aria-hidden="true">R$</span>
+          <MoneyInput ref={qaValRef} {...p} placeholder="0,00" value={qaVal} onChange={setQaVal} onKeyDown={e=>e.key==="Enter"&&quickAdd()}/>
+        </div>
+      )}</Field>
+      <Field id="qa-desc" label="Descrição">{p=>(
+        <input ref={qaDescRef} {...p} placeholder="Ex.: Mercado" value={qaDesc} maxLength={120} onChange={e=>setQaDesc(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={SI}/>
+      )}</Field>
+      {!isEditing&&frequentTx.length>0&&renderFrequentPicks(applyFrequent)}
+      <div>
+        <div id="qa-cat-label" style={{fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Categoria</div>
+        <div role="group" aria-labelledby="qa-cat-label" style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {fullCats.map(c=>{const on=qaCat===c;return(
+            <button key={c} type="button" aria-pressed={on} onClick={()=>setQaCat(c)} className="cat-chip">
+              <i aria-hidden="true" style={{background:catColor(c)}}/>{c}
             </button>
           );})}
         </div>
-      )}
-      <div style={{display:"flex",gap:10,marginBottom:12}}>
-        <input ref={qaDescRef} placeholder="Descrição..." value={qaDesc} maxLength={120} onChange={e=>setQaDesc(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={{...SI,flex:2}}/>
-        <MoneyInput ref={qaValRef} placeholder="R$" value={qaVal} onChange={setQaVal} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={{...SI,flex:1}}/>
       </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}}>
-        {fullCats.map(c=>{const cc=catColor(c);return(
-          <button key={c} onClick={()=>setQaCat(c)} className="chip-btn" style={{padding:"7px 12px",borderRadius:R_CHIP,border:"none",fontSize:12,cursor:"pointer",background:qaCat===c?cc+"26":"rgba(255,255,255,0.03)",color:qaCat===c?cc:TX2,fontWeight:qaCat===c?700:500,display:"flex",alignItems:"center",gap:5}}><CategoryIcon cat={c} size={13}/>{c}</button>
-        );})}
-      </div>
-      <button onClick={()=>setQaExpanded(p=>!p)} style={{background:"none",border:"none",color:accent,fontSize:12,fontWeight:600,cursor:"pointer",padding:"4px 0",marginBottom:qaExpanded?12:4,display:"flex",alignItems:"center",gap:4}}>
-        {qaExpanded?<ChevronUp size={14}/>:<ChevronDown size={14}/>} data, forma, fixo/variável, repetir
-      </button>
-      {qaExpanded&&(
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:12}}>
-          <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Data</div><input type="date" value={qaDate} min={DATE_MIN} max={DATE_MAX} onChange={e=>setQaDate(e.target.value)} style={SI}/></div>
-          <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Forma</div><select value={qaForm} onChange={e=>setQaForm(e.target.value)} style={SI}>{["pix","debito","credito","dinheiro","deposito"].map(o=><option key={o}>{o}</option>)}</select></div>
-          <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Fixo/Variável</div><select value={qaFixed} onChange={e=>setQaFixed(e.target.value)} style={SI}><option value="Variavel">Variável</option><option value="Fixa">Fixa</option></select></div>
-          {!isEditing&&<div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Repetir</div><select value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option></select></div>}
+      <details className="qa-more" open={qaExpanded} onToggle={e=>setQaExpanded(e.currentTarget.open)}>
+        <summary><ChevronRight size={14} aria-hidden="true"/>Data, forma de pagamento, fixo e repetir</summary>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:8}}>
+          <Field id="qa-date" label="Data">{p=><input {...p} type="date" value={qaDate} min={DATE_MIN} max={DATE_MAX} onChange={e=>setQaDate(e.target.value)} style={SI}/>}</Field>
+          <Field id="qa-form" label="Forma">{p=><select {...p} value={qaForm} onChange={e=>setQaForm(e.target.value)} style={SI}>{[["pix","Pix"],["debito","Débito"],["credito","Crédito"],["dinheiro","Dinheiro"],["deposito","Depósito"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>}</Field>
+          <Field id="qa-fixed" label="Tipo de gasto">{p=><select {...p} value={qaFixed} onChange={e=>setQaFixed(e.target.value)} style={SI}><option value="Variavel">Variável</option><option value="Fixa">Fixo</option></select>}</Field>
+          {!isEditing&&<Field id="qa-repeat" label="Repetir">{p=><select {...p} value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option></select>}</Field>}
         </div>
-      )}
-      {/* O botão continua com aparência "inativa" quando falta preencher algo,
-          mas NÃO usa `disabled`: um botão desabilitado engole o clique sem
-          explicar nada — quem chegava aqui achava que estava quebrado. Assim o
+      </details>
+      {/* O botão parece inativo quando falta algo, mas não usa `disabled`: o
           clique sempre roda a validação, que diz exatamente o que falta. */}
-      {/* `disabled` real aqui é só o lock de duplo clique (isSubmittingTx) —
-          continua sem `disabled` para o caso "faltou preencher algo"
-          (aria-disabled), que é intencional (ver comentário acima). */}
-      <button onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",padding:"14px",borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:700,background:!canAdd?"rgba(255,255,255,0.04)":isEditing?"#FBBF24":accent,color:!canAdd?TX3:"white",boxShadow:canAdd&&!isSubmittingTx?`0 2px 10px ${isEditing?"#FBBF24":accent}40`:"none",opacity:isSubmittingTx?0.7:1,transition:"filter .15s ease, box-shadow .15s ease, opacity .15s ease"}}>
-        {isSubmittingTx?"Adicionando...":isEditing?"Salvar alterações":qaCat==="Investimento"?`+ ${qaInvTipo}`:`+ Adicionar ${qaType}`}
+      <button type="button" onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",height:48,borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:600,background:!canAdd?MUTED:accent,color:!canAdd?TX2:BG,opacity:isSubmittingTx?0.7:1}}>
+        {isSubmittingTx?"Adicionando...":isEditing?"Salvar alterações":qaCat==="Investimento"?`Adicionar ${qaInvTipo.toLowerCase()}`:`Adicionar ${qaType}`}
       </button>
-    </>
+    </div>
   );
 
   const appTabs=[
-    {id:"dashboard",label:"Início",icon:LayoutDashboard},
-    {id:"planning",label:"Planejamento",short:"Planos",icon:CalendarDays},
-    {id:"transactions",label:"Transações",icon:Receipt},
-    {id:"planned",label:"Previstos",icon:Calendar},
-    {id:"installments",label:"Parcelas",icon:CreditCard},
-    {id:"wishes",label:"Metas",icon:Sparkles},
+    {id:"dashboard",label:"Início",icon:LayoutDashboard,group:"Dia a dia",mobile:true},
+    {id:"transactions",label:"Transações",icon:Receipt,group:"Dia a dia",mobile:true},
+    {id:"wishes",label:"Metas",icon:Target,group:"Dia a dia",mobile:true},
+    {id:"planning",label:"Planejamento",short:"Planos",icon:CalendarDays,group:"Planejamento",mobile:true},
+    {id:"planned",label:"Previstos",icon:Calendar,group:"Planejamento",hint:"Contas que se repetem e as de um mês só"},
+    {id:"installments",label:"Parcelas",icon:CreditCard,group:"Planejamento",hint:"Compras parceladas em andamento"},
   ];
+  const navGroups=["Dia a dia","Planejamento"];
+  const goTab=id=>{setTab(id);setShowMore(false);};
   const instToDelete=delInstId?installments.find(i=>i.id===delInstId):null;
   const instTxCount=instToDelete?instToDelete.txIds.filter(id=>txMap.has(id)).length:0;
 
   if(!isLoaded)return(
     <div style={{background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif",gap:16}}>
-      <div style={{background:"#111111",borderRadius:R_MODAL,width:54,height:54,display:"flex",alignItems:"center",justifyContent:"center"}}><LogoSymbol size={25} color="#FFFFFF"/></div>
-      <div style={{color:TX,fontWeight:700,fontSize:17}}>LaCalle <span style={{color:GOLD}}>Finance</span></div>
-      <div style={{color:TX2,fontSize:13,display:"flex",alignItems:"center",gap:6}}><Loader2 size={14} className="spin"/>Carregando seus dados…</div>
+      <FinanceMark size={40}/>
+      <div style={{color:TX,fontWeight:700,fontSize:17,letterSpacing:"-0.03em"}}>LaCalle <span style={{color:GOLD}}>Finance</span></div>
+      {loadError?(
+        <div role="alert" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,maxWidth:320,textAlign:"center",padding:"0 20px"}}>
+          <div style={{color:TX,fontSize:14,fontWeight:600}}>Não consegui carregar seus dados.</div>
+          <div style={{color:TX2,fontSize:13,lineHeight:1.5}}>Pode ser a conexão. Nada foi apagado: seus dados continuam na nuvem.</div>
+          <Btn onClick={loadData} style={{paddingInline:22}}>Tentar de novo</Btn>
+        </div>
+      ):(
+        <div style={{color:TX2,fontSize:13,display:"flex",alignItems:"center",gap:6}}><Loader2 size={14} className="spin"/>Carregando seus dados…</div>
+      )}
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} .spin{animation:spin 1s linear infinite;}`}</style>
     </div>
   );
@@ -1638,8 +1631,6 @@ function MainApp({user,setUser}){
           .bento-half{grid-column:span 1;}
           .bento-wide{grid-column:span 4;}
         }
-        .chart-card{display:flex;flex-direction:column;}
-        .chart-card .chart-fill{flex:1;min-height:0;}
         .rg-2col{display:grid;grid-template-columns:1fr;gap:20px;}
         @media(min-width:900px){.rg-2col{grid-template-columns:1fr 1fr;}}
         .insights-grid{display:grid;grid-template-columns:1fr;gap:14px;}
@@ -1680,93 +1671,170 @@ function MainApp({user,setUser}){
           *{transition-duration:.01ms !important;}
         }
 
-        /* ---- Mobile responsiveness ---- */
-        .app-header{display:flex;align-items:center;gap:14px;}
-        .hdr-info{flex:1;min-width:0;}
-        .hdr-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
-        @media(max-width:560px){
-          .main-content{padding:16px !important;}
-          .app-header{padding:12px 16px !important;gap:10px;}
-          .hero-balance{font-size:36px !important;}
-          .hdr-username{display:none;}
+        /* ---- Estrutura (nova cara, 05/10/2026) ----
+           Computador (> 760px): barra lateral fixa de 240px com os destinos em
+           dois grupos e o marcador de 3px do item atual (sidebar do Life).
+           Celular: cabeçalho com a assinatura, barra de baixo com 5 destinos. */
+        .side-nav{position:fixed;top:0;bottom:0;left:0;width:240px;display:flex;flex-direction:column;background:${CARD};border-right:1px solid ${BD};z-index:200;}
+        .side-logo{height:64px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid ${BD};flex-shrink:0;}
+        .side-groups{flex:1;overflow-y:auto;padding:12px;}
+        .side-group-title{padding:20px 12px 8px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${TX3};}
+        .side-groups>div:first-child .side-group-title{padding-top:8px;}
+        .side-item{position:relative;width:100%;display:flex;align-items:center;gap:12px;height:40px;padding:0 12px 0 16px;border:none;border-radius:${R_BTN}px;background:transparent;color:${TX2};font-size:14px;cursor:pointer;text-align:left;margin-bottom:2px;}
+        .side-item:hover{background:${MUTED};color:${TX};filter:none !important;}
+        .side-item.on{background:${accentSurface(accent)};color:${accentText(accent)};font-weight:600;}
+        .side-item.on::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px;background:${accent};}
+        .side-foot{display:flex;align-items:center;gap:10px;padding:12px 12px 12px 16px;border-top:1px solid ${BD};}
+        .side-avatar{position:relative;width:32px;height:32px;border-radius:50%;background:${MUTED};color:${TX2};border:none;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+        .side-avatar::after{content:"";position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%);}
+        .app-main{margin-left:240px;min-width:0;}
+        .app-header{display:flex;align-items:center;gap:12px;min-height:56px;padding:0 32px;padding-top:env(safe-area-inset-top);border-bottom:1px solid ${BD};background:${BG};}
+        .hdr-sig{display:none;}
+        .hdr-sync{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:12px;color:${TX3};}
+        .hdr-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+        .hdr-btn{position:relative;display:inline-flex;align-items:center;gap:4px;background:none;border:none;border-radius:${R_BTN}px;padding:6px 8px;font-size:12px;}
+        .hdr-avatar{display:none;}
+        .bottom-nav{display:none;}
+        .only-mobile{display:none;}
+        .home-hero{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr));gap:20px;align-items:center;background:${CARD};border:1px solid ${BD};border-left:3px solid ${accent};border-radius:${R_CARD}px;padding:20px 20px 20px 28px;}
+        .home-metric{font-size:36px;line-height:1.1;letter-spacing:-0.02em;font-weight:600;margin-top:6px;white-space:nowrap;}
+        .home-hero-num{position:relative;display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;background:none;border:none;border-left:1px solid ${BD};padding:4px 0 4px 20px;cursor:pointer;min-width:0;color:${TX};}
+        .home-hero-num span{font-size:12px;color:${TX3};}
+        .home-hero-num b{font-size:18px;font-weight:600;white-space:nowrap;}
+        .home-hero-num:hover{filter:none !important;}
+        .home-hero-num:hover span{text-decoration:underline;text-underline-offset:3px;}
+        .home-grid{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:24px;align-items:start;}
+        .home-col{display:flex;flex-direction:column;gap:24px;min-width:0;}
+        .home-list{list-style:none;margin:0;padding:0;}
+        .home-li{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid ${BD};}
+        .home-li:first-child{border-top:none;}
+        .home-li-name{font-size:14px;color:${TX};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .home-li-meta{font-size:12px;color:${TX3};margin-top:1px;}
+        .home-li-val{font-size:13.5px;font-weight:600;white-space:nowrap;color:${TX};}
+        .home-li-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;background:none;border:none;padding:0;cursor:pointer;text-align:left;}
+        .home-li-btn:hover{filter:none !important;}
+        .home-li-btn:hover .home-li-name{text-decoration:underline;text-underline-offset:3px;}
+        .home-link{position:relative;background:none;border:none;font-size:12px;color:${TX2};text-decoration:underline;text-underline-offset:4px;cursor:pointer;padding:0;}
+        .home-link::after{content:"";position:absolute;left:50%;top:50%;width:100%;min-width:44px;height:44px;transform:translate(-50%,-50%);}
+        .amt-field{display:flex;align-items:baseline;gap:8px;height:60px;padding:0 14px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:rgba(255,255,255,0.03);}
+        .amt-field:focus-within{border-color:${accent}90;box-shadow:0 0 0 3px ${accent}22;}
+        .amt-field span{font-family:${NUM_FONT};color:${TX3};font-size:16px;line-height:60px;}
+        .amt-field.amt-sm{height:48px;}.amt-field.amt-sm span{line-height:48px;font-size:14px;}.amt-field.amt-sm input{height:46px;font-size:18px;}
+        .amt-field input{flex:1;min-width:0;border:none !important;box-shadow:none !important;background:transparent;outline:none;font-family:${NUM_FONT};font-variant-numeric:tabular-nums;font-size:26px;font-weight:600;letter-spacing:-0.02em;height:58px;color:${TX};}
+        .cat-chip{position:relative;height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:${R_CHIP}px;border:1px solid ${BD};background:transparent;color:${TX2};font-size:12.5px;cursor:pointer;}
+        .cat-chip::after{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%);}
+        .cat-chip i{width:8px;height:8px;border-radius:50%;}
+        .cat-chip[aria-pressed="true"]{border-color:${accent}73;background:${accentSurface(accent)};color:${accentText(accent)};font-weight:600;}
+        .qa-more summary{list-style:none;cursor:pointer;font-size:13px;color:${TX2};display:flex;align-items:center;gap:6px;min-height:44px;}
+        .qa-more summary::-webkit-details-marker{display:none;}
+        .qa-more summary svg{transition:transform .25s ease;}
+        .qa-more[open] summary svg{transform:rotate(90deg);}
+        @media(max-width:1100px){
+          .home-grid{grid-template-columns:minmax(0,1fr);}
+          .home-hero{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:16px 16px 16px 24px;}
+          .home-hero-main{grid-column:1 / -1;padding-bottom:12px;border-bottom:1px solid ${BD};margin-bottom:4px;}
+          .home-hero-num{border-left:none;padding:4px 0;}
+          .home-hero-num b{font-size:13px;}
+          .home-hero-num span{font-size:11px;}
+        }
+        @media(max-width:760px){
+          .only-desktop{display:none;}
+          .only-mobile{display:block;}
+          .home-metric{font-size:28px;}
+        }
+        .more-row{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:none;border-radius:${R_BTN}px;text-align:left;cursor:pointer;color:${TX};}
+        .more-row:hover{background:${MUTED};filter:none !important;}
+        .more-t{display:block;font-size:14px;font-weight:500;}
+        .more-h{display:block;font-size:12px;color:${TX3};}
+        @media(max-width:760px){
+          .side-nav{display:none;}
+          .app-main{margin-left:0;}
+          .app-header{padding:0 12px 0 16px;padding-top:env(safe-area-inset-top);min-height:56px;}
+          .hdr-sig{display:inline-flex;}
           .sync-label{display:none;}
-          .stat3{grid-template-columns:repeat(3,1fr) !important;gap:8px !important;}
-          .stat3 .stat-card{padding:12px 8px !important;}
-          .stat3 .stat-val{font-size:13px !important;}
-          .stat3 .stat-label{font-size:10px !important;}
+          .hdr-avatar{display:flex;}
+          .main-content{padding:20px 16px calc(84px + env(safe-area-inset-bottom)) !important;}
+          .toast-wrap{bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
+          /* fundo sólido no tom da marca (o azul-marinho antigo sobrava aqui);
+             sólido porque desfoque com posição fixa falha no WebKit */
+          .bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:250;background:${BG};border-top:1px solid ${BD};padding:4px 4px env(safe-area-inset-bottom);}
+          .bottom-nav-btn{background:none;border:none;cursor:pointer;min-width:0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:${TX3};padding:4px 0;}
+          .bottom-nav-btn[aria-current="page"]{color:${accentText(accent)};}
+          .bottom-nav-ico{display:flex;align-items:center;justify-content:center;width:44px;height:26px;border-radius:999px;transition:background .25s ease;}
+          .bottom-nav-btn[aria-current="page"] .bottom-nav-ico{background:${accentSurface(accent)};}
+          .bottom-nav-lbl{font-size:11px;font-weight:600;line-height:1;max-width:100%;white-space:nowrap;}
         }
         @media(max-width:380px){
-          .hdr-actions .undo-count{display:none;}
-        }
-
-        /* ---- Navegação inferior (bottom nav) no celular ---- */
-        .bottom-nav{display:none;}
-        /* BUG-08: min-height garante os ~44px de alvo de toque (WCAG 2.5.5 /
-           Apple HIG) na navegação principal do celular, sem depender de
-           padding+ícone+rótulo somarem isso "por acaso" em toda fonte/zoom —
-           o botão inteiro (ícone + rótulo) já é clicável, isto só torna o
-           mínimo explícito em vez de implícito. */
-        .bottom-nav-btn{background:none;border:none;cursor:pointer;flex:1 1 0;min-width:0;min-height:44px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 1px 4px;transition:color .15s ease;}
-        .bottom-nav-ico{display:flex;align-items:center;justify-content:center;width:40px;height:26px;border-radius:13px;transition:background .18s ease;flex-shrink:0;}
-        .bottom-nav-lbl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        @media(max-width:760px){
-          .top-tabs{display:none !important;}
-          .bottom-nav{
-            display:flex;position:fixed;left:0;right:0;bottom:0;z-index:250;
-            background:rgba(11,27,43,0.97);backdrop-filter:blur(14px);
-            border-top:1px solid ${BD2};
-            padding:4px 4px calc(4px + env(safe-area-inset-bottom));
-          }
-          .main-content{padding-bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
-          .toast-wrap{bottom:calc(86px + env(safe-area-inset-bottom)) !important;}
-        }
-
-        /* ---- Margem de segurança no topo (notch/barra de status do celular) ---- */
-        .app-header{padding-top:calc(14px + env(safe-area-inset-top)) !important;}
-        @media(max-width:560px){
-          .app-header{padding-top:calc(12px + env(safe-area-inset-top)) !important;}
+          .undo-count{display:none;}
         }
       `}</style>
 
-      <div className="toast-wrap" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:300,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none",width:"100%",padding:"0 16px"}}>
+      <div className="toast-wrap" role="status" aria-live="polite" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:300,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none",width:"100%",padding:"0 16px"}}>
         {toasts.map(t=>{
           const Ic=t.type==="error"?AlertCircle:t.type==="success"?CheckCircle2:Info;
           const col=t.type==="error"?"#F87171":t.type==="success"?"#34D399":TX2;
           return(
             <div key={t.id} style={{background:"rgba(22,25,29,0.97)",backdropFilter:"blur(12px)",border:`1px solid ${BD2}`,color:TX,padding:"13px 18px",borderRadius:R_INPUT,fontSize:13,fontWeight:600,boxShadow:SH_LG,animation:`toastIn .3s ${EASE_OUT}`,maxWidth:380,display:"flex",alignItems:"center",gap:9}}>
-              <Ic size={16} color={col}/>{t.msg}
+              <Ic size={16} color={col} style={{flexShrink:0}}/><span style={{flex:1}}>{t.msg}</span>
+              {t.action&&<button type="button" className="touch-44" onClick={()=>{dismissToast(t.id);t.action.onClick();}} style={{pointerEvents:"auto",background:"none",border:"none",color:accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:"2px 4px",marginLeft:4,textDecoration:"underline",textUnderlineOffset:3}}>{t.action.label}</button>}
             </div>
           );
         })}
       </div>
 
-      <div className="app-header" style={{background:HDR,padding:"14px 24px",borderBottom:`1px solid ${BD}`}}>
-        <div style={{background:"#111111",borderRadius:R_BTN,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <LogoSymbol size={16} color="#FFFFFF"/>
-        </div>
-        <div className="hdr-info">
-          <div style={{fontWeight:700,fontSize:14.5,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:"-0.01em"}}>{walletName}</div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:1}}>
-            {syncStatus==="loading"&&<><Loader2 size={11} className="spin" color={TX3}/><span className="sync-label" style={{fontSize:11,color:TX3}}>Carregando</span></>}
-            {syncStatus==="saving"&&<><Loader2 size={11} className="spin" color={TX3}/><span className="sync-label" style={{fontSize:11,color:TX3}}>Salvando</span></>}
-            {syncStatus==="saved"&&<><Cloud size={11} color={accent}/><span className="sync-label" style={{fontSize:11,color:TX2}}>Sincronizado</span><button onClick={retrySave} title="Salvar agora" className="touch-44" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:0,display:"flex"}}><RefreshCw size={11}/></button></>}
-            {syncStatus==="error"&&<><AlertTriangle size={11} color="#FBBF24"/><span className="sync-label" style={{fontSize:11,color:"#FBBF24"}}>Erro</span><button onClick={retrySave} title="Tentar salvar de novo" className="touch-44" style={{background:"none",border:"none",color:"#FBBF24",cursor:"pointer",padding:0}}><RefreshCw size={11}/></button></>}
-            {syncStatus==="conflict"&&<><AlertTriangle size={11} color="#F87171"/><span className="sync-label" style={{fontSize:11,color:"#F87171"}} title="Esses dados foram alterados em outra aba ou aparelho">Dados desatualizados</span><button onClick={reloadFromRemote} title="Recarregar dados mais recentes" className="touch-44" style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:3,fontSize:11,fontWeight:600}}><RefreshCw size={11}/>Recarregar</button></>}
+      {/* ---- Barra lateral (computador) ---- */}
+      <aside className="side-nav" aria-label="Menu">
+        <div className="side-logo"><Signature size={20}/></div>
+        <nav aria-label="Seções" className="side-groups">
+          {navGroups.map(g=>(
+            <div key={g}>
+              <div className="side-group-title">{g}</div>
+              {appTabs.filter(t=>t.group===g).map(t=>{const Ic=t.icon;const on=tab===t.id;return(
+                <button key={t.id} type="button" id={`app-tab-${t.id}`} aria-current={on?"page":undefined} onClick={()=>goTab(t.id)} className={`side-item${on?" on":""}`}><Ic size={18} aria-hidden="true"/>{t.label}</button>
+              );})}
+            </div>
+          ))}
+        </nav>
+        <div className="side-foot">
+          <button type="button" className="side-avatar" onClick={()=>setShowProfile(true)} title="Minha conta" aria-label="Minha conta">{(user.name||"?").trim().charAt(0).toUpperCase()}</button>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
+            <div style={{fontSize:11,color:TX3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{walletName}</div>
           </div>
+          <IconButton icon={LogOut} label="Sair" onClick={()=>setUser(null)}/>
+        </div>
+      </aside>
+
+      <div className="app-main">
+      <header className="app-header">
+        <span className="hdr-sig"><Signature size={18}/></span>
+        <div className="hdr-sync" aria-live="polite">
+          {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
+          {syncStatus==="saving"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Salvando</span></>}
+          {syncStatus==="saved"&&<><Cloud size={12} color={TX3}/><span className="sync-label">Sincronizado</span><IconButton icon={RefreshCw} size={12} label="Salvar agora" onClick={retrySave}/></>}
+          {syncStatus==="offline"&&<><CloudOff size={12} color={TX2}/><span className="sync-label">Salvo neste aparelho</span><IconButton icon={RefreshCw} size={12} label="Tentar enviar para a nuvem" onClick={retrySave}/></>}
+          {syncStatus==="error"&&<><AlertTriangle size={12} color={WARNING}/><span className="sync-label" style={{color:WARNING}}>Erro ao salvar</span><IconButton icon={RefreshCw} size={12} color={WARNING} label="Tentar salvar de novo" onClick={retrySave}/></>}
         </div>
         <div className="hdr-actions">
-          <button onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} className="touch-44" style={{background:historyLen>0?"rgba(255,255,255,0.05)":"transparent",border:"none",borderRadius:12,padding:"7px 10px",color:historyLen>0?TX2:TX3,cursor:historyLen>0?"pointer":"not-allowed",fontSize:12,flexShrink:0,display:"flex",alignItems:"center",gap:5}}>
-            <Undo2 size={14}/><span className="undo-count">{historyLen>0?historyLen:""}</span>
+          <button type="button" onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} aria-label={historyLen?`Desfazer (${historyLen} passos)`:"Desfazer"} className="touch-44 hdr-btn" style={{color:historyLen?TX2:TX3,cursor:historyLen?"pointer":"not-allowed"}}>
+            <Undo2 size={16}/>{historyLen>0&&<span className="undo-count">{historyLen}</span>}
           </button>
-          <button onClick={()=>setShowSearch(true)} title="Pesquisar (Ctrl+K)" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><Search size={14}/></button>
-          <div className="hdr-username" style={{fontSize:12,color:TX2,flexShrink:0,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
-          <button onClick={()=>setShowProfile(true)} title="Minha conta" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><Settings size={14}/></button>
-          <button onClick={()=>setUser(null)} title="Sair" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><LogOut size={14}/></button>
+          <IconButton icon={Search} size={16} color={TX2} label="Pesquisar (Ctrl+K)" onClick={()=>setShowSearch(true)}/>
+          <button type="button" className="side-avatar hdr-avatar" onClick={()=>setShowProfile(true)} title="Minha conta" aria-label="Minha conta">{(user.name||"?").trim().charAt(0).toUpperCase()}</button>
         </div>
-      </div>
+      </header>
 
+      {showNewTx&&!isEditing&&(
+        <Modal align="sheet" onClose={closeNewTx} maxWidth={560} padding={20} label="Novo lançamento">
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+            <h2 style={{margin:0,fontSize:17,fontWeight:600,color:TX,letterSpacing:"-0.01em"}}>Novo lançamento</h2>
+            <IconButton icon={X} size={18} label="Fechar" onClick={closeNewTx}/>
+          </div>
+          {renderTxForm()}
+        </Modal>
+      )}
       {isEditing&&(
-        <Modal onClose={requestCloseEditTx} maxWidth={420} padding={28} zIndex={100}>
+        <Modal onClose={requestCloseEditTx} maxWidth={420} padding={28}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <div style={{fontSize:16,fontWeight:700,color:TX,letterSpacing:"-0.01em"}}>Editar lançamento</div>
             <button onClick={requestCloseEditTx} style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4}}><X size={20}/></button>
@@ -1775,7 +1843,7 @@ function MainApp({user,setUser}){
         </Modal>
       )}
       {pendingImport&&(
-        <Modal maxWidth={360} padding={32} zIndex={190} contentStyle={{textAlign:"center"}}>
+        <Modal maxWidth={360} padding={32} contentStyle={{textAlign:"center"}}>
           <div style={{width:46,height:46,borderRadius:12,background:"#FBBF2418",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Upload size={20} color="#FBBF24"/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Importar backup?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:10,lineHeight:1.5}}>Isso vai <strong style={{color:TX}}>substituir</strong> todos os seus dados atuais (transações, previstos, parcelamentos, desejos, categorias) pelos dados desse arquivo.</div>
@@ -1786,8 +1854,23 @@ function MainApp({user,setUser}){
           </div>
         </Modal>
       )}
+      {reportPick!==null&&(
+        <Modal onClose={()=>setReportPick(null)} maxWidth={380} padding={24} label="Relatório do mês">
+          <h2 style={{margin:"0 0 6px",fontSize:17,fontWeight:600,color:TX}}>Relatório do mês</h2>
+          <p style={{margin:"0 0 16px",fontSize:13,color:TX2,lineHeight:1.5}}>Resumo, categorias, previstos, metas e todos os lançamentos do mês. Na janela de impressão, escolha <b style={{color:TX}}>Salvar como PDF</b> para guardar o arquivo.</p>
+          <label htmlFor="report-month" style={{display:"block",fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Mês</label>
+          <select id="report-month" value={reportPick} onChange={e=>setReportPick(e.target.value)} style={{...SI,marginBottom:20}}>
+            {[...new Set([currentMonthKeyReal,...months])].sort((a,b)=>monthIndex(b)-monthIndex(a)).map(m=><option key={m} value={m}>{m}</option>)}
+          </select>
+          <div style={{display:"flex",gap:10}}>
+            <BtnGhost onClick={()=>setReportPick(null)} style={{flex:1,fontSize:14}}>Cancelar</BtnGhost>
+            <Btn onClick={()=>{setPrintingReport(buildMonthlyReport({transactions,plannedExpenses,wishes,month:reportPick,todayISO}));setReportPick(null);}} style={{flex:2,fontSize:14}}>Gerar PDF</Btn>
+          </div>
+        </Modal>
+      )}
+      {printingReport&&<MonthlyReport report={printingReport} owner={user.name} todayISO={todayISO} onDone={closeReport}/>}
       {showClearConfirm&&(
-        <Modal maxWidth={340} padding={32} zIndex={100} contentStyle={{textAlign:"center"}}>
+        <Modal maxWidth={340} padding={32} contentStyle={{textAlign:"center"}}>
           <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#F87171"/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar tudo?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Todas as transações serão removidas permanentemente.</div>
@@ -1818,6 +1901,7 @@ function MainApp({user,setUser}){
             <button onClick={()=>{
               if(confirmDiscard==="wish"){setShowWishForm(false);setEditingWish(null);}
               else if(confirmDiscard==="planned"){setShowPlannedForm(false);setEditingPlanned(null);}
+              else if(confirmDiscard==="newtx"){setShowNewTx(false);resetQuickAddForm();}
               else if(confirmDiscard==="tx")cancelEditTx();
               setConfirmDiscard(null);
             }} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Descartar</button>
@@ -1827,7 +1911,7 @@ function MainApp({user,setUser}){
       {deleteAccountOpen&&(()=>{
         const phraseOk=deleteAccountPhrase.trim().toUpperCase()===ACCOUNT_DELETE_PHRASE;
         return(
-        <Modal onClose={deleteAccountBusy?()=>{}:closeDeleteAccount} maxWidth={400} padding={30} zIndex={200}>
+        <Modal onClose={deleteAccountBusy?()=>{}:closeDeleteAccount} maxWidth={400} padding={30} label="Apagar sua conta">
           <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color="#F87171"/></div>
           <div style={{fontSize:17,fontWeight:700,color:TX,marginBottom:10,textAlign:"center",letterSpacing:"-0.01em"}}>Apagar sua conta para sempre?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:14,lineHeight:1.6}}>
@@ -1838,12 +1922,12 @@ function MainApp({user,setUser}){
           </div>
           <div style={{fontSize:12,color:TX2,marginBottom:6}}>Para confirmar, digite <strong style={{color:TX}}>{ACCOUNT_DELETE_PHRASE}</strong>:</div>
           <input
+            aria-label={`Digite ${ACCOUNT_DELETE_PHRASE} para confirmar`}
             value={deleteAccountPhrase}
             onChange={e=>setDeleteAccountPhrase(e.target.value)}
             disabled={deleteAccountBusy}
             autoFocus
             maxLength={40}
-            aria-label={`Digite ${ACCOUNT_DELETE_PHRASE} para confirmar`}
             placeholder={ACCOUNT_DELETE_PHRASE}
             style={{...SI,marginBottom:20,letterSpacing:"0.04em"}}
           />
@@ -1904,10 +1988,8 @@ function MainApp({user,setUser}){
             <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Forma</div><select value={transferWish.form.form} onChange={e=>setTransferWish(p=>({...p,form:{...p.form,form:e.target.value}}))} style={SI}>{["pix","debito","credito","dinheiro","deposito"].map(o=><option key={o}>{o}</option>)}</select></div>
             <div>
               <div style={{fontSize:11,color:TX2,marginBottom:5}}>Repetição</div>
-              <div style={{display:"flex",borderRadius:R_INPUT,overflow:"hidden",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`}}>
-                <button onClick={()=>setTransferWish(p=>({...p,form:{...p.form,recurring:false}}))} style={{flex:1,padding:"9px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:!transferWish.form.recurring?accent:"transparent",color:!transferWish.form.recurring?"white":TX2}}>Só um mês</button>
-                <button onClick={()=>setTransferWish(p=>({...p,form:{...p.form,recurring:true}}))} style={{flex:1,padding:"9px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:transferWish.form.recurring?accent:"transparent",color:transferWish.form.recurring?"white":TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><Repeat size={12}/>Todo mês</button>
-              </div>
+              <Segmented ariaLabel="Repetição" size="sm" value={transferWish.form.recurring} onChange={v=>setTransferWish(p=>({...p,form:{...p.form,recurring:v}}))}
+                options={[{value:false,label:"Só um mês",tone:"accent"},{value:true,label:"Todo mês",icon:Repeat,tone:"accent"}]}/>
             </div>
             {!transferWish.form.recurring&&(
               <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Mês previsto *</div><select value={transferWish.form.month} onChange={e=>setTransferWish(p=>({...p,form:{...p.form,month:e.target.value}}))} style={SI}>{MONTH_ORDER.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
@@ -1923,7 +2005,7 @@ function MainApp({user,setUser}){
         const ex=getExplain(explainKey);
         if(!ex)return null;
         return(
-          <Modal onClose={()=>setExplainKey(null)} maxWidth={440} padding={28} zIndex={180}>
+          <Modal onClose={()=>setExplainKey(null)} maxWidth={440} padding={28}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontSize:16,fontWeight:700,color:TX,display:"flex",alignItems:"center",gap:8}}><Info size={16} color={accent}/>{ex.title}</div>
               <button onClick={()=>setExplainKey(null)} style={{background:"none",border:"none",color:TX3,cursor:"pointer"}}><X size={18}/></button>
@@ -1980,7 +2062,7 @@ function MainApp({user,setUser}){
         />
       )}
       {showSearch&&(
-        <Modal onClose={closeSearch} maxWidth={560} padding={0} align="top" scroll={false} contentStyle={{maxHeight:"70vh",display:"flex",flexDirection:"column",overflow:"hidden"}} zIndex={200}>
+        <Modal onClose={closeSearch} maxWidth={560} padding={0} align="top" scroll={false} contentStyle={{maxHeight:"70vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"16px 18px",borderBottom:`1px solid ${BD}`,flexShrink:0}}>
               <Search size={16} color={TX3}/>
               <input autoFocus value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Buscar transações, categorias, metas, previstos, investimentos..." style={{flex:1,background:"none",border:"none",outline:"none",color:TX,fontSize:14}}/>
@@ -2001,6 +2083,9 @@ function MainApp({user,setUser}){
                       <span className="num" style={{fontSize:12,color:t.type==="Entrada"?"#34D399":"#F87171",fontWeight:600}}>{fmt(t.val)}</span>
                     </button>
                   ))}
+                  {searchResults.txTotal>searchResults.txRes.length&&(
+                    <button type="button" onClick={goToAllTx} style={{background:"none",border:"none",color:TX2,fontSize:12,cursor:"pointer",padding:"8px 8px",textDecoration:"underline",textUnderlineOffset:3}}>Ver todos os {searchResults.txTotal} lançamentos</button>
+                  )}
                 </div>
               )}
               {searchResults&&searchResults.catRes.length>0&&(
@@ -2081,7 +2166,7 @@ function MainApp({user,setUser}){
         </Modal>
       )}
       {delInstId&&instToDelete&&(
-        <Modal maxWidth={360} padding={28} zIndex={100}>
+        <Modal maxWidth={360} padding={28}>
           <div style={{fontSize:15,fontWeight:700,color:TX,marginBottom:8,letterSpacing:"-0.01em"}}>Apagar "{instToDelete.desc}"?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:22}}>{instTxCount} transações vinculadas.</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -2205,17 +2290,40 @@ function MainApp({user,setUser}){
         </Modal>
       )}
 
-      <Tabs items={appTabs} value={tab} onChange={setTab} idPrefix="app" style={{padding:"8px 20px 0",background:HDR,borderBottom:`1px solid ${BD}`}}/>
-
-      {/* ---- Navegação inferior (só no celular) ---- */}
-      <nav className="bottom-nav">
-        {appTabs.map(t=>{const Ic=t.icon;const active=tab===t.id;return(
-          <button key={t.id} onClick={()=>setTab(t.id)} className="bottom-nav-btn" style={{color:active?accent:TX3}}>
-            <span className="bottom-nav-ico" style={{background:active?`${accent}1f`:"transparent"}}><Ic size={20}/></span>
-            <span className="bottom-nav-lbl" style={{fontSize:9.5,fontWeight:600,letterSpacing:"-0.02em"}}>{t.short||t.label}</span>
+      {/* ---- Barra de baixo (celular) ---- */}
+      <nav className="bottom-nav" aria-label="Seções no celular">
+        {appTabs.filter(t=>t.mobile).map(t=>{const Ic=t.icon;const on=tab===t.id;return(
+          <button key={t.id} type="button" onClick={()=>goTab(t.id)} aria-current={on?"page":undefined} className="bottom-nav-btn">
+            <span className="bottom-nav-ico"><Ic size={20} aria-hidden="true"/></span>
+            <span className="bottom-nav-lbl">{t.short||t.label}</span>
           </button>
         );})}
+        {(()=>{const on=appTabs.some(t=>!t.mobile&&t.id===tab);return(
+          <button type="button" onClick={()=>setShowMore(true)} aria-current={on?"page":undefined} aria-haspopup="dialog" className="bottom-nav-btn">
+            <span className="bottom-nav-ico"><MoreHorizontal size={20} aria-hidden="true"/></span>
+            <span className="bottom-nav-lbl">Mais</span>
+          </button>
+        );})()}
       </nav>
+      {showMore&&(
+        <Modal align="sheet" onClose={()=>setShowMore(false)} maxWidth={560} padding={16} label="Mais">
+          <div style={{width:36,height:4,borderRadius:4,background:BD2,margin:"0 auto 14px"}} aria-hidden="true"/>
+          {appTabs.filter(t=>!t.mobile).map(t=>{const Ic=t.icon;return(
+            <button key={t.id} type="button" className="more-row" onClick={()=>goTab(t.id)} aria-current={tab===t.id?"page":undefined}>
+              <Ic size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">{t.label}</span><span className="more-h">{t.hint}</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
+            </button>
+          );})}
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);setShowProfile(true);}}>
+            <Settings size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Perfil</span><span className="more-h">Nome, cor, densidade, backup e conta</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
+          </button>
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);setShowTrash(true);}}>
+            <Trash2 size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Lixeira</span><span className="more-h">Itens apagados nos últimos {TRASH_RETENTION_DAYS} dias</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
+          </button>
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);setUser(null);}}>
+            <LogOut size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Sair</span></span>
+          </button>
+        </Modal>
+      )}
 
       <div key={tab} className="main-content" style={{padding:"28px 32px",maxWidth:1600,margin:"0 auto",animation:`fadeIn .35s ${EASE_OUT}`}}>
 
@@ -2227,244 +2335,208 @@ function MainApp({user,setUser}){
           const firstName=(user.name||"").split(" ")[0]||user.name;
           const proj30=cashFlowProjections.find(p=>p.days===30);
           const bestCats=catDataDisplay.slice(0,5);
-          const heroMonthLabel=(()=>{const mm={jan:"Janeiro",fev:"Fevereiro",mar:"Março",abr:"Abril",mai:"Maio",jun:"Junho",jul:"Julho",ago:"Agosto",set:"Setembro",out:"Outubro",nov:"Novembro",dez:"Dezembro"};return mm[currentMonthKeyReal.split("/")[0]]||currentMonthKeyReal;})();
+          const todayLong=new Date(todayISO+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
+          const monthName=new Date(todayISO+"T12:00:00").toLocaleDateString("pt-BR",{month:"long"});
+          // Gráfico: os últimos 6 meses até o atual, com zero nos meses sem lançamento.
+          const curIdx=monthIndex(currentMonthKeyReal);
+          const byMonth=new Map(summary.map(m=>[m.month,m]));
+          const chartData=[5,4,3,2,1,0].map(i=>{const mk=monthAt(curIdx-i);const m=byMonth.get(mk);return{month:mk,in:m?.in||0,out:m?.out||0};});
+          const recentTx=[...transactions].filter(t=>t.date<=todayISO).sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id).slice(0,4);
+          const row=(key,left,meta,right,rightColor)=>(
+            <li key={key} className="home-li">
+              <div style={{minWidth:0}}><div className="home-li-name">{left}</div>{meta&&<div className="home-li-meta">{meta}</div>}</div>
+              <span className="num home-li-val" style={rightColor?{color:rightColor}:undefined}>{right}</span>
+            </li>
+          );
+          const money=(v,isIn)=>`${isIn?"+":"−"}${fmt(Math.abs(v))}`;
+          const newTxButton=(full)=>(
+            <Btn onClick={()=>openNewTx()} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,...(full?{width:"100%",height:48}:{})}}><Plus size={16}/>Novo lançamento</Btn>
+          );
           return(
-          <div style={{display:"flex",flexDirection:"column",gap:26}}>
+          <div className="stagger" style={{display:"flex",flexDirection:"column",gap:24}}>
+            <PageHeader icon={LayoutDashboard} title="Início" subtitle={`${todayLong.charAt(0).toUpperCase()+todayLong.slice(1)} · ${greeting}, ${firstName}`} actions={<span className="only-desktop">{newTxButton(false)}</span>}/>
 
-            <div>
-              <div style={{fontSize:22,fontWeight:800,color:TX,letterSpacing:"-0.02em"}}>{greeting}, {firstName} 👋</div>
-              <div style={{fontSize:13.5,color:TX2,marginTop:6}}>{resumoDoMes?resumoDoMes.text:"Aqui está o que importa hoje na sua vida financeira."}</div>
-            </div>
+            {resumoDoMes&&<p style={{margin:"-12px 0 0",fontSize:13,color:TX2,maxWidth:"70ch",lineHeight:1.55}}>{resumoDoMes.text}</p>}
 
-            {/* ---- Onboarding leve: só aparece pra quem ainda não tem nenhum dado cadastrado ---- */}
+            {/* ---- Primeiros passos: só para quem ainda não tem nenhum dado ---- */}
             {!onboardingDismissed&&transactions.length===0&&wishes.length===0&&plannedExpenses.length===0&&installments.length===0&&(
-              <div style={{background:`linear-gradient(135deg, ${accent}18, ${CARD} 70%)`,border:`1px solid ${accent}30`,borderRadius:R_CARD,padding:22,display:"flex",alignItems:"flex-start",gap:14}}>
-                <div style={{width:38,height:38,borderRadius:8,background:accent+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Sparkles size={18} color={accent}/></div>
+              <Card style={{padding:20,display:"flex",alignItems:"flex-start",gap:14,boxShadow:"none"}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:6}}>Bem-vindo(a) ao {walletName}!</div>
-                  <div style={{fontSize:13,color:TX2,lineHeight:1.6,marginBottom:4}}>Pra começar: lance sua primeira <strong style={{color:TX}}>transação</strong> na aba "Transações", cadastre contas fixas em <strong style={{color:TX}}>"Previstos"</strong> e metas de longo prazo em <strong style={{color:TX}}>"Metas"</strong>. Os Insights e os gráficos vão aparecer sozinhos conforme você for usando.</div>
+                  <div style={{fontSize:15,fontWeight:600,color:TX,marginBottom:6}}>Bem-vindo(a) ao {walletName}</div>
+                  <div style={{fontSize:13,color:TX2,lineHeight:1.6}}>Comece com “Novo lançamento”. Contas fixas vão em <strong style={{color:TX}}>Previstos</strong> e objetivos em <strong style={{color:TX}}>Metas</strong>. As descobertas e os gráficos aparecem sozinhos conforme você usa.</div>
                 </div>
-                <button onClick={()=>setOnboardingDismissed(true)} title="Dispensar" className="touch-44" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,flexShrink:0}}><X size={16}/></button>
-              </div>
+                <IconButton icon={X} label="Dispensar" onClick={()=>setOnboardingDismissed(true)}/>
+              </Card>
             )}
 
-            {/* ---- Ações rápidas ---- */}
-            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:2}}>
-              {[
-                {label:"Nova Receita",icon:ArrowUpCircle,color:"#34D399",title:"Registrar uma nova receita",action:()=>quickAction("receita")},
-                {label:"Nova Despesa",icon:ArrowDownCircle,color:"#F87171",title:"Registrar uma nova despesa",action:()=>quickAction("despesa")},
-                // "Transferência" abria exatamente a mesma coisa que
-                // "Investimento" (um aporte) — dois botões diferentes para a
-                // mesma ação, o que fazia um deles parecer quebrado. O app não
-                // tem modelo de contas/carteiras, então transferência entre
-                // contas não existe aqui; o par que existe de verdade é
-                // aporte (dinheiro sai da conta) e resgate (dinheiro volta).
-                {label:"Aporte",icon:TrendingUp,color:"#3B82F6",title:"Investir: tirar da conta e aplicar",action:()=>quickAction("investimento")},
-                {label:"Resgate",icon:Repeat,color:"#A78BFA",title:"Resgatar: trazer dinheiro do investimento de volta para a conta",action:()=>quickAction("resgate")},
-                {label:"Nova Meta",icon:Sparkles,color:accent,title:"Criar uma nova meta",action:()=>quickAction("meta")},
-              ].map(qa=>(
-                <button key={qa.label} onClick={qa.action} title={qa.title} aria-label={qa.title} style={{flexShrink:0,display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderRadius:R_BTN,border:`1px solid ${BD2}`,background:"rgba(255,255,255,0.03)",color:TX,cursor:"pointer",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap"}}>
-                  <qa.icon size={14} color={qa.color}/>{qa.label}
+            {/* ---- Saldo: um card principal com filete (Card hero do LaCalle Life) e os três números do mês ---- */}
+            <section aria-label="Saldo" className="home-hero">
+              <div className="home-hero-main">
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,color:TX2,fontWeight:500}}>
+                  Saldo atual
+                  <IconButton icon={Info} size={14} label="Como chegamos no saldo atual" onClick={()=>setExplainKey("saldoAtual")}/>
+                </div>
+                <div className="num home-metric" style={{color:balance<0?ERROR:TX}}><AnimatedValue value={balance}/></div>
+                {resumoDoMes&&<Comparison delta={resumoDoMes.stats.economia} formatMagnitude={fmt} label={`de economia em ${monthName}`} tone={resumoDoMes.stats.economia>=0?"positive":"negative"} style={{fontSize:12,marginTop:8}}/>}
+              </div>
+              <button type="button" className="home-hero-num" onClick={()=>setExplainKey("saldoLivre")}>
+                <span>Saldo livre</span><b className="num">{fmt(freeBalance)}</b>
+              </button>
+              <button type="button" className="home-hero-num" onClick={()=>setProjectionDrawer({key:"saldoPrevisto",daysAhead:daysToEndOfMonth,title:"Previsto no Fim do Mês"})}>
+                <span>Previsto no fim do mês</span><b className="num" style={{color:(projection?.expected??0)<0?ERROR:TX}}>{projection?fmt(projection.expected):"—"}</b>
+              </button>
+              {proj30&&(
+                <button type="button" className="home-hero-num" onClick={()=>setProjectionDrawer({key:"quantoPossoGastar",daysAhead:30,title:"Quanto você pode gastar"})}>
+                  <span>Pode gastar em 30 dias</span><b className="num" style={{color:proj30.value<0?ERROR:accentText(accent)}}>{fmt(Math.max(0,proj30.value))}</b>
                 </button>
-              ))}
+              )}
+            </section>
+            {proj30&&proj30.value<0&&(
+              <p role="status" style={{margin:"-12px 0 0",fontSize:13,color:ERROR,display:"flex",gap:6,alignItems:"center"}}><AlertTriangle size={14} aria-hidden="true"/>A projeção dos próximos 30 dias está negativa em {fmt(Math.abs(proj30.value))}. Evite gastos não essenciais.</p>
+            )}
+            <div className="only-mobile">{newTxButton(true)}</div>
+
+            <div className="home-grid">
+              <div className="home-col">
+                {chartData.some(d=>d.in||d.out)&&(
+                  <section>
+                    <SectionTitle action={<span style={{fontSize:12,color:TX3}}>últimos 6 meses</span>}>Receitas e gastos</SectionTitle>
+                    <Card style={{boxShadow:"none"}}><IncomeExpenseChart data={chartData}/></Card>
+                  </section>
+                )}
+                <section>
+                  <SectionTitle>Evolução do seu dinheiro</SectionTitle>
+                  <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                    <ul className="home-list">
+                      {moneySteps.map(s=>row(s.label,s.label,null,fmt(s.value),s.value<0?ERROR:TX))}
+                    </ul>
+                  </Card>
+                </section>
+              </div>
+              <div className="home-col">
+                <section>
+                  <SectionTitle>Patrimônio e metas</SectionTitle>
+                  {patrimonySeries.length>=2&&<Card style={{boxShadow:"none",marginBottom:10}}><TrendChart data={patrimonySeries} color={accent}/></Card>}
+                  <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                    <ul className="home-list">
+                      {row("pat","Patrimônio",null,resumoDoMes?fmt(resumoDoMes.stats.patrimonio):"—")}
+                      {resumoDoMes?.stats?.meta&&row("meta",`Meta ${resumoDoMes.stats.meta.name}`,null,`${resumoDoMes.stats.meta.pct}%`)}
+                      {row("desc","Descobertas do mês",null,String(consultantInsights.length))}
+                    </ul>
+                  </Card>
+                </section>
+                <section>
+                  <SectionTitle action={<button type="button" className="home-link" onClick={()=>setTab("planning")}>Linha do tempo</button>}>Próximos eventos</SectionTitle>
+                  <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                    {upcomingEvents.length===0?(
+                      <div style={{color:TX3,padding:"14px 0",fontSize:13}}>Nada agendado por enquanto.</div>
+                    ):(
+                      <ul className="home-list">
+                        {upcomingEvents.map(t=>row(t.id,t.desc,`${t.label} · ${formatDay(t.date,todayISO)}`,money(t.val,t.type==="Entrada"),t.type==="Entrada"?SUCCESS:undefined))}
+                      </ul>
+                    )}
+                  </Card>
+                </section>
+                {recentTx.length>0&&(
+                  <section>
+                    <SectionTitle action={<button type="button" className="home-link" onClick={()=>setTab("transactions")}>Ver todos</button>}>Últimos lançamentos</SectionTitle>
+                    <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                      <ul className="home-list">
+                        {recentTx.map(t=>row(t.id,t.desc,`${t.cat} · ${formatDay(t.date,todayISO)}`,money(t.val,t.type==="Entrada"),t.type==="Entrada"?SUCCESS:undefined))}
+                      </ul>
+                    </Card>
+                  </section>
+                )}
+              </div>
             </div>
 
-            {/* ---- Saldo: hero único (era 3 cards + o hero "Resumo do mês" separado) ----
-                 Consolidado num card por pedido do usuário (auditoria de
-                 04-06/09/2026): "Resumo do mês" + os 3 cards de saldo
-                 repetiam o mesmo padrão ícone+número+legenda 7 vezes antes de
-                 qualquer conteúdo real. Saldo Livre e Previsto no Fim do Mês
-                 continuam clicáveis (mesmos handlers de antes), só mudaram de
-                 card próprio para linha/texto. */}
-            <div className="fc-card" onClick={()=>setExplainKey("saldoAtual")} title="Toque para entender este número" style={{...cardStyle,padding:26,cursor:"pointer"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                <div style={{width:28,height:28,borderRadius:8,background:accent+"1f",display:"flex",alignItems:"center",justifyContent:"center"}}><Wallet size={14} color={accent}/></div>
-                <div style={{fontSize:11.5,color:TX2,fontWeight:600,flex:1}}>Saldo Atual</div>
-                <Info size={12} color={TX3}/>
-              </div>
-              <div className="num" style={{fontSize:32,fontWeight:800,color:balance>=0?"#34D399":"#F87171",letterSpacing:"-0.02em"}}><AnimatedValue value={balance}/></div>
-              <div style={{fontSize:12.5,color:TX2,marginTop:8,lineHeight:1.5}}>
-                {resumoDoMes&&(<Comparison delta={resumoDoMes.stats.economia} formatMagnitude={fmt} label="de economia este mês ·" tone={resumoDoMes.stats.economia>=0?"positive":"negative"} style={{fontWeight:700,display:"inline-flex"}}/>)}
-                <span onClick={e=>{e.stopPropagation();setExplainKey("saldoLivre");}} style={{textDecoration:"underline",textUnderlineOffset:2,cursor:"pointer"}}>Saldo livre {fmt(freeBalance)}</span>
-              </div>
-            </div>
-
-            {/* ---- Patrimônio, meta, descobertas e previsão: lista, não grid ---- */}
-            <Card style={{padding:22}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`}}>
-                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Patrimônio</span>
-                <span className="num" style={{fontSize:14,fontWeight:700,color:accent}}>{resumoDoMes?fmt(resumoDoMes.stats.patrimonio):"—"}</span>
-              </div>
-              {resumoDoMes?.stats?.meta&&(
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`,gap:12}}>
-                  <span style={{fontSize:12.5,color:TX2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Meta {resumoDoMes.stats.meta.name}</span>
-                  <span className="num" style={{fontSize:14,fontWeight:700,color:"#34D399",flexShrink:0}}>{resumoDoMes.stats.meta.pct}%</span>
-                </div>
-              )}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`}}>
-                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Descobertas este mês</span>
-                <span style={{fontSize:14,fontWeight:700,color:TX}}>{consultantInsights.length}</span>
-              </div>
-              <div onClick={()=>setProjectionDrawer({key:"saldoPrevisto",daysAhead:daysToEndOfMonth,title:"Previsto no Fim do Mês"})} title="Toque para ver de onde vem esse número" style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",cursor:"pointer"}}>
-                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Previsto no fim do mês</span>
-                <span className="num" style={{fontSize:14,fontWeight:700,color:(projection?projection.expected:0)>=0?"#34D399":"#F87171"}}>{projection?fmt(projection.expected):"—"}</span>
-              </div>
-            </Card>
-
-            {/* ---- Quanto posso gastar ---- */}
-            {proj30&&(
-              <div onClick={()=>setProjectionDrawer({key:"quantoPossoGastar",daysAhead:30,title:"Quanto você pode gastar"})} className="fc-card" title="Toque para ver de onde vem esse número" style={{...cardStyle,padding:26,cursor:"pointer",background:proj30.value>=0?`linear-gradient(120deg, ${accent}14, ${CARD} 70%)`:`linear-gradient(120deg, #F8717114, ${CARD} 70%)`,border:`1px solid ${proj30.value>=0?accent+"30":"#F8717140"}`}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                  <div style={{width:32,height:32,borderRadius:8,background:(proj30.value>=0?accent:"#F87171")+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{proj30.value>=0?<Check size={16} color={accent}/>:<AlertTriangle size={16} color="#F87171"/>}</div>
-                  <div style={{fontSize:13.5,fontWeight:700,color:TX,flex:1}}>Quanto você pode gastar?</div>
-                  <Info size={12} color={TX3}/>
-                </div>
-                <div className="num" style={{fontSize:30,fontWeight:800,color:proj30.value>=0?accent:"#F87171",letterSpacing:"-0.02em"}}>{fmt(Math.max(0,proj30.value))}</div>
-                <div style={{fontSize:12.5,color:TX2,marginTop:6,lineHeight:1.5}}>{proj30.value>=0?"nos próximos 30 dias, sem comprometer contas e parcelas já previstas.":`Sua projeção para os próximos 30 dias está negativa em ${fmt(Math.abs(proj30.value))}. Evite gastos não essenciais.`}</div>
-              </div>
-            )}
-
-            {/* ---- Evolução do dinheiro: lista, não caixas ligadas por seta ---- */}
-            <Card style={{padding:22}}>
-              <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:10,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={15} color={accent}/>Evolução do seu dinheiro</div>
-              {moneySteps.map((s,i)=>(
-                <div key={s.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:i<moneySteps.length-1?`1px solid ${BD}`:"none"}}>
-                  <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>{s.label}</span>
-                  <span className="num" style={{fontSize:13.5,fontWeight:700,color:s.value>=0?"#34D399":"#F87171"}}>{fmt(s.value)}</span>
-                </div>
-              ))}
-            </Card>
-
-            {/* ---- Próximos eventos ---- */}
-            <Card style={{padding:26}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                <div style={{fontSize:14,fontWeight:700,color:TX,display:"flex",alignItems:"center",gap:8}}><CalendarDays size={16} color={accent}/>Próximos eventos</div>
-                <button onClick={()=>setTab("planning")} style={{background:"none",border:"none",color:accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>ver linha do tempo</button>
-              </div>
-              {upcomingEvents.length===0?(
-                <div style={{textAlign:"center",color:TX3,padding:20,fontSize:13}}>Nenhum evento futuro cadastrado.</div>
-              ):(
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {upcomingEvents.map(t=>(
-                    <div key={t.id} style={{display:"flex",alignItems:"center",gap:12}}>
-                      <span style={{width:8,height:8,borderRadius:"50%",background:t.color,flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
-                        <div style={{fontSize:11,color:TX3,marginTop:2}}>{t.label} · {t.date}</div>
-                      </div>
-                      <div className="num" style={{fontSize:13,fontWeight:700,color:t.color,flexShrink:0}}>{fmt(t.val)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-
-            {/* ---- Segundo plano: gráficos e detalhes ---- */}
-            <div style={{marginTop:6,fontSize:11.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:TX3}}>Detalhes e gráficos</div>
-
-            {summary.length>0&&(
-              <div className="chart-card" style={{...cardStyle,height:340}}>
-                <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:16}}>Receitas vs Gastos</div>
-                <div className="chart-fill">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={summary}>
-                      <defs>
-                        <linearGradient id="barInGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34D399" stopOpacity={1}/><stop offset="100%" stopColor="#16A34A" stopOpacity={0.85}/></linearGradient>
-                        <linearGradient id="barOutGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#F87171" stopOpacity={1}/><stop offset="100%" stopColor="#DC2626" stopOpacity={0.85}/></linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 6" stroke={BD} vertical={false}/>
-                      <XAxis dataKey="month" tick={{fill:TX2,fontSize:11}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={{fill:TX2,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
-                      <Tooltip content={<ChartTooltip/>}/><Legend wrapperStyle={{fontSize:12,color:TX2}}/>
-                      <Bar dataKey="in" name="Receitas" fill="url(#barInGrad)" radius={[6,6,0,0]} animationDuration={900}/>
-                      <Bar dataKey="out" name="Gastos" fill="url(#barOutGrad)" radius={[6,6,0,0]} animationDuration={900}/>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            <div className="rg-2col">
+            <div className="home-grid">
               {bestCats.length>0&&(
-                <Card style={{padding:24}}>
-                  <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:16}}>Principais categorias</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <section>
+                  <SectionTitle>Principais categorias</SectionTitle>
+                  <Card style={{boxShadow:"none",padding:20,display:"flex",flexDirection:"column",gap:12}}>
                     {bestCats.map(d=>{
                       const cc=d.name==="Outras categorias"?TX3:catColor(d.name);
-                      const maxV=bestCats[0].value||1;
-                      const pct=Math.round((d.value/maxV)*100);
+                      const pct=Math.round((d.value/(bestCats[0].value||1))*100);
                       return(
                         <div key={d.name}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                            <span style={{fontSize:12.5,color:TX,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>{d.name==="Outras categorias"?<Package size={12} color={cc}/>:<CategoryIcon cat={d.name} size={12} color={cc}/>}{d.name}</span>
-                            <span className="num" style={{fontSize:12.5,fontWeight:700,color:TX}}>{fmt(d.value)}</span>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:6}}>
+                            <span style={{fontSize:13,color:TX,display:"flex",alignItems:"center",gap:8,minWidth:0}}><i aria-hidden="true" style={{width:8,height:8,borderRadius:"50%",background:cc,flexShrink:0}}/>{d.name}</span>
+                            <span className="num" style={{fontSize:13,fontWeight:600,color:TX}}>{fmt(d.value)}</span>
                           </div>
                           <ProgressBar pct={pct} color={cc} height={5}/>
                         </div>
                       );
                     })}
-                  </div>
-                </Card>
+                  </Card>
+                </section>
               )}
-              <Card style={{padding:24}}>
-                <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><ShieldCheck size={15} color={accent}/>Saúde financeira</div>
-                <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  {healthIndicators.slice(0,5).map(h=>{
-                    const statusColor={"Excelente":"#34D399","Boa":accent,"Atenção":"#FBBF24","Crítica":"#F87171"}[h.status]||TX3;
-                    return(
-                      <div key={h.label} onClick={()=>setExplainKey(`health:${h.label}`)} title="Toque para entender este número" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,cursor:"pointer"}}>
-                        <div style={{fontSize:12.5,color:TX2,display:"flex",alignItems:"center",gap:5}}>{h.label}<Info size={10} color={TX3}/></div>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:13,fontWeight:700,color:TX}}>{h.value}</span>
-                          {h.status&&<span style={{fontSize:10,fontWeight:700,color:statusColor,background:statusColor+"1f",padding:"2px 8px",borderRadius:20}}>{h.status}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
+              <section>
+                <SectionTitle>Saúde financeira</SectionTitle>
+                <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                  <ul className="home-list">
+                    {healthIndicators.slice(0,5).map(hi=>{
+                      const tone={"Excelente":[SUCCESS_SURFACE,SUCCESS],"Boa":[MUTED,TX],"Atenção":[WARNING_SURFACE,WARNING],"Crítica":[DANGER_SURFACE,ERROR]}[hi.status]||[MUTED,TX2];
+                      return(
+                        <li key={hi.label} className="home-li">
+                          <button type="button" className="home-li-btn" onClick={()=>setExplainKey(`health:${hi.label}`)} aria-label={`${hi.label}: ${hi.value}${hi.status?`, ${hi.status}`:""}. Como é calculado`}>
+                            <span className="home-li-name" style={{color:TX2}}>{hi.label}</span>
+                            <span style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:13,fontWeight:600,color:TX}}>{hi.value}</span>
+                              {hi.status&&<span style={{fontSize:11,fontWeight:600,background:tone[0],color:tone[1],padding:"2px 8px",borderRadius:999}}>{hi.status}</span>}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </Card>
+              </section>
             </div>
 
             {(investmentStats||subscriptions)&&(
-              <div className="rg-2col">
+              <div className="home-grid">
                 {investmentStats&&(
-                  <Card style={{padding:24}}>
-                    <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:14,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={15} color={accent}/>Investimentos</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Total investido</span><span className="num" style={{fontSize:13,fontWeight:700,color:TX}}>{fmt(investmentStats.aportes)}</span></div>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Rentabilidade cadastrada</span><span className="num" style={{fontSize:13,fontWeight:700,color:"#34D399"}}>{fmt(investmentStats.rendimentos)}</span></div>
-                      {investmentParticipacao!==null&&<div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Participação no patrimônio</span><span style={{fontSize:13,fontWeight:700,color:accent}}>{investmentParticipacao}%</span></div>}
-                    </div>
-                  </Card>
+                  <section>
+                    <SectionTitle>Investimentos</SectionTitle>
+                    <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                      <ul className="home-list">
+                        {row("inv-total","Total investido",null,fmt(investmentStats.aportes))}
+                        {row("inv-rend","Rentabilidade cadastrada",null,fmt(investmentStats.rendimentos),SUCCESS)}
+                        {investmentParticipacao!==null&&row("inv-part","Participação no patrimônio",null,`${investmentParticipacao}%`)}
+                      </ul>
+                    </Card>
+                  </section>
                 )}
                 {subscriptions&&(
-                  <Card style={{padding:24}}>
-                    <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:14,display:"flex",alignItems:"center",gap:8}}><Repeat size={15} color={accent}/>Assinaturas e recorrências</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Total mensal</span><span className="num" style={{fontSize:13,fontWeight:700,color:"#F87171"}}>{fmt(subscriptions.total)}</span></div>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Maior assinatura</span><span style={{fontSize:13,fontWeight:700,color:TX}}>{subscriptions.biggest?.desc}</span></div>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Pendentes este mês</span><span style={{fontSize:13,fontWeight:700,color:"#FBBF24"}}>{subscriptions.pendingCount}</span></div>
-                    </div>
-                  </Card>
+                  <section>
+                    <SectionTitle>Assinaturas</SectionTitle>
+                    <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                      <ul className="home-list">
+                        {row("sub-total","Total mensal",null,fmt(subscriptions.total))}
+                        {row("sub-big","Maior assinatura",null,subscriptions.biggest?`${subscriptions.biggest.desc} · ${fmt(subscriptions.biggest.val)}`:"—")}
+                        {row("sub-pend","Pendentes este mês",null,String(subscriptions.pendingCount))}
+                      </ul>
+                    </Card>
+                  </section>
                 )}
               </div>
             )}
 
-            {/* ---- Cartões de consultor: agora abaixo dos gráficos ---- */}
-            <div>
-              <div style={{fontSize:15,fontWeight:700,color:TX,marginBottom:4,display:"flex",alignItems:"center",gap:8,letterSpacing:"-0.01em"}}><Lightbulb size={17} color={accent}/>O que merece sua atenção hoje</div>
-              <div style={{fontSize:12,color:TX3,marginBottom:18}}>Poucos destaques, com o raciocínio completo por trás de cada um — não só a conclusão.</div>
+            {/* ---- Descobertas: poucos destaques, com o raciocínio completo de cada um ---- */}
+            <section>
+              <SectionTitle>Descobertas do mês</SectionTitle>
               {consultantInsights.length===0?(
-                <div style={{...cardStyle,padding:20,display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:18}}>🟢</span>
-                  <div style={{fontSize:13,color:TX2,fontWeight:600}}>Tudo certo por aqui! Nenhum destaque no momento.</div>
-                </div>
+                <Card style={{boxShadow:"none",padding:20,display:"flex",alignItems:"center",gap:10}}>
+                  <CheckCircle2 size={18} color={SUCCESS} aria-hidden="true"/>
+                  <div style={{fontSize:13,color:TX2}}>Tudo certo por aqui. Nenhum destaque no momento.</div>
+                </Card>
               ):(
                 <div className="insights-grid">
                   {consultantInsights.map((it,i)=><InsightCard key={it.key} item={it} index={i} action={insightActionFor(it)}/>)}
                 </div>
               )}
-            </div>
+            </section>
           </div>
           );
         })()}
@@ -2494,12 +2566,12 @@ function MainApp({user,setUser}){
         {tab==="transactions"&&(
         <TabPanel id="transactions" idPrefix="app">
           <TransactionsTab
-            renderTxForm={renderTxForm} accent={accent} catColor={catColor}
+            onNewTx={()=>openNewTx()} accent={accent} catColor={catColor}
             filterType={filterType} search={search} filterMonth={filterMonth} months={months} filterCat={filterCat}
             fullCats={fullCats} viewTotals={viewTotals} filtered={filtered} groupedByDate={groupedByDate} editingTx={editingTx}
             setFilterType={setFilterType} setSearch={setSearch} setFilterMonth={setFilterMonth} setFilterCat={setFilterCat}
-            onImportCSV={importCSV} onExportCSV={exportCSV} onClearAll={()=>setShowClearConfirm(true)}
-            onStartEditTx={startEditTx} onRequestDelete={setConfirmDelete}
+            onImportCSV={importCSV} onExportCSV={exportCSV} onClearAll={()=>setShowClearConfirm(true)} onReport={()=>setReportPick(filterMonth||currentMonthKeyReal)}
+            onStartEditTx={startEditTx} onRequestDelete={performDelete}
           />
         </TabPanel>
         )}
@@ -2507,7 +2579,7 @@ function MainApp({user,setUser}){
         {tab==="planned"&&(
         <TabPanel id="planned" idPrefix="app">
           <PlannedTab
-            plannedMonth={plannedMonth} plannedStats={plannedStats} showPlannedForm={showPlannedForm} plannedFormRef={plannedFormRef}
+            plannedMonth={plannedMonth} plannedStats={plannedStats} showPlannedForm={showPlannedForm}
             editingPlanned={editingPlanned} plannedForm={plannedForm} plannedValRef={plannedValRef}
             frequentTx={frequentTx} renderFrequentPicks={renderFrequentPicks} applyFrequentToPlanned={applyFrequentToPlanned}
             fullCats={fullCats} catColor={catColor}
@@ -2518,7 +2590,8 @@ function MainApp({user,setUser}){
             onShiftMonth={delta=>setPlannedMonth(m=>shiftMonth(m,delta))} onGoToday={()=>setPlannedMonth(monthKey(todayFn()))}
             onSave={savePlannedItem} onCancelForm={closePlannedForm} onTogglePaid={togglePlannedPaid}
             onToggleIgnored={togglePlannedIgnoredForMonth} onTransferToWish={openTransferToWish}
-            onStartEdit={startEditPlanned} onRequestDelete={setConfirmDelete} onToggleNotes={toggleNotes}
+            onStartEdit={startEditPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes} onEndAt={endPlannedAt}
+            endedPlanned={plannedExpenses.filter(p=>p.recurring&&p.until&&monthIndex(plannedMonth)>monthIndex(p.until))}
           />
         </TabPanel>
         )}
@@ -2539,14 +2612,15 @@ function MainApp({user,setUser}){
           <WishesTab
             wishes={wishes} sortedWishes={sortedWishes} wishSortBy={wishSortBy} showWishForm={showWishForm}
             wishForm={wishForm} editingWish={editingWish} expandedNotes={expandedNotes} accent={accent}
-            wishFormRef={wishFormRef} wishFormSnapshotRef={wishFormSnapshotRef}
+            wishFormSnapshotRef={wishFormSnapshotRef}
             setWishSortBy={setWishSortBy} setShowWishForm={setShowWishForm} setEditingWish={setEditingWish} setWishForm={setWishForm}
-            onSave={saveWish} onCancelForm={closeWishForm} onToggleDone={toggleWishDone}
-            onTransferToPlanned={openTransferToPlanned} onRequestDelete={setConfirmDelete} onToggleNotes={toggleNotes}
+            onSave={saveWish} onCancelForm={closeWishForm} onToggleDone={toggleWishDone} onMove={moveWish}
+            onTransferToPlanned={openTransferToPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes}
           />
         </TabPanel>
         )}
       </div>
+    </div>
     </div>
     </DensityProvider>
     </AccentContext.Provider>
@@ -2556,6 +2630,9 @@ function MainApp({user,setUser}){
 export default function Root(){
   const [user,setUser]=useState(null);
   const [checkingSession,setCheckingSession]=useState(true);
+  // Voltou pelo link de "Esqueci minha senha": antes de entrar no app, pede
+  // a senha nova (ver lib/authRecovery.js).
+  const [recovering,setRecovering]=useState(openedFromRecoveryLink);
 
   // Ao carregar a página, confere se já existe uma sessão válida (cookie do
   // Supabase) — se sim, entra direto sem pedir login de novo. Depois disso,
@@ -2571,8 +2648,11 @@ export default function Root(){
       setUser(deriveUser(session));
       setCheckingSession(false);
     });
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
-      setUser(deriveUser(session));
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+      if(event==="PASSWORD_RECOVERY")setRecovering(true);
+      // Renovar a sessão não troca o nome que já está na tela (o nome salvo
+      // no app vence o da conta, que pode estar desatualizado).
+      setUser(prev=>{const next=deriveUser(session);return prev&&next&&prev.email===next.email?{...next,name:prev.name}:next;});
     });
     return ()=>subscription.unsubscribe();
   },[]);
@@ -2580,19 +2660,32 @@ export default function Root(){
   // O resto do app (MainApp) já sabe deslogar chamando setUser(null) — só
   // interceptamos essa chamada aqui pra também encerrar a sessão de verdade
   // no Supabase, sem precisar mudar nada dentro do MainApp.
+  // Ao sair, as cópias do modo sem rede saem do aparelho junto (dado
+  // financeiro não fica num aparelho compartilhado). Se alguma ainda não foi
+  // para a nuvem, pergunta antes, porque sair apagaria essas edições.
   const handleSetUser=value=>{
-    if(value===null)supabase.auth.signOut();
+    if(value===null){
+      if(hasPendingLocalCopy()&&!window.confirm("Há alterações feitas sem internet que ainda não chegaram à nuvem. Se sair agora, elas são apagadas deste aparelho. Sair mesmo assim?"))return;
+      clearLocalCopies();
+      supabase.auth.signOut();
+    }
     else setUser(value);
   };
 
   if(checkingSession){
     return(
-      <div style={{background:"#071421",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <style>{`@keyframes rootspin{to{transform:rotate(360deg)}}`}</style>
-        <div style={{width:28,height:28,border:"3px solid rgba(59,130,246,0.25)",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"rootspin .8s linear infinite"}}/>
+      // Conferindo a sessão: o fundo da marca e o símbolo (antes, um azul-marinho
+      // e um spinner azul que sobraram da identidade anterior).
+      <div style={{background:BG,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <FinanceMark size={36}/>
       </div>
     );
   }
   if(!user)return <AuthScreen onLogin={(email,name)=>setUser({email,name})}/>;
+  if(recovering)return <NewPasswordScreen onDone={()=>{
+    setRecovering(false);
+    // tira o "#...type=recovery" do endereço para um recarregar não pedir a senha de novo
+    if(window.location.hash)window.history.replaceState(null,"",window.location.pathname+window.location.search);
+  }}/>;
   return <MainApp user={user} setUser={handleSetUser}/>;
 }

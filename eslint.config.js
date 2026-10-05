@@ -6,6 +6,7 @@
 // uma guerra de estilo. Por isso: regras recomendadas do JS + hooks do
 // React, nada de regras de formatação/preferência.
 import js from "@eslint/js";
+import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
@@ -21,9 +22,12 @@ export default [
       globals: { ...globals.browser, ...globals.node },
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
-    plugins: { "react-hooks": reactHooks, "react-refresh": reactRefresh },
+    plugins: { react, "react-hooks": reactHooks, "react-refresh": reactRefresh },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Sem isto, no-unused-vars não enxerga uso dentro de JSX e acusava
+      // todo componente importado (223 avisos falsos que escondiam os reais).
+      "react/jsx-uses-vars": "error",
       "react-refresh/only-export-components": "off", // não é um projeto de biblioteca de componentes
       "no-unused-vars": ["warn", { args: "none", varsIgnorePattern: "^_" }],
       "no-empty": ["error", { allowEmptyCatch: true }],

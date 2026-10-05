@@ -1,12 +1,13 @@
 import {
   CalendarDays, Flag, TrendingUp, Briefcase, Bell, ChevronLeft, ChevronRight,
-  Clock, Calendar, Hourglass, ShieldCheck, Target, Rocket,
+  Clock, Calendar, Hourglass, ShieldCheck, Target, Rocket, CheckCircle2, AlertTriangle, Info,
 } from "lucide-react";
-import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, ChartTooltip, Table, TableRow, Comparison } from "./ui";
-import { TX, TX2, TX3, BD, CARD, R_CHIP, R_CARD, R_INPUT, SI } from "../lib/theme";
+import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, Table, TableRow, Comparison, Segmented, PageHeader } from "./ui";
+import { TX, TX2, TX3, BD, CARD, R_CARD, R_INPUT, SI, SUCCESS, ERROR, WARNING } from "../lib/theme";
 import { fmt, FinancialEngine, formatMonths } from "../lib/financialEngine";
 import { parseNum } from "../lib/validation";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
+import { formatDay } from "../lib/dates";
+import { IncomeExpenseChart } from "./charts";
 
 const WEEKDAYS_PT = ["D", "S", "T", "Q", "Q", "S", "S"];
 
@@ -45,16 +46,10 @@ export default function PlanningTab({
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div>
-        <div style={{ fontSize: 17, fontWeight: 700, color: TX, letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 8 }}><CalendarDays size={18} color={accent} />Planejamento</div>
-        <div style={{ fontSize: 12.5, color: TX2, marginTop: 4 }}>Veja o futuro do seu dinheiro com base no que você já cadastrou.</div>
-      </div>
+      <PageHeader icon={CalendarDays} title="Planejamento" subtitle="O futuro do seu dinheiro, a partir do que você já cadastrou" />
 
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
-        {[["geral", "Visão Geral"], ["calendario", "Calendário"], ["timeline", "Timeline"], ["metas", "Metas"], ["decisoes", "Decisões"], ["ano", "Visão Anual"]].map(([id, label]) => (
-          <button key={id} onClick={() => setPlanTab(id)} style={{ padding: "9px 15px", borderRadius: R_CHIP, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", background: planTab === id ? accent : "rgba(255,255,255,0.03)", color: planTab === id ? "white" : TX2 }}>{label}</button>
-        ))}
-      </div>
+      <Segmented ariaLabel="Seções do planejamento" scroll value={planTab} onChange={setPlanTab}
+        options={[["geral", "Visão Geral"], ["calendario", "Calendário"], ["timeline", "Timeline"], ["metas", "Metas"], ["decisoes", "Decisões"], ["ano", "Visão Anual"]].map(([v, label]) => ({ value: v, label, tone: "accent" }))} />
 
       {planTab === "geral" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -64,11 +59,11 @@ export default function PlanningTab({
           <Card style={{ padding: 26 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: TX, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}><Flag size={16} color={accent} />Próximos Eventos</div>
             {[
-              { l: "Próxima conta", ev: nextEvents.proximaConta, c: "#F87171" },
-              { l: "Próxima receita", ev: nextEvents.proximaReceita, c: "#34D399" },
-              { l: "Próxima parcela", ev: nextEvents.proximaParcela, c: "#FBBF24" },
-              { l: "Maior pagamento futuro", ev: nextEvents.maiorPagamento, c: "#F87171" },
-              { l: "Maior entrada prevista", ev: nextEvents.maiorEntrada, c: "#34D399" },
+              { l: "Próxima conta", ev: nextEvents.proximaConta, c: ERROR },
+              { l: "Próxima receita", ev: nextEvents.proximaReceita, c: SUCCESS },
+              { l: "Próxima parcela", ev: nextEvents.proximaParcela, c: WARNING },
+              { l: "Maior pagamento futuro", ev: nextEvents.maiorPagamento, c: ERROR },
+              { l: "Maior entrada prevista", ev: nextEvents.maiorEntrada, c: SUCCESS },
             ].map((item, i, arr) => (
               <div key={item.l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: i < arr.length - 1 ? `1px solid ${BD}` : "none" }}>
                 <span style={{ fontSize: 12.5, color: TX2, fontWeight: 600 }}>{item.l}</span>
@@ -76,7 +71,7 @@ export default function PlanningTab({
                   <span style={{ textAlign: "right" }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: TX }}>{item.ev.desc}</span>{" "}
                     <span className="num" style={{ fontSize: 13, color: item.c, fontWeight: 700 }}>{fmt(item.ev.val)}</span>
-                    <div style={{ fontSize: 11, color: TX3 }}>{item.ev.date}</div>
+                    <div style={{ fontSize: 11, color: TX3 }}>{formatDay(item.ev.date, todayISO)}</div>
                   </span>
                 ) : <span style={{ fontSize: 12, color: TX3 }}>Nada agendado</span>}
               </div>
@@ -89,12 +84,12 @@ export default function PlanningTab({
             <div style={{ fontSize: 12, color: TX2, marginBottom: 12 }}>Estimativa com base no saldo atual, lançamentos futuros e previstos ainda não pagos.</div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${BD}` }}>
               <span style={{ fontSize: 12.5, color: TX2, fontWeight: 600 }}>Saldo atual</span>
-              <span className="num" style={{ fontSize: 14, fontWeight: 700, color: balance >= 0 ? "#34D399" : "#F87171" }}>{fmt(balance)}</span>
+              <span className="num" style={{ fontSize: 14, fontWeight: 700, color: balance >= 0 ? SUCCESS : ERROR }}>{fmt(balance)}</span>
             </div>
             {cashFlowProjections.map((cp, i) => (
               <div key={cp.days} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: i < cashFlowProjections.length - 1 ? `1px solid ${BD}` : "none" }}>
                 <span style={{ fontSize: 12.5, color: TX2, fontWeight: 600 }}>Em {cp.days} dias</span>
-                <span className="num" style={{ fontSize: 14, fontWeight: 700, color: cp.value >= 0 ? "#34D399" : "#F87171" }}>{fmt(cp.value)}</span>
+                <span className="num" style={{ fontSize: 14, fontWeight: 700, color: cp.value >= 0 ? SUCCESS : ERROR }}>{fmt(cp.value)}</span>
               </div>
             ))}
           </Card>
@@ -102,7 +97,7 @@ export default function PlanningTab({
           <Card style={{ padding: 26 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: TX, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><Briefcase size={16} color={accent} />Compromissos Financeiros</div>
             <div className="bento">
-              <StatTile label="Parcelas restantes" value={fmt(instStats.remaining)} color="#FBBF24" caption={`${pendingParcelasCount} parcela(s)`} />
+              <StatTile label="Parcelas restantes" value={fmt(instStats.remaining)} color={WARNING} caption={`${pendingParcelasCount} parcela(s)`} />
               {subscriptions && <StatTile label="Assinaturas" value={fmt(subscriptions.total)} color="#A78BFA" caption={`${subscriptions.count} ativa(s)`} />}
               <StatTile label="Comprometido no próximo mês" value={fmt(committedNextMonth)} color={accent} caption={nextMonthKeyReal} />
               <StatTile label="Comprometido nos próximos 3 meses" value={fmt(committedNext3Months)} color={accent} />
@@ -159,7 +154,7 @@ export default function PlanningTab({
           <Card style={{ padding: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: TX2, marginBottom: 12, letterSpacing: "0.04em", textTransform: "uppercase" }}>Legenda</div>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              {[["Receitas", "#34D399"], ["Despesas", "#F87171"], ["Investimentos", "#3B82F6"], ["Parcelas", "#FBBF24"], ["Assinaturas", "#A78BFA"]].map(([l, c]) => (
+              {[["Receitas", SUCCESS], ["Despesas", ERROR], ["Investimentos", "#3B82F6"], ["Parcelas", WARNING], ["Assinaturas", "#A78BFA"]].map(([l, c]) => (
                 <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: TX2 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{l}</div>
               ))}
             </div>
@@ -181,7 +176,7 @@ export default function PlanningTab({
                       <span style={{ width: 8, height: 8, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, color: TX, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.data.desc}</div>
-                        <div style={{ fontSize: 11, color: TX3 }}>{it.label}{it.kind === "tx" ? ` · ${it.data.date}` : ` · ${it.month} (sem dia definido)`}</div>
+                        <div style={{ fontSize: 11, color: TX3 }}>{it.label}{it.kind === "tx" ? ` · ${formatDay(it.data.date, todayISO)}` : ` · ${it.month} (sem dia definido)`}</div>
                       </div>
                       <div className="num" style={{ fontSize: 13, fontWeight: 700, color: it.color, flexShrink: 0 }}>{fmt(it.data.val)}</div>
                     </div>
@@ -212,7 +207,7 @@ export default function PlanningTab({
                 <div className="bento-half"><div style={{ fontSize: 11, color: TX2, marginBottom: 4 }}>Tempo estimado</div><div style={{ fontSize: 14, fontWeight: 700, color: TX }}>{formatMonths(w.estMonths, w.estMonthsExact)}</div></div>
                 <div className="bento-half"><div style={{ fontSize: 11, color: TX2, marginBottom: 4 }}>Previsão de conclusão</div><div style={{ fontSize: 14, fontWeight: 700, color: TX }}>{w.etaDate || "—"}</div></div>
                 <div className="bento-half"><div style={{ fontSize: 11, color: TX2, marginBottom: 4 }}>Guardar por mês (na sua meta)</div><div className="num" style={{ fontSize: 14, fontWeight: 700, color: TX }}>{w.monthlyByTarget ? fmt(w.monthlyByTarget) : "defina um prazo em meses"}</div></div>
-                <div className="bento-half"><div style={{ fontSize: 11, color: TX2, marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}><Hourglass size={11} />Aportando 50% a mais</div><div style={{ fontSize: 14, fontWeight: 700, color: "#34D399" }}>{w.timeSaved ? `economiza ~${w.timeSaved} meses` : "—"}</div></div>
+                <div className="bento-half"><div style={{ fontSize: 11, color: TX2, marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}><Hourglass size={11} />Aportando 50% a mais</div><div style={{ fontSize: 14, fontWeight: 700, color: SUCCESS }}>{w.timeSaved ? `economiza ~${w.timeSaved} meses` : "—"}</div></div>
               </div>
             </Card>
           ))}
@@ -238,7 +233,7 @@ export default function PlanningTab({
             {askResult && (
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <span style={{ fontSize: 19 }}>{askResult.status === "ok" ? "✅" : askResult.status === "atencao" ? "❌" : "ℹ️"}</span>
+                  {(() => { const Ic = askResult.status === "ok" ? CheckCircle2 : askResult.status === "atencao" || askResult.status === "critico" ? AlertTriangle : Info; return <Ic size={20} color={decisionColor(askResult.status)} aria-hidden="true" />; })()}
                   <div style={{ fontSize: 14, fontWeight: 700, color: decisionColor(askResult.status) }}>{askResult.answer}</div>
                 </div>
                 {askResult.detail && <div style={{ fontSize: 12.5, color: TX2, marginBottom: 16, lineHeight: 1.55 }}>{askResult.detail}</div>}
@@ -248,13 +243,13 @@ export default function PlanningTab({
                     {askResult.breakdown.commitItems?.length > 0 && (
                       <div>
                         <div style={{ fontSize: 10, fontWeight: 700, color: TX3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Compromissos considerados</div>
-                        <LineItemsList items={askResult.breakdown.commitItems} accentColor="#F87171" />
+                        <LineItemsList items={askResult.breakdown.commitItems} accentColor={ERROR} />
                       </div>
                     )}
                     {askResult.breakdown.incomeItems?.length > 0 && (
                       <div>
                         <div style={{ fontSize: 10, fontWeight: 700, color: TX3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Receitas futuras consideradas</div>
-                        <LineItemsList items={askResult.breakdown.incomeItems} accentColor="#34D399" />
+                        <LineItemsList items={askResult.breakdown.incomeItems} accentColor={SUCCESS} />
                       </div>
                     )}
                     <DataUsedChecklist tags={askResult.evidence?.dataUsed} />
@@ -267,11 +262,8 @@ export default function PlanningTab({
           <Card style={{ padding: 26 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: TX, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}><Rocket size={16} color={accent} />Simulação (E se...)</div>
             <div style={{ fontSize: 12, color: TX2, marginBottom: 16 }}>Simulação hipotética com os números que você informar — não é recomendação de investimento nem conselho financeiro.</div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-              {[["economizar_mais", "Economizar mais"], ["compra_grande", "Comprar parcelado"], ["investir_mensal", "Investir todo mês"]].map(([id, label]) => (
-                <button key={id} onClick={() => { setSimType(id); setSimResult(null); }} style={{ padding: "8px 14px", borderRadius: R_CHIP, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, background: simType === id ? accent : "rgba(255,255,255,0.03)", color: simType === id ? "white" : TX2 }}>{label}</button>
-              ))}
-            </div>
+            <Segmented ariaLabel="Tipo de simulação" size="sm" scroll value={simType} onChange={v => { setSimType(v); setSimResult(null); }} style={{ marginBottom: 16 }}
+              options={[["economizar_mais", "Economizar mais"], ["compra_grande", "Comprar parcelado"], ["investir_mensal", "Investir todo mês"]].map(([v, label]) => ({ value: v, label, tone: "accent" }))} />
             {simType === "economizar_mais" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
                 <select value={simGoalId} onChange={e => setSimGoalId(e.target.value)} style={SI}>
@@ -318,21 +310,9 @@ export default function PlanningTab({
             <div style={{ textAlign: "center", color: TX3, padding: 40, fontSize: 13, background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD }}>Ainda não há dados suficientes.</div>
           ) : (
             <>
-              <Card className="chart-card" style={{ height: 340 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: TX, marginBottom: 16 }}>Comparativo mensal</div>
-                <div className="chart-fill">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={summary}>
-                      <CartesianGrid strokeDasharray="3 6" stroke={BD} vertical={false} />
-                      <XAxis dataKey="month" tick={{ fill: TX2, fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: TX2, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip content={<ChartTooltip />} /><Legend wrapperStyle={{ fontSize: 12, color: TX2 }} />
-                      <Bar dataKey="in" name="Receita" fill="#34D399" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="out" name="Despesa" fill="#F87171" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="balance" name="Saldo" fill={accent} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+              <Card style={{ padding: 20, boxShadow: "none" }}>
+                <h2 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 600, color: TX }}>Receitas e gastos{summary.length > 12 ? ", últimos 12 meses" : ""}</h2>
+                <IncomeExpenseChart data={summary.slice(-12)} height={200} />
               </Card>
               <Table columns={YEAR_SUMMARY_COLUMNS} minWidth={560}>
                 {summary.map((m, i) => {
@@ -344,9 +324,9 @@ export default function PlanningTab({
                       columns={YEAR_SUMMARY_COLUMNS}
                       cells={[
                         { value: m.month, style: { color: TX, fontWeight: 600 } },
-                        { value: fmt(m.in), style: { color: "#34D399", fontWeight: 600 } },
-                        { value: fmt(m.out), style: { color: "#F87171", fontWeight: 600 } },
-                        { value: fmt(m.balance), style: { color: m.balance >= 0 ? "#34D399" : "#F87171", fontWeight: 700 } },
+                        { value: fmt(m.in), style: { color: SUCCESS, fontWeight: 600 } },
+                        { value: fmt(m.out), style: { color: ERROR, fontWeight: 600 } },
+                        { value: fmt(m.balance), style: { color: m.balance >= 0 ? SUCCESS : ERROR, fontWeight: 700 } },
                         {
                           value: delta === null ? (
                             <span title="Sem base de comparação no mês anterior" style={{ color: TX3 }}>—</span>
