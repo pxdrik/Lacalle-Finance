@@ -192,11 +192,24 @@ export function Totals({ items }) {
     <div className="totals3">
       {items.map(c => (
         <Card key={c.l} style={{ padding: 12, boxShadow: "none", minWidth: 0 }}>
-          <div className="num" style={{ fontSize: 14, fontWeight: 600, color: c.c, whiteSpace: "nowrap" }}><AnimatedValue value={c.v} /></div>
+          <div className="num" style={{ fontSize: 14, fontWeight: 600, color: c.c, whiteSpace: "nowrap" }}>{c.count ? c.v : <AnimatedValue value={c.v} />}</div>
           <div style={{ fontSize: 11, color: TX3, marginTop: 2 }}>{c.l}</div>
         </Card>
       ))}
     </div>
+  );
+}
+
+/** Linha das folhas de opções ("..."): ícone, título e uma dica opcional. */
+export function MenuRow({ icon: Icon, title, hint, onClick, danger }) {
+  return (
+    <button type="button" onClick={onClick} className="more-row">
+      <Icon size={20} aria-hidden="true" color={danger ? ERROR : TX2} />
+      <span style={{ flex: 1 }}>
+        <span className="more-t" style={danger ? { color: ERROR } : undefined}>{title}</span>
+        {hint && <span className="more-h">{hint}</span>}
+      </span>
+    </button>
   );
 }
 

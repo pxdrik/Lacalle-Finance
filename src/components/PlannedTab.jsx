@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, ChevronLeft, ChevronRight, Repeat, Calendar, Check, Eye, EyeOff, ArrowRightLeft, Pencil, Trash2, MoreHorizontal, Info, CalendarX, X } from "lucide-react";
-import { Card, BtnGhost, Btn, MoneyInput, LinkifiedText, EmptyState, Segmented, PageHeader, IconButton, Modal, useArmed, Totals } from "./ui";
-import { TX, TX2, TX3, BD, BD2, SI, SUCCESS, SUCCESS_FILL, WARNING, ERROR, R_BTN, R_CHIP, accentText } from "../lib/theme";
+import { Card, BtnGhost, Btn, MoneyInput, LinkifiedText, EmptyState, Segmented, PageHeader, IconButton, Modal, useArmed, Totals, MenuRow } from "./ui";
+import { TX, TX2, TX3, BD, BD2, SI, SUCCESS, SUCCESS_FILL, WARNING, R_BTN, R_CHIP, accentText } from "../lib/theme";
 import { fmt, monthKey, MONTH_ORDER, monthIndex } from "../lib/financialEngine";
 import { formatMonthKey, todayLocalISO } from "../lib/dates";
 
@@ -172,14 +172,3 @@ export default function PlannedTab({
   );
 }
 
-function MenuRow({ icon: Icon, title, hint, onClick, danger }) {
-  return (
-    <button type="button" onClick={onClick} className="more-row">
-      <Icon size={20} aria-hidden="true" color={danger ? ERROR : TX2} />
-      <span style={{ flex: 1 }}>
-        <span className="more-t" style={danger ? { color: ERROR } : undefined}>{title}</span>
-        {hint && <span className="more-h">{hint}</span>}
-      </span>
-    </button>
-  );
-}

@@ -252,6 +252,41 @@ describe("previsto com Até", () => {
   });
 });
 
+describe("Metas e Parcelas na nova cara", () => {
+  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("meta: cadastrar, concluir mostra o selo, excluir pelo menu em dois toques", async () => {
+    await openApp();
+    fireEvent.click(navBtn("Metas"));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Nova meta" }))[0]);
+    fireEvent.change(await screen.findByLabelText("Nome"), { target: { value: "Viagem" } });
+    fireEvent.change(screen.getByLabelText("Quanto custa"), { target: { value: "5.000" } });
+    fireEvent.change(screen.getByLabelText("Já juntei"), { target: { value: "1.000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+    await waitFor(() => expect(h.storage.peek()?.wishes?.[0]).toMatchObject({ name: "Viagem", price: 5000, saved: 1000 }), SAVE_WAIT);
+    fireEvent.click(screen.getByRole("button", { name: "Viagem: marcar como concluída" }));
+    await screen.findByText("Concluída");
+    fireEvent.click(screen.getByRole("button", { name: "Opções de Viagem" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Excluir/ }));
+    expect(h.storage.peek()?.wishes).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /Toque de novo para excluir/ }));
+    await waitFor(() => expect(h.storage.peek()?.wishes ?? []).toHaveLength(0), SAVE_WAIT);
+  });
+
+  test("parcela: a folha cria as transações e a lista mostra quanto falta", async () => {
+    await openApp();
+    fireEvent.click(navBtn("Parcelas"));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Nova compra" }))[0]);
+    fireEvent.change(await screen.findByLabelText("Valor total"), { target: { value: "1.200" } });
+    fireEvent.change(screen.getByLabelText("Descrição"), { target: { value: "Geladeira" } });
+    fireEvent.change(screen.getByLabelText("Parcelas", { selector: "input" }), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: /Criar 12x de/ }));
+    await waitFor(() => expect(h.storage.peek()?.inst?.[0]).toMatchObject({ desc: "Geladeira", numParcelas: 12 }), SAVE_WAIT);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Remover Geladeira" })).toBeTruthy();
+  });
+});
+
 // Abre a folha "Novo previsto" e preenche um recorrente (sem salvar).
 async function newRecurring(desc, val) {
   fireEvent.click((await screen.findAllByRole("button", { name: "Novo previsto" }))[0]);

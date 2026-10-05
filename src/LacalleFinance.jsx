@@ -983,13 +983,6 @@ function MainApp({user,setUser}){
   const qaValRef=useRef(null);
   const plannedValRef=useRef(null);
 
-  // ---- Scroll automático até o formulário ao abrir (Adicionar OU Editar) ----
-  // Sem isso, ao clicar em "Editar" num item lá embaixo da lista, o formulário
-  // abre no topo da seção e fica fora da área visível.
-  const wishFormRef=useRef(null);
-  useEffect(()=>{
-    if(showWishForm)requestAnimationFrame(()=>wishFormRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
-  },[showWishForm]);
   const applyFrequent=item=>{
     setQaDesc(item.desc);
     setQaVal(toDecimalStr(item.val));
@@ -1687,6 +1680,7 @@ function MainApp({user,setUser}){
         .amt-field{display:flex;align-items:baseline;gap:8px;height:60px;padding:0 14px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:rgba(255,255,255,0.03);}
         .amt-field:focus-within{border-color:${accent}90;box-shadow:0 0 0 3px ${accent}22;}
         .amt-field span{font-family:${NUM_FONT};color:${TX3};font-size:16px;line-height:60px;}
+        .amt-field.amt-sm{height:48px;}.amt-field.amt-sm span{line-height:48px;font-size:14px;}.amt-field.amt-sm input{height:46px;font-size:18px;}
         .amt-field input{flex:1;min-width:0;border:none !important;box-shadow:none !important;background:transparent;outline:none;font-family:${NUM_FONT};font-variant-numeric:tabular-nums;font-size:26px;font-weight:600;letter-spacing:-0.02em;height:58px;color:${TX};}
         .cat-chip{position:relative;height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:${R_CHIP}px;border:1px solid ${BD};background:transparent;color:${TX2};font-size:12.5px;cursor:pointer;}
         .cat-chip::after{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%);}
@@ -2562,7 +2556,7 @@ function MainApp({user,setUser}){
           <WishesTab
             wishes={wishes} sortedWishes={sortedWishes} wishSortBy={wishSortBy} showWishForm={showWishForm}
             wishForm={wishForm} editingWish={editingWish} expandedNotes={expandedNotes} accent={accent}
-            wishFormRef={wishFormRef} wishFormSnapshotRef={wishFormSnapshotRef}
+            wishFormSnapshotRef={wishFormSnapshotRef}
             setWishSortBy={setWishSortBy} setShowWishForm={setShowWishForm} setEditingWish={setEditingWish} setWishForm={setWishForm}
             onSave={saveWish} onCancelForm={closeWishForm} onToggleDone={toggleWishDone}
             onTransferToPlanned={openTransferToPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes}
