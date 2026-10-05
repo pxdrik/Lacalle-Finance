@@ -4,12 +4,12 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
-## 🔶 NA BRANCH, FALTA TESTAR: pontos do Lacalle Life no Finance (04/10/2026)
+## ✅ EM PRODUÇÃO: pontos do Lacalle Life no Finance (04/10/2026)
 
-Implementado na branch `melhorias-auditoria` a partir do protótipo
+Implementado a partir do protótipo
 (https://claude.ai/artifact/PVbbKMtz7Nmhy8ZiQu9fVt) e da auditoria Life →
-Finance (https://claude.ai/artifact/4Qe6abrgqN2uyK9kwxkZ3C). Só vai para o
-`main` (que publica no Netlify) depois do Pedro testar a prévia do PR.
+Finance (https://claude.ai/artifact/4Qe6abrgqN2uyK9kwxkZ3C), testado pelo
+Pedro na prévia do PR antes do merge.
 
 - **Sincronização:** o mais recente vence, item por item (regra do Life),
   com quarentena para registro malformado; modo sem rede com a cópia no
@@ -21,12 +21,13 @@ Finance (https://claude.ai/artifact/4Qe6abrgqN2uyK9kwxkZ3C). Só vai para o
   mensal em PDF.
 - **Mantido como decidido:** as 14 categorias e o Investimento como
   categoria; "Novo lançamento" discreto abaixo do resumo em Transações.
-- **Antes do merge:** aplicar a migration `20261005000000` e publicar a
-  função `delete-account` junto (as duas dependem de confirmação do Pedro).
+- **No ar em 04/10/2026:** PR #3 (merge `9bfd29a`), migration
+  `20261005000000` aplicada em produção, função `delete-account` versão 5.
+  Falta só o Pedro ligar a proteção contra senha vazada no painel do Supabase.
 
 ---
 
-## 🔶 NA BRANCH, FALTA TESTAR: previsto com data de fim ("Até") (04/10/2026)
+## ✅ EM PRODUÇÃO: previsto com data de fim ("Até") (04/10/2026)
 
 - Campo `until` (último mês que conta) e `from` (mês de início, desde o
   cadastro, como o Pedro escolheu). Uma regra só,
