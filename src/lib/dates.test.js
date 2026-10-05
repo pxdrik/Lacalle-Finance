@@ -22,3 +22,9 @@ test("data ausente ou inválida vira travessão, nunca texto quebrado", () => {
 test("título de grupo começa com maiúscula", () => {
   assert.equal(formatDayTitle("2026-10-04", "2026-10-04"), "Hoje");
 });
+
+import { formatMonthKey } from "./dates.js";
+test("mês por extenso", () => {
+  assert.equal(formatMonthKey("out/26"), "outubro de 2026");
+  assert.equal(formatMonthKey("???"), "???");
+});

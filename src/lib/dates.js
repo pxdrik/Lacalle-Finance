@@ -32,3 +32,12 @@ export const formatDayTitle = (iso, todayISO) => { const s = formatDay(iso, toda
 
 /** Hoje no fuso local, no formato das datas do app (AAAA-MM-DD). */
 export const todayLocalISO = () => toISO(new Date());
+
+const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const MONTH_KEYS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+/** "out/26" vira "outubro de 2026" (chave inválida volta como veio). */
+export function formatMonthKey(mk) {
+  const [m, y] = String(mk || "").split("/");
+  const i = MONTH_KEYS.indexOf(m);
+  return i < 0 || !y ? String(mk || "") : `${MONTH_NAMES[i]} de 20${y}`;
+}

@@ -1681,7 +1681,7 @@ export const InsightEngine=(()=>{
       if(curEntry.balance>0&&curEntry.balance>bestPrev){
         out.push({
           category:"conquista",priority:"alta",
-          title:"Novo recorde de saldo mensal! 🎉",
+          title:"Novo recorde de saldo mensal",
           heroNumber:{value:patrimonio,format:"currency",sign:"+"},
           explanation:`Este mês seu saldo fechou em ${fmt(curEntry.balance)} — o melhor resultado dos últimos ${closed.length+1} meses (recorde anterior: ${fmt(bestPrev)}).`,
           reason:"Nenhum dos meses recentes teve um saldo tão bom quanto este.",

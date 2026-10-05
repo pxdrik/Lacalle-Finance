@@ -181,6 +181,25 @@ export function PageHeader({ icon: Icon, title, subtitle, actions }) {
   );
 }
 
+/**
+ * Os três totais do topo de Transações e Previstos. Três colunas no
+ * computador; no celular o primeiro ocupa a linha toda e os outros dois
+ * dividem a de baixo (em três colunas de 320 a 414px, "R$ 1.705,90" já não
+ * cabia e virava "R$ 1.705,...").
+ */
+export function Totals({ items }) {
+  return (
+    <div className="totals3">
+      {items.map(c => (
+        <Card key={c.l} style={{ padding: 12, boxShadow: "none", minWidth: 0 }}>
+          <div className="num" style={{ fontSize: 14, fontWeight: 600, color: c.c, whiteSpace: "nowrap" }}><AnimatedValue value={c.v} /></div>
+          <div style={{ fontSize: 11, color: TX3, marginTop: 2 }}>{c.l}</div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 /** Título de seção fora do card (Section compact do Life), com ação opcional à direita. */
 export function SectionTitle({ children, action, style }) {
   return (

@@ -987,13 +987,9 @@ function MainApp({user,setUser}){
   // Sem isso, ao clicar em "Editar" num item lá embaixo da lista, o formulário
   // abre no topo da seção e fica fora da área visível.
   const wishFormRef=useRef(null);
-  const plannedFormRef=useRef(null);
   useEffect(()=>{
     if(showWishForm)requestAnimationFrame(()=>wishFormRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
   },[showWishForm]);
-  useEffect(()=>{
-    if(showPlannedForm)requestAnimationFrame(()=>plannedFormRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
-  },[showPlannedForm]);
   const applyFrequent=item=>{
     setQaDesc(item.desc);
     setQaVal(toDecimalStr(item.val));
@@ -1065,7 +1061,7 @@ function MainApp({user,setUser}){
     setPlannedExpenses(p=>[...p,{...payload,id:genId()}]);
     setWishes(p=>p.filter(x=>x.id!==item.id));
     setTransferWish(null);
-    showToast("✅ Item movido para Previstos.","success");
+    showToast("Item movido para Previstos.","success");
   };
 
   // ---- Transferência Previsto -> Desejo ----
@@ -1078,7 +1074,7 @@ function MainApp({user,setUser}){
     setWishes(p=>[...p,{...payload,id:genId()}]);
     setPlannedExpenses(p=>p.filter(x=>x.id!==transferPlanned.id));
     setTransferPlanned(null);
-    showToast("✅ Item movido para Metas.","success");
+    showToast("Item movido para Metas.","success");
   };
 
   // Converte "jul/26" + dia em ISO. O dia é limitado ao último dia REAL do mês
@@ -1177,6 +1173,13 @@ function MainApp({user,setUser}){
     const isIgnored=!!item.ignored?.[month];
     setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,ignored:{...x.ignored,[month]:isIgnored?undefined:true}}:x));
     return!isIgnored;
+  };
+  // ---- Encerrar um recorrente: conta até `month` e some depois; os meses anteriores ficam ----
+  const endPlannedAt=(item,month)=>{
+    pushHistory();
+    setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,until:month}:x));
+    const len=historyRef.current.length;
+    showToast(`"${item.desc}" conta até ${month}.`,"info",{action:{label:"Desfazer",onClick:()=>undoIfLast(len)}});
   };
   // ---- Transforma um previsto de "só este mês" em recorrente todo mês ----
   const makePlannedRecurring=item=>{
@@ -1876,7 +1879,6 @@ function MainApp({user,setUser}){
             disabled={deleteAccountBusy}
             autoFocus
             maxLength={40}
-            aria-label={`Digite ${ACCOUNT_DELETE_PHRASE} para confirmar`}
             placeholder={ACCOUNT_DELETE_PHRASE}
             style={{...SI,marginBottom:20,letterSpacing:"0.04em"}}
           />
@@ -2527,7 +2529,7 @@ function MainApp({user,setUser}){
         {tab==="planned"&&(
         <TabPanel id="planned" idPrefix="app">
           <PlannedTab
-            plannedMonth={plannedMonth} plannedStats={plannedStats} showPlannedForm={showPlannedForm} plannedFormRef={plannedFormRef}
+            plannedMonth={plannedMonth} plannedStats={plannedStats} showPlannedForm={showPlannedForm}
             editingPlanned={editingPlanned} plannedForm={plannedForm} plannedValRef={plannedValRef}
             frequentTx={frequentTx} renderFrequentPicks={renderFrequentPicks} applyFrequentToPlanned={applyFrequentToPlanned}
             fullCats={fullCats} catColor={catColor}
@@ -2538,7 +2540,7 @@ function MainApp({user,setUser}){
             onShiftMonth={delta=>setPlannedMonth(m=>shiftMonth(m,delta))} onGoToday={()=>setPlannedMonth(monthKey(todayFn()))}
             onSave={savePlannedItem} onCancelForm={closePlannedForm} onTogglePaid={togglePlannedPaid}
             onToggleIgnored={togglePlannedIgnoredForMonth} onTransferToWish={openTransferToWish}
-            onStartEdit={startEditPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes}
+            onStartEdit={startEditPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes} onEndAt={endPlannedAt}
             endedPlanned={plannedExpenses.filter(p=>p.recurring&&p.until&&monthIndex(plannedMonth)>monthIndex(p.until))}
           />
         </TabPanel>

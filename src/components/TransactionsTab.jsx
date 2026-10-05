@@ -1,5 +1,5 @@
 import { Upload, Download, Trash2, Search, CreditCard, Calendar, Pencil, X, Receipt, Plus } from "lucide-react";
-import { Card, BtnGhost, AnimatedValue, ConfirmIconButton, Segmented, useIncrementalReveal, PageHeader, IconButton } from "./ui";
+import { Card, BtnGhost, ConfirmIconButton, Segmented, useIncrementalReveal, PageHeader, IconButton, Totals } from "./ui";
 import { TX, TX2, TX3, BD, BD2, R_BTN, R_CARD, SI, SUCCESS, ERROR, MUTED, accentText } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
 import { formatDayTitle, todayLocalISO } from "../lib/dates";
@@ -61,14 +61,7 @@ export default function TransactionsTab({
       </div>
 
       {/* ---- Resumo do que está filtrado ---- */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
-        {[{ l: "Entradas", v: viewTotals.totalIn, c: SUCCESS }, { l: "Saídas", v: viewTotals.totalOut, c: TX }, { l: "Saldo", v: viewTotals.balance, c: viewTotals.balance >= 0 ? accentText(accent) : ERROR }].map(c => (
-          <Card key={c.l} style={{ padding: 12, boxShadow: "none" }}>
-            <div className="num" style={{ fontSize: 14, fontWeight: 600, color: c.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><AnimatedValue value={c.v} /></div>
-            <div style={{ fontSize: 11, color: TX3, marginTop: 2 }}>{c.l}</div>
-          </Card>
-        ))}
-      </div>
+      <Totals items={[{ l: "Saldo", v: viewTotals.balance, c: viewTotals.balance >= 0 ? accentText(accent) : ERROR }, { l: "Entradas", v: viewTotals.totalIn, c: SUCCESS }, { l: "Saídas", v: viewTotals.totalOut, c: TX }]} />
       {/* Mesmo botão do Início, em versão discreta: só contorno (pedido de 04/10/2026). */}
       <button type="button" onClick={onNewTx} className="btn-quiet-new" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 44, width: "100%", borderRadius: R_BTN, border: `1px solid ${BD2}`, background: "transparent", color: TX, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
         <Plus size={16} color={accentText(accent)} aria-hidden="true" />Novo lançamento

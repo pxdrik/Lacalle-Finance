@@ -205,14 +205,11 @@ describe("previsto com Até", () => {
     const nextMonth = monthAt(monthIndex(thisMonth) + 1);
     await openApp();
     fireEvent.click(navBtn("Previstos"));
-    fireEvent.click((await screen.findAllByRole("button", { name: "Adicionar" }))[0]);
-    fireEvent.change(screen.getByPlaceholderText(/Smart Fit/), { target: { value: "Netflix" } });
-    fireEvent.change(screen.getAllByPlaceholderText("R$").at(-1), { target: { value: "55,90" } });
-    fireEvent.click(within(screen.getByRole("group", { name: "Repetição" })).getByRole("button", { name: /Todo mês/ }));
+    await newRecurring("Netflix", "55,90");
     fireEvent.click(within(screen.getByRole("group", { name: "Até quando" })).getByRole("button", { name: "Até um mês" }));
     fireEvent.change(screen.getByLabelText("Último mês que conta"), { target: { value: nextMonth } });
     expect(screen.getByText(/Conta todo mês até/).textContent).toContain("2 meses");
-    fireEvent.click(screen.getAllByRole("button", { name: "Adicionar" }).at(-1));
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar" }));
     await waitFor(() => expect(h.storage.peek()?.planned?.[0]).toMatchObject({ desc: "Netflix", recurring: true, from: thisMonth, until: nextMonth }), SAVE_WAIT);
     // mês seguinte: ainda conta
     const next = () => fireEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
@@ -223,7 +220,45 @@ describe("previsto com Até", () => {
     await screen.findByText(/Encerrado antes deste mês: Netflix/);
     expect(screen.queryByText("Netflix")).toBeNull(); // saiu da lista do mês
   });
+
+  test("Encerrar pelo menu: conta até o mês aberto, e Desfazer volta a não ter fim", async () => {
+    const { monthKey } = await import("./lib/financialEngine.js");
+    const now = new Date();
+    const thisMonth = monthKey(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-15`);
+    await openApp();
+    fireEvent.click(navBtn("Previstos"));
+    await newRecurring("Academia", "99,90");
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Opções de Academia" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Encerrar em/ }));
+    await waitFor(() => expect(h.storage.peek()?.planned?.[0]?.until).toBe(thisMonth), SAVE_WAIT);
+    fireEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
+    await screen.findByText(/Encerrado antes deste mês: Academia/);
+    fireEvent.click(screen.getByRole("button", { name: "Desfazer" }));
+    await waitFor(() => expect(h.storage.peek()?.planned?.[0]?.until ?? null).toBeNull(), SAVE_WAIT);
+    await screen.findByText("Academia");
+  });
+
+  test("Excluir pelo menu pede dois toques", async () => {
+    await openApp();
+    fireEvent.click(navBtn("Previstos"));
+    await newRecurring("Spotify", "21,90");
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Opções de Spotify" }));
+    fireEvent.click(screen.getByRole("button", { name: /Excluir de todos os meses/ }));
+    expect(screen.getByText("Spotify", { selector: "li *" })).toBeTruthy(); // primeiro toque só arma
+    fireEvent.click(screen.getByRole("button", { name: /Toque de novo para excluir/ }));
+    await waitFor(() => expect(h.storage.peek()?.planned ?? []).toHaveLength(0), SAVE_WAIT);
+  });
 });
+
+// Abre a folha "Novo previsto" e preenche um recorrente (sem salvar).
+async function newRecurring(desc, val) {
+  fireEvent.click((await screen.findAllByRole("button", { name: "Novo previsto" }))[0]);
+  fireEvent.change(await screen.findByLabelText("Descrição"), { target: { value: desc } });
+  fireEvent.change(screen.getByLabelText("Valor"), { target: { value: val } });
+  fireEvent.click(within(screen.getByRole("group", { name: "Repetição" })).getByRole("button", { name: /Todo mês/ }));
+}
 
 describe("apagar a conta pede login recente", () => {
   beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
@@ -281,6 +316,20 @@ describe("geometria da navegação", () => {
         expect(label.getBoundingClientRect().width).toBeLessThanOrEqual(b.getBoundingClientRect().width);
         for (const hit of hitTargetsAcross(b)) expect(b.contains(hit)).toBe(true);
       }
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    });
+  }
+
+  for (const width of PHONE_WIDTHS) {
+    test(`celular ${width}px: os totais de Previstos aparecem inteiros, sem reticências`, async () => {
+      h.storage = createFakeStorage({ planned: [{ id: 1, desc: "Aluguel", val: 12345.67, cat: "Outros", form: "pix", recurring: true, month: null, paid: {}, ignored: {} }] });
+      await setViewport(width, 800);
+      render(<StrictMode><Root /></StrictMode>);
+      const nav = await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
+      fireEvent.click(within(nav).getByRole("button", { name: "Mais" }));
+      fireEvent.click(await screen.findByRole("button", { name: /Previstos/ }));
+      await waitFor(() => expect(document.querySelector(".totals3")?.textContent).toContain("12.345,67"));
+      for (const n of document.querySelectorAll(".totals3 .num")) expect(overflowX(n.parentElement)).toBeLessThanOrEqual(0);
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     });
   }

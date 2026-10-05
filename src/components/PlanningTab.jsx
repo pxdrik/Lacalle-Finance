@@ -1,6 +1,6 @@
 import {
   CalendarDays, Flag, TrendingUp, Briefcase, Bell, ChevronLeft, ChevronRight,
-  Clock, Calendar, Hourglass, ShieldCheck, Target, Rocket,
+  Clock, Calendar, Hourglass, ShieldCheck, Target, Rocket, CheckCircle2, AlertTriangle, Info,
 } from "lucide-react";
 import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, ChartTooltip, Table, TableRow, Comparison, Segmented } from "./ui";
 import { TX, TX2, TX3, BD, CARD, R_CARD, R_INPUT, SI } from "../lib/theme";
@@ -236,7 +236,7 @@ export default function PlanningTab({
             {askResult && (
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <span style={{ fontSize: 19 }}>{askResult.status === "ok" ? "✅" : askResult.status === "atencao" ? "❌" : "ℹ️"}</span>
+                  {(() => { const Ic = askResult.status === "ok" ? CheckCircle2 : askResult.status === "atencao" || askResult.status === "critico" ? AlertTriangle : Info; return <Ic size={20} color={decisionColor(askResult.status)} aria-hidden="true" />; })()}
                   <div style={{ fontSize: 14, fontWeight: 700, color: decisionColor(askResult.status) }}>{askResult.answer}</div>
                 </div>
                 {askResult.detail && <div style={{ fontSize: 12.5, color: TX2, marginBottom: 16, lineHeight: 1.55 }}>{askResult.detail}</div>}

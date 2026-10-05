@@ -132,7 +132,7 @@ export default function ProjectionDrawer({
   return (
     <>
       <style>{`
-        .proj-drawer-overlay{position:fixed;inset:0;background:rgba(2,7,14,0.72);z-index:190;animation:overlayIn .15s ease-out;}
+        .proj-drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:190;animation:overlayIn .15s ease-out;}
         .proj-drawer-panel{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:${CARD};border-left:1px solid ${BD2};box-shadow:${SH_LG};z-index:191;display:flex;flex-direction:column;animation:projDrawerInRight .28s ${EASE_OUT};}
         @keyframes projDrawerInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
         @media(max-width:760px){
@@ -185,7 +185,7 @@ export default function ProjectionDrawer({
 
         <div className="proj-drawer-body" style={{ padding: "6px 22px 18px" }}>
           {explain.groups.length === 0 && (
-            <div style={{ textAlign: "center", color: TX3, padding: "32px 8px", fontSize: 13 }}>Nenhum gasto previsto para este período. 🎉</div>
+            <div style={{ textAlign: "center", color: TX3, padding: "32px 8px", fontSize: 13 }}>Nenhum gasto previsto para este período.</div>
           )}
           {explain.groups.map((g) => {
             const gColor = catColor(g.cat);
