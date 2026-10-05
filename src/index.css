@@ -72,3 +72,7 @@ button, input, select, textarea {
 .lc-dialog[open] { display: flex; align-items: center; justify-content: center; }
 .lc-dialog-top[open] { align-items: flex-start; padding-top: 10vh; }
 .lc-dialog::backdrop { background: rgba(0, 0, 0, 0.72); animation: overlayIn .15s ease-out; }
+
+/* Folha que sobe de baixo (Modal align="sheet"). */
+.lc-dialog-sheet[open] { align-items: flex-end; padding: 0; }
+@keyframes sheetIn { from { transform: translateY(100%); } to { transform: translateY(0); } }

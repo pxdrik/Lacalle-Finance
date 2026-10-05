@@ -100,16 +100,16 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase, openedFromRecoveryLink } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
 import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
-import LogoSymbol from "./components/LogoSymbol";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addMonthsStr, daysInMonth, MONTH_ORDER, MONTHS_ARR, PlannedStatus, monthIndex, monthAt } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
+import { Signature, FinanceMark } from "./components/Brand";
 import InstallmentsTab from "./components/InstallmentsTab";
 import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE, PALETTES } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, Tabs, TabPanel, DensityToggle, Segmented } from "./components/ui";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText } from "./lib/theme";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, TabPanel, DensityToggle, Segmented, IconButton } from "./components/ui";
 import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
@@ -122,7 +122,7 @@ import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/install
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
 import {
-  Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Package, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Check, ChevronDown, ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, Lightbulb, ShieldCheck, CalendarDays, Bell
+  Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Package, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Check, ChevronDown, ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, Lightbulb, ShieldCheck, CalendarDays, Bell, Target, MoreHorizontal, ChevronRight
 } from "lucide-react";
 
 const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
@@ -194,6 +194,7 @@ function MainApp({user,setUser}){
   const [revealActive,setRevealActive]=useState(true);
   const [syncStatus,setSyncStatus]=useState("loading");
   const [tab,setTab]=useState("dashboard");
+  const [showMore,setShowMore]=useState(false);
   const [transactions,setTransactions]=useState([]);
   const [wishes,setWishes]=useState([]);
   const [installments,setInstallments]=useState([]);
@@ -1504,21 +1505,26 @@ function MainApp({user,setUser}){
     </>
   );
 
+  // Navegação (nova cara, 05/10/2026). Computador: barra lateral em dois
+  // grupos, como a do LaCalle Life. Celular: 5 destinos com rótulo de 11px
+  // (o piso do Life; antes eram 6 com 9,5px), e Previstos e Parcelas no "Mais".
   const appTabs=[
-    {id:"dashboard",label:"Início",icon:LayoutDashboard},
-    {id:"planning",label:"Planejamento",short:"Planos",icon:CalendarDays},
-    {id:"transactions",label:"Transações",icon:Receipt},
-    {id:"planned",label:"Previstos",icon:Calendar},
-    {id:"installments",label:"Parcelas",icon:CreditCard},
-    {id:"wishes",label:"Metas",icon:Sparkles},
+    {id:"dashboard",label:"Início",icon:LayoutDashboard,group:"Dia a dia",mobile:true},
+    {id:"transactions",label:"Transações",icon:Receipt,group:"Dia a dia",mobile:true},
+    {id:"wishes",label:"Metas",icon:Target,group:"Dia a dia",mobile:true},
+    {id:"planning",label:"Planejamento",short:"Planos",icon:CalendarDays,group:"Planejamento",mobile:true},
+    {id:"planned",label:"Previstos",icon:Calendar,group:"Planejamento",hint:"Contas que se repetem e as de um mês só"},
+    {id:"installments",label:"Parcelas",icon:CreditCard,group:"Planejamento",hint:"Compras parceladas em andamento"},
   ];
+  const navGroups=["Dia a dia","Planejamento"];
+  const goTab=id=>{setTab(id);setShowMore(false);};
   const instToDelete=delInstId?installments.find(i=>i.id===delInstId):null;
   const instTxCount=instToDelete?instToDelete.txIds.filter(id=>txMap.has(id)).length:0;
 
   if(!isLoaded)return(
     <div style={{background:BG,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif",gap:16}}>
-      <div style={{background:"#111111",borderRadius:R_MODAL,width:54,height:54,display:"flex",alignItems:"center",justifyContent:"center"}}><LogoSymbol size={25} color="#FFFFFF"/></div>
-      <div style={{color:TX,fontWeight:700,fontSize:17}}>LaCalle <span style={{color:GOLD}}>Finance</span></div>
+      <FinanceMark size={40}/>
+      <div style={{color:TX,fontWeight:700,fontSize:17,letterSpacing:"-0.03em"}}>LaCalle <span style={{color:GOLD}}>Finance</span></div>
       {loadError?(
         <div role="alert" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,maxWidth:320,textAlign:"center",padding:"0 20px"}}>
           <div style={{color:TX,fontSize:14,fontWeight:600}}>Não consegui carregar seus dados.</div>
@@ -1616,51 +1622,54 @@ function MainApp({user,setUser}){
           *{transition-duration:.01ms !important;}
         }
 
-        /* ---- Mobile responsiveness ---- */
-        .app-header{display:flex;align-items:center;gap:14px;}
-        .hdr-info{flex:1;min-width:0;}
-        .hdr-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
-        @media(max-width:560px){
-          .main-content{padding:16px !important;}
-          .app-header{padding:12px 16px !important;gap:10px;}
-          .hero-balance{font-size:36px !important;}
-          .hdr-username{display:none;}
+        /* ---- Estrutura (nova cara, 05/10/2026) ----
+           Computador (> 760px): barra lateral fixa de 240px com os destinos em
+           dois grupos e o marcador de 3px do item atual (sidebar do Life).
+           Celular: cabeçalho com a assinatura, barra de baixo com 5 destinos. */
+        .side-nav{position:fixed;top:0;bottom:0;left:0;width:240px;display:flex;flex-direction:column;background:${CARD};border-right:1px solid ${BD};z-index:200;}
+        .side-logo{height:64px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid ${BD};flex-shrink:0;}
+        .side-groups{flex:1;overflow-y:auto;padding:12px;}
+        .side-group-title{padding:20px 12px 8px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${TX3};}
+        .side-groups>div:first-child .side-group-title{padding-top:8px;}
+        .side-item{position:relative;width:100%;display:flex;align-items:center;gap:12px;height:40px;padding:0 12px 0 16px;border:none;border-radius:${R_BTN}px;background:transparent;color:${TX2};font-size:14px;cursor:pointer;text-align:left;margin-bottom:2px;}
+        .side-item:hover{background:${MUTED};color:${TX};filter:none !important;}
+        .side-item.on{background:${accentSurface(accent)};color:${accentText(accent)};font-weight:600;}
+        .side-item.on::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px;background:${accent};}
+        .side-foot{display:flex;align-items:center;gap:10px;padding:12px 12px 12px 16px;border-top:1px solid ${BD};}
+        .side-avatar{position:relative;width:32px;height:32px;border-radius:50%;background:${MUTED};color:${TX2};border:none;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+        .side-avatar::after{content:"";position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%);}
+        .app-main{margin-left:240px;min-width:0;}
+        .app-header{display:flex;align-items:center;gap:12px;min-height:56px;padding:0 32px;padding-top:env(safe-area-inset-top);border-bottom:1px solid ${BD};background:${BG};}
+        .hdr-sig{display:none;}
+        .hdr-sync{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:12px;color:${TX3};}
+        .hdr-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+        .hdr-btn{position:relative;display:inline-flex;align-items:center;gap:4px;background:none;border:none;border-radius:${R_BTN}px;padding:6px 8px;font-size:12px;}
+        .hdr-avatar{display:none;}
+        .bottom-nav{display:none;}
+        .more-row{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:none;border-radius:${R_BTN}px;text-align:left;cursor:pointer;color:${TX};}
+        .more-row:hover{background:${MUTED};filter:none !important;}
+        .more-t{display:block;font-size:14px;font-weight:500;}
+        .more-h{display:block;font-size:12px;color:${TX3};}
+        @media(max-width:760px){
+          .side-nav{display:none;}
+          .app-main{margin-left:0;}
+          .app-header{padding:0 12px 0 16px;padding-top:env(safe-area-inset-top);min-height:56px;}
+          .hdr-sig{display:inline-flex;}
           .sync-label{display:none;}
-          .stat3{grid-template-columns:repeat(3,1fr) !important;gap:8px !important;}
-          .stat3 .stat-card{padding:12px 8px !important;}
-          .stat3 .stat-val{font-size:13px !important;}
-          .stat3 .stat-label{font-size:10px !important;}
+          .hdr-avatar{display:flex;}
+          .main-content{padding:20px 16px calc(84px + env(safe-area-inset-bottom)) !important;}
+          .toast-wrap{bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
+          /* fundo sólido no tom da marca (o azul-marinho antigo sobrava aqui);
+             sólido porque desfoque com posição fixa falha no WebKit */
+          .bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:250;background:${BG};border-top:1px solid ${BD};padding:4px 4px env(safe-area-inset-bottom);}
+          .bottom-nav-btn{background:none;border:none;cursor:pointer;min-width:0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:${TX3};padding:4px 0;}
+          .bottom-nav-btn[aria-current="page"]{color:${accentText(accent)};}
+          .bottom-nav-ico{display:flex;align-items:center;justify-content:center;width:44px;height:26px;border-radius:999px;transition:background .25s ease;}
+          .bottom-nav-btn[aria-current="page"] .bottom-nav-ico{background:${accentSurface(accent)};}
+          .bottom-nav-lbl{font-size:11px;font-weight:600;line-height:1;max-width:100%;white-space:nowrap;}
         }
         @media(max-width:380px){
-          .hdr-actions .undo-count{display:none;}
-        }
-
-        /* ---- Navegação inferior (bottom nav) no celular ---- */
-        .bottom-nav{display:none;}
-        /* BUG-08: min-height garante os ~44px de alvo de toque (WCAG 2.5.5 /
-           Apple HIG) na navegação principal do celular, sem depender de
-           padding+ícone+rótulo somarem isso "por acaso" em toda fonte/zoom —
-           o botão inteiro (ícone + rótulo) já é clicável, isto só torna o
-           mínimo explícito em vez de implícito. */
-        .bottom-nav-btn{background:none;border:none;cursor:pointer;flex:1 1 0;min-width:0;min-height:44px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 1px 4px;transition:color .15s ease;}
-        .bottom-nav-ico{display:flex;align-items:center;justify-content:center;width:40px;height:26px;border-radius:13px;transition:background .18s ease;flex-shrink:0;}
-        .bottom-nav-lbl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        @media(max-width:760px){
-          .top-tabs{display:none !important;}
-          .bottom-nav{
-            display:flex;position:fixed;left:0;right:0;bottom:0;z-index:250;
-            background:rgba(11,27,43,0.97);backdrop-filter:blur(14px);
-            border-top:1px solid ${BD2};
-            padding:4px 4px calc(4px + env(safe-area-inset-bottom));
-          }
-          .main-content{padding-bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
-          .toast-wrap{bottom:calc(86px + env(safe-area-inset-bottom)) !important;}
-        }
-
-        /* ---- Margem de segurança no topo (notch/barra de status do celular) ---- */
-        .app-header{padding-top:calc(14px + env(safe-area-inset-top)) !important;}
-        @media(max-width:560px){
-          .app-header{padding-top:calc(12px + env(safe-area-inset-top)) !important;}
+          .undo-count{display:none;}
         }
       `}</style>
 
@@ -1677,29 +1686,46 @@ function MainApp({user,setUser}){
         })}
       </div>
 
-      <div className="app-header" style={{background:HDR,padding:"14px 24px",borderBottom:`1px solid ${BD}`}}>
-        <div style={{background:"#111111",borderRadius:R_BTN,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <LogoSymbol size={16} color="#FFFFFF"/>
-        </div>
-        <div className="hdr-info">
-          <div style={{fontWeight:700,fontSize:14.5,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:"-0.01em"}}>{walletName}</div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:1}}>
-            {syncStatus==="loading"&&<><Loader2 size={11} className="spin" color={TX3}/><span className="sync-label" style={{fontSize:11,color:TX3}}>Carregando</span></>}
-            {syncStatus==="saving"&&<><Loader2 size={11} className="spin" color={TX3}/><span className="sync-label" style={{fontSize:11,color:TX3}}>Salvando</span></>}
-            {syncStatus==="saved"&&<><Cloud size={11} color={accent}/><span className="sync-label" style={{fontSize:11,color:TX2}}>Sincronizado</span><button onClick={retrySave} title="Salvar agora" className="touch-44" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:0,display:"flex"}}><RefreshCw size={11}/></button></>}
-            {syncStatus==="error"&&<><AlertTriangle size={11} color="#FBBF24"/><span className="sync-label" style={{fontSize:11,color:"#FBBF24"}}>Erro</span><button onClick={retrySave} title="Tentar salvar de novo" className="touch-44" style={{background:"none",border:"none",color:"#FBBF24",cursor:"pointer",padding:0}}><RefreshCw size={11}/></button></>}
+      {/* ---- Barra lateral (computador) ---- */}
+      <aside className="side-nav" aria-label="Menu">
+        <div className="side-logo"><Signature size={20}/></div>
+        <nav aria-label="Seções" className="side-groups">
+          {navGroups.map(g=>(
+            <div key={g}>
+              <div className="side-group-title">{g}</div>
+              {appTabs.filter(t=>t.group===g).map(t=>{const Ic=t.icon;const on=tab===t.id;return(
+                <button key={t.id} type="button" id={`app-tab-${t.id}`} aria-current={on?"page":undefined} onClick={()=>goTab(t.id)} className={`side-item${on?" on":""}`}><Ic size={18} aria-hidden="true"/>{t.label}</button>
+              );})}
+            </div>
+          ))}
+        </nav>
+        <div className="side-foot">
+          <button type="button" className="side-avatar" onClick={()=>setShowProfile(true)} title="Minha conta" aria-label="Minha conta">{(user.name||"?").trim().charAt(0).toUpperCase()}</button>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
+            <div style={{fontSize:11,color:TX3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{walletName}</div>
           </div>
+          <IconButton icon={LogOut} label="Sair" onClick={()=>setUser(null)}/>
+        </div>
+      </aside>
+
+      <div className="app-main">
+      <header className="app-header">
+        <span className="hdr-sig"><Signature size={18}/></span>
+        <div className="hdr-sync" aria-live="polite">
+          {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
+          {syncStatus==="saving"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Salvando</span></>}
+          {syncStatus==="saved"&&<><Cloud size={12} color={TX3}/><span className="sync-label">Sincronizado</span><IconButton icon={RefreshCw} size={12} label="Salvar agora" onClick={retrySave}/></>}
+          {syncStatus==="error"&&<><AlertTriangle size={12} color={WARNING}/><span className="sync-label" style={{color:WARNING}}>Erro ao salvar</span><IconButton icon={RefreshCw} size={12} color={WARNING} label="Tentar salvar de novo" onClick={retrySave}/></>}
         </div>
         <div className="hdr-actions">
-          <button onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} className="touch-44" style={{background:historyLen>0?"rgba(255,255,255,0.05)":"transparent",border:"none",borderRadius:12,padding:"7px 10px",color:historyLen>0?TX2:TX3,cursor:historyLen>0?"pointer":"not-allowed",fontSize:12,flexShrink:0,display:"flex",alignItems:"center",gap:5}}>
-            <Undo2 size={14}/><span className="undo-count">{historyLen>0?historyLen:""}</span>
+          <button type="button" onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} aria-label={historyLen?`Desfazer (${historyLen} passos)`:"Desfazer"} className="touch-44 hdr-btn" style={{color:historyLen?TX2:TX3,cursor:historyLen?"pointer":"not-allowed"}}>
+            <Undo2 size={16}/>{historyLen>0&&<span className="undo-count">{historyLen}</span>}
           </button>
-          <button onClick={()=>setShowSearch(true)} title="Pesquisar (Ctrl+K)" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><Search size={14}/></button>
-          <div className="hdr-username" style={{fontSize:12,color:TX2,flexShrink:0,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
-          <button onClick={()=>setShowProfile(true)} title="Minha conta" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><Settings size={14}/></button>
-          <button onClick={()=>setUser(null)} title="Sair" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:12,padding:"7px 9px",color:TX2,cursor:"pointer",flexShrink:0}}><LogOut size={14}/></button>
+          <IconButton icon={Search} size={16} color={TX2} label="Pesquisar (Ctrl+K)" onClick={()=>setShowSearch(true)}/>
+          <button type="button" className="side-avatar hdr-avatar" onClick={()=>setShowProfile(true)} title="Minha conta" aria-label="Minha conta">{(user.name||"?").trim().charAt(0).toUpperCase()}</button>
         </div>
-      </div>
+      </header>
 
       {isEditing&&(
         <Modal onClose={requestCloseEditTx} maxWidth={420} padding={28}>
@@ -2143,17 +2169,40 @@ function MainApp({user,setUser}){
         </Modal>
       )}
 
-      <Tabs items={appTabs} value={tab} onChange={setTab} idPrefix="app" style={{padding:"8px 20px 0",background:HDR,borderBottom:`1px solid ${BD}`}}/>
-
-      {/* ---- Navegação inferior (só no celular) ---- */}
-      <nav className="bottom-nav">
-        {appTabs.map(t=>{const Ic=t.icon;const active=tab===t.id;return(
-          <button key={t.id} onClick={()=>setTab(t.id)} className="bottom-nav-btn" style={{color:active?accent:TX3}}>
-            <span className="bottom-nav-ico" style={{background:active?`${accent}1f`:"transparent"}}><Ic size={20}/></span>
-            <span className="bottom-nav-lbl" style={{fontSize:9.5,fontWeight:600,letterSpacing:"-0.02em"}}>{t.short||t.label}</span>
+      {/* ---- Barra de baixo (celular) ---- */}
+      <nav className="bottom-nav" aria-label="Seções no celular">
+        {appTabs.filter(t=>t.mobile).map(t=>{const Ic=t.icon;const on=tab===t.id;return(
+          <button key={t.id} type="button" onClick={()=>goTab(t.id)} aria-current={on?"page":undefined} className="bottom-nav-btn">
+            <span className="bottom-nav-ico"><Ic size={20} aria-hidden="true"/></span>
+            <span className="bottom-nav-lbl">{t.short||t.label}</span>
           </button>
         );})}
+        {(()=>{const on=appTabs.some(t=>!t.mobile&&t.id===tab);return(
+          <button type="button" onClick={()=>setShowMore(true)} aria-current={on?"page":undefined} aria-haspopup="dialog" className="bottom-nav-btn">
+            <span className="bottom-nav-ico"><MoreHorizontal size={20} aria-hidden="true"/></span>
+            <span className="bottom-nav-lbl">Mais</span>
+          </button>
+        );})()}
       </nav>
+      {showMore&&(
+        <Modal align="sheet" onClose={()=>setShowMore(false)} maxWidth={560} padding={16} label="Mais">
+          <div style={{width:36,height:4,borderRadius:4,background:BD2,margin:"0 auto 14px"}} aria-hidden="true"/>
+          {appTabs.filter(t=>!t.mobile).map(t=>{const Ic=t.icon;return(
+            <button key={t.id} type="button" className="more-row" onClick={()=>goTab(t.id)} aria-current={tab===t.id?"page":undefined}>
+              <Ic size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">{t.label}</span><span className="more-h">{t.hint}</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
+            </button>
+          );})}
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);setShowProfile(true);}}>
+            <Settings size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Perfil</span><span className="more-h">Nome, cor, densidade, backup e conta</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
+          </button>
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);setShowTrash(true);}}>
+            <Trash2 size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Lixeira</span><span className="more-h">Itens apagados nos últimos {TRASH_RETENTION_DAYS} dias</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
+          </button>
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);setUser(null);}}>
+            <LogOut size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Sair</span></span>
+          </button>
+        </Modal>
+      )}
 
       <div key={tab} className="main-content" style={{padding:"28px 32px",maxWidth:1600,margin:"0 auto",animation:`fadeIn .35s ${EASE_OUT}`}}>
 
@@ -2486,6 +2535,7 @@ function MainApp({user,setUser}){
         )}
       </div>
     </div>
+    </div>
     </DensityProvider>
     </AccentContext.Provider>
   );
@@ -2531,9 +2581,10 @@ export default function Root(){
 
   if(checkingSession){
     return(
-      <div style={{background:"#071421",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <style>{`@keyframes rootspin{to{transform:rotate(360deg)}}`}</style>
-        <div style={{width:28,height:28,border:"3px solid rgba(59,130,246,0.25)",borderTopColor:"#3B82F6",borderRadius:"50%",animation:"rootspin .8s linear infinite"}}/>
+      // Conferindo a sessão: o fundo da marca e o símbolo (antes, um azul-marinho
+      // e um spinner azul que sobraram da identidade anterior).
+      <div style={{background:BG,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <FinanceMark size={36}/>
       </div>
     );
   }

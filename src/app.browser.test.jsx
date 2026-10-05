@@ -5,7 +5,7 @@ import { StrictMode } from "react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { createFakeStorage } from "./test/fakeStorage.js";
-import { setViewport, DESKTOP_WIDTH } from "./test/geometry.js";
+import { setViewport, DESKTOP_WIDTH, PHONE_WIDTHS, overflowX, hitTargetsAcross } from "./test/geometry.js";
 import { contrastRatio } from "./lib/theme.js";
 
 const h = vi.hoisted(() => ({ storage: null, invoke: null }));
@@ -31,11 +31,13 @@ const SAVE_WAIT = { timeout: 4000 };
 
 async function openApp() {
   render(<StrictMode><Root /></StrictMode>);
-  await screen.findByRole("tab", { name: /Transações/ }, { timeout: 8000 });
+  await screen.findByRole("navigation", { name: "Seções" }, { timeout: 8000 });
 }
+// botão de um destino na barra lateral (computador)
+const navBtn = name => within(screen.getByRole("navigation", { name: "Seções" })).getByRole("button", { name: new RegExp(name) });
 
 async function addTransaction(desc, value) {
-  fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+  fireEvent.click(navBtn("Transações"));
   const descInput = await screen.findByPlaceholderText("Descrição...");
   fireEvent.change(descInput, { target: { value: desc } });
   fireEvent.change(screen.getByPlaceholderText("R$"), { target: { value } });
@@ -76,19 +78,19 @@ describe("ciclo de salvamento pela tela", () => {
     h.storage.failGet = true;
     render(<StrictMode><Root /></StrictMode>);
     await screen.findByText("Não consegui carregar seus dados.", {}, { timeout: 8000 });
-    expect(screen.queryByRole("tab", { name: /Transações/ })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Seções" })).toBeNull();
     expect(h.storage.sets).toBe(0);
     h.storage.failGet = false;
     fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
-    await screen.findByRole("tab", { name: /Transações/ }, { timeout: 8000 });
-    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    await screen.findByRole("navigation", { name: "Seções" }, { timeout: 8000 });
+    fireEvent.click(navBtn("Transações"));
     await screen.findByText("Guardado na nuvem");
   });
 
   test("um lançamento estragado na nuvem não derruba o app, e não é apagado", async () => {
     h.storage = createFakeStorage({ tx: [tx(1, "Bom"), { ...tx(2, "Estragado"), date: null, val: "abc" }] });
     await openApp();
-    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    fireEvent.click(navBtn("Transações"));
     await screen.findByText("Bom");
     expect(screen.queryByText("Estragado")).toBeNull();
     await addTransaction("Depois", "5,00");
@@ -117,7 +119,7 @@ describe("excluir em dois toques e desfazer pelo aviso", () => {
 
   test("o primeiro toque só arma; sair do botão desarma", async () => {
     await openApp();
-    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    fireEvent.click(navBtn("Transações"));
     const btn = await screen.findByRole("button", { name: "Excluir Mercado" });
     fireEvent.click(btn);
     expect(btn.textContent).toBe("Excluir?");
@@ -128,7 +130,7 @@ describe("excluir em dois toques e desfazer pelo aviso", () => {
 
   test("o segundo toque exclui; Desfazer no aviso devolve e não deixa cópia na lixeira", async () => {
     await openApp();
-    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    fireEvent.click(navBtn("Transações"));
     const btn = await screen.findByRole("button", { name: "Excluir Mercado" });
     fireEvent.click(btn);
     fireEvent.click(btn);
@@ -149,7 +151,7 @@ describe("contraste medido na tela", () => {
 
   test("seletor Saída/Entrada escolhido e botão Adicionar passam de 4,5:1", async () => {
     await openApp();
-    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    fireEvent.click(navBtn("Transações"));
     const group = within(await screen.findByRole("group", { name: "Tipo de lançamento" }));
     expect(ratio(group.getByRole("button", { name: "Saída", pressed: true }))).toBeGreaterThanOrEqual(4.5);
     fireEvent.click(group.getByRole("button", { name: "Entrada" }));
@@ -166,7 +168,7 @@ describe("modal sobre <dialog>", () => {
   test("prende o foco, trava a página de trás, fecha com Esc e destrava", async () => {
     const { userEvent } = await import("vitest/browser");
     await openApp();
-    fireEvent.click(screen.getByTitle("Minha conta"));
+    fireEvent.click(screen.getByRole("button", { name: "Minha conta" }));
     const dialog = await waitFor(() => { const d = document.querySelector("dialog[open]"); if (!d) throw new Error("sem dialog"); return d; });
     expect(document.body.style.overflow).toBe("hidden");
     await userEvent.keyboard("{Tab}");
@@ -195,7 +197,7 @@ describe("previsto com Até", () => {
     const thisMonth = monthKey(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-15`);
     const nextMonth = monthAt(monthIndex(thisMonth) + 1);
     await openApp();
-    fireEvent.click(screen.getByRole("tab", { name: /Previstos/ }));
+    fireEvent.click(navBtn("Previstos"));
     fireEvent.click((await screen.findAllByRole("button", { name: "Adicionar" }))[0]);
     fireEvent.change(screen.getByPlaceholderText(/Smart Fit/), { target: { value: "Netflix" } });
     fireEvent.change(screen.getAllByPlaceholderText("R$").at(-1), { target: { value: "55,90" } });
@@ -222,13 +224,13 @@ describe("apagar a conta pede login recente", () => {
   test("se o servidor pede login recente, nada some e o aviso oferece sair e entrar", async () => {
     h.invoke = async () => ({ data: null, error: { context: { json: async () => ({ code: "reauth_required" }) } } });
     await openApp();
-    fireEvent.click(screen.getByTitle("Minha conta"));
+    fireEvent.click(screen.getByRole("button", { name: "Minha conta" }));
     fireEvent.click(await screen.findByRole("button", { name: /Apagar conta e dados/ }));
     fireEvent.change(await screen.findByLabelText("Digite APAGAR MINHA CONTA para confirmar"), { target: { value: "apagar minha conta" } });
     fireEvent.click(screen.getByRole("button", { name: "Apagar para sempre" }));
     await screen.findByText(/entre de novo com sua senha/);
     expect(screen.getByRole("button", { name: "Sair e entrar" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: /Transações/ })).toBeTruthy(); // continua logado
+    expect(navBtn("Transações")).toBeTruthy(); // continua logado
     h.invoke = null;
   });
 });
@@ -239,7 +241,7 @@ describe("lista longa e busca", () => {
 
   test("Transações desenha 40 de cada vez e libera mais ao rolar até o fim", async () => {
     await openApp();
-    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    fireEvent.click(navBtn("Transações"));
     await screen.findAllByRole("button", { name: /^Excluir Café/ });
     expect(screen.getAllByRole("button", { name: /^Excluir Café/ }).length).toBe(40);
     window.scrollTo(0, document.body.scrollHeight);
@@ -251,6 +253,47 @@ describe("lista longa e busca", () => {
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     fireEvent.change(await screen.findByPlaceholderText(/Buscar|Pesquisar/), { target: { value: "café" } });
     fireEvent.click(await screen.findByRole("button", { name: "Ver todos os 100 lançamentos" }));
-    await waitFor(() => expect(screen.getByRole("tab", { name: /Transações/ }).getAttribute("aria-selected")).toBe("true"));
+    await waitFor(() => expect(navBtn("Transações").getAttribute("aria-current")).toBe("page"));
+  });
+});
+
+describe("geometria da navegação", () => {
+  beforeEach(() => { h.storage = createFakeStorage(); });
+
+  for (const width of PHONE_WIDTHS) {
+    test(`celular ${width}px: 5 destinos, rótulo de 11px sem transbordar, cada botão recebe o próprio toque`, async () => {
+      await setViewport(width, 800);
+      render(<StrictMode><Root /></StrictMode>);
+      const nav = await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
+      const buttons = within(nav).getAllByRole("button");
+      expect(buttons.map(b => b.textContent)).toEqual(["Início", "Transações", "Metas", "Planos", "Mais"]);
+      for (const b of buttons) {
+        const label = b.querySelector(".bottom-nav-lbl");
+        expect(getComputedStyle(label).fontSize).toBe("11px");
+        expect(overflowX(b)).toBeLessThanOrEqual(0);
+        expect(label.getBoundingClientRect().width).toBeLessThanOrEqual(b.getBoundingClientRect().width);
+        for (const hit of hitTargetsAcross(b)) expect(b.contains(hit)).toBe(true);
+      }
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    });
+  }
+
+  test("computador: barra lateral com os dois grupos e o item atual marcado", async () => {
+    await setViewport(DESKTOP_WIDTH, 900);
+    await openApp();
+    const side = screen.getByRole("navigation", { name: "Seções" });
+    expect(within(side).getByText("Dia a dia")).toBeTruthy();
+    expect(within(side).getByText("Planejamento", { selector: ".side-group-title" })).toBeTruthy();
+    expect(navBtn("Início").getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("navigation", { name: "Seções no celular" })).toBeNull();
+  });
+
+  test("celular: Previstos e Parcelas abrem pelo Mais", async () => {
+    await setViewport(390, 800);
+    render(<StrictMode><Root /></StrictMode>);
+    const nav = await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
+    fireEvent.click(within(nav).getByRole("button", { name: "Mais" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Previstos/ }));
+    await waitFor(() => expect(within(nav).getByRole("button", { name: "Mais" }).getAttribute("aria-current")).toBe("page"));
   });
 });

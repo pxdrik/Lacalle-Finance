@@ -9,7 +9,7 @@ import { useState, useRef, useEffect, forwardRef, Component } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { sanitizeMoneyInput } from "../lib/money";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA, MUTED, SUCCESS_SURFACE, DANGER_SURFACE, ERROR_BG, accentSurface, accentText } from "../lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA, MUTED, SUCCESS_SURFACE, DANGER_SURFACE, ERROR_BG, accentSurface, accentText, C2 } from "../lib/theme";
 import { DENSITIES, useDensity } from "../lib/density";
 import LogoSymbol from "./LogoSymbol";
 
@@ -164,6 +164,33 @@ export function useIncrementalReveal(total, { step = 40, resetKey } = {}) {
   return { visible: Math.min(count, total), sentinelRef };
 }
 
+// ==================== PageHeader ====================
+// Toda tela abre do mesmo jeito (PageHeader do LaCalle Life): ícone num
+// quadrado discreto, título e uma linha de contexto; ações à direita.
+export function PageHeader({ icon: Icon, title, subtitle, actions }) {
+  const accent = useAccent();
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+      <span aria-hidden="true" style={{ marginTop: 2, width: 36, height: 36, borderRadius: R_CHIP, background: MUTED, color: accentText(accent), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon size={18} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h1 style={{ margin: 0, fontSize: 24, lineHeight: 1.25, letterSpacing: "-0.02em", fontWeight: 700, color: TX }}>{title}</h1>
+        {subtitle && <p style={{ margin: "4px 0 0", fontSize: 13, color: TX2 }}>{subtitle}</p>}
+      </div>
+      {actions && <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{actions}</div>}
+    </div>
+  );
+}
+
+/** Título de seção fora do card (Section compact do Life), com ação opcional à direita. */
+export function SectionTitle({ children, action, style }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 10, ...style }}>
+      <h2 style={{ margin: 0, fontSize: 12, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: TX3 }}>{children}</h2>
+      {action}
+    </div>
+  );
+}
+
 // ==================== Tabs ====================
 // role="tablist"/"tab" com aria-selected, aria-controls e roving tabindex —
 // a semântica que faltava (brandbook, seção 43). O visual é o `.nav-tab` que
@@ -238,7 +265,7 @@ export function Tabs({ items, value, onChange, idPrefix, style }) {
 /** O painel de uma aba — `aria-labelledby` fecha o par com o botão que o abriu. */
 export function TabPanel({ id, idPrefix, children, style }) {
   return (
-    <div id={tabPanelId(idPrefix, id)} role="tabpanel" aria-labelledby={tabId(idPrefix, id)} className="tab-panel-enter" style={style}>
+    <div id={tabPanelId(idPrefix, id)} role="region" aria-labelledby={tabId(idPrefix, id)} className="tab-panel-enter" style={style}>
       <SectionBoundary>{children}</SectionBoundary>
     </div>
   );
@@ -416,6 +443,7 @@ export function StatTile({label,value,color=TX,caption,size=16,textAlign}){
 // vira o evento "cancel". A página de trás para de rolar enquanto ele está
 // aberto. Modais abertos depois ficam por cima (top layer), sem zIndex.
 // Sem `onClose` (importar backup, por exemplo), Esc e clique fora não fecham.
+// `align="sheet"`: folha que sobe de baixo (menu "Mais", novo lançamento).
 export const Modal=({onClose,children,maxWidth=420,align="center",padding=28,scroll=true,contentStyle,label})=>{
   const ref=useRef(null);
   const pressedOnBackdrop=useRef(false);
@@ -430,7 +458,7 @@ export const Modal=({onClose,children,maxWidth=420,align="center",padding=28,scr
     <dialog
       ref={ref}
       aria-label={label}
-      className={`lc-dialog${align==="top"?" lc-dialog-top":""}`}
+      className={`lc-dialog${align==="top"?" lc-dialog-top":align==="sheet"?" lc-dialog-sheet":""}`}
       onCancel={e=>{e.preventDefault();onClose?.();}}
       onMouseDown={e=>{pressedOnBackdrop.current=e.target===e.currentTarget;}}
       onMouseUp={e=>{
@@ -440,7 +468,7 @@ export const Modal=({onClose,children,maxWidth=420,align="center",padding=28,scr
     >
       <div
         onMouseDown={e=>e.stopPropagation()}
-        style={{background:CARD,border:`1px solid ${BD2}`,borderRadius:R_MODAL,padding,width:"100%",maxWidth,boxSizing:"border-box",...(scroll?{maxHeight:"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:`modalIn .2s ${EASE_OUT}`,color:TX,textAlign:"left",...contentStyle}}
+        style={{background:align==="sheet"?C2:CARD,border:`1px solid ${BD2}`,borderRadius:align==="sheet"?`${R_MODAL}px ${R_MODAL}px 0 0`:R_MODAL,padding,width:"100%",maxWidth,boxSizing:"border-box",...(scroll?{maxHeight:align==="sheet"?"90vh":"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:align==="sheet"?`sheetIn .35s ${EASE_OUT}`:`modalIn .2s ${EASE_OUT}`,color:TX,textAlign:"left",...(align==="sheet"?{paddingBottom:`calc(${padding}px + env(safe-area-inset-bottom))`}:{}),...contentStyle}}
       >
         {children}
       </div>
