@@ -1289,7 +1289,17 @@ function MainApp({user,setUser}){
         // vez de sair da tela achando que a conta sumiu quando na verdade
         // só a sessão local caiu e a conta real continua existindo.
         const{error}=await supabase.functions.invoke("delete-account");
-        if(error)throw error;
+        if(error){
+          // A função só apaga com login recente (ver supabase/functions/delete-account).
+          const body=await error.context?.json?.().catch(()=>null);
+          if(body?.code==="reauth_required"){
+            deleteAccountBusyRef.current=false;
+            setDeleteAccountBusy(false);
+            showToast("Por segurança, entre de novo com sua senha e apague a conta logo em seguida.","info",{action:{label:"Sair e entrar",onClick:()=>setUser(null)}});
+            return;
+          }
+          throw error;
+        }
         deleteAccountBusyRef.current=false;
         setDeleteAccountBusy(false);
         closeDeleteAccount();
@@ -1750,7 +1760,7 @@ function MainApp({user,setUser}){
       {deleteAccountOpen&&(()=>{
         const phraseOk=deleteAccountPhrase.trim().toUpperCase()===ACCOUNT_DELETE_PHRASE;
         return(
-        <Modal onClose={deleteAccountBusy?()=>{}:closeDeleteAccount} maxWidth={400} padding={30} zIndex={200}>
+        <Modal onClose={deleteAccountBusy?()=>{}:closeDeleteAccount} maxWidth={400} padding={30} label="Apagar sua conta">
           <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color="#F87171"/></div>
           <div style={{fontSize:17,fontWeight:700,color:TX,marginBottom:10,textAlign:"center",letterSpacing:"-0.01em"}}>Apagar sua conta para sempre?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:14,lineHeight:1.6}}>
@@ -1761,6 +1771,7 @@ function MainApp({user,setUser}){
           </div>
           <div style={{fontSize:12,color:TX2,marginBottom:6}}>Para confirmar, digite <strong style={{color:TX}}>{ACCOUNT_DELETE_PHRASE}</strong>:</div>
           <input
+            aria-label={`Digite ${ACCOUNT_DELETE_PHRASE} para confirmar`}
             value={deleteAccountPhrase}
             onChange={e=>setDeleteAccountPhrase(e.target.value)}
             disabled={deleteAccountBusy}
@@ -1844,7 +1855,7 @@ function MainApp({user,setUser}){
         const ex=getExplain(explainKey);
         if(!ex)return null;
         return(
-          <Modal onClose={()=>setExplainKey(null)} maxWidth={440} padding={28} zIndex={180}>
+          <Modal onClose={()=>setExplainKey(null)} maxWidth={440} padding={28}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div style={{fontSize:16,fontWeight:700,color:TX,display:"flex",alignItems:"center",gap:8}}><Info size={16} color={accent}/>{ex.title}</div>
               <button onClick={()=>setExplainKey(null)} style={{background:"none",border:"none",color:TX3,cursor:"pointer"}}><X size={18}/></button>

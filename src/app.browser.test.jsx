@@ -8,7 +8,7 @@ import { createFakeStorage } from "./test/fakeStorage.js";
 import { setViewport, DESKTOP_WIDTH } from "./test/geometry.js";
 import { contrastRatio } from "./lib/theme.js";
 
-const h = vi.hoisted(() => ({ storage: null }));
+const h = vi.hoisted(() => ({ storage: null, invoke: null }));
 
 vi.mock("./lib/supabaseClient", () => ({
   openedFromRecoveryLink: false,
@@ -19,7 +19,7 @@ vi.mock("./lib/supabaseClient", () => ({
       updateUser: async () => ({ data: {}, error: null }),
       signOut: async () => ({ error: null }),
     },
-    functions: { invoke: async () => ({ data: null, error: null }) },
+    functions: { invoke: (...a) => (h.invoke ? h.invoke(...a) : Promise.resolve({ data: null, error: null })) },
   },
 }));
 vi.mock("./lib/storage", () => ({ storage: new Proxy({}, { get: (_t, k) => h.storage[k].bind(h.storage) }) }));
@@ -213,5 +213,22 @@ describe("previsto com Até", () => {
     next();
     await screen.findByText(/Encerrado antes deste mês: Netflix/);
     expect(screen.queryByText("Netflix")).toBeNull(); // saiu da lista do mês
+  });
+});
+
+describe("apagar a conta pede login recente", () => {
+  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("se o servidor pede login recente, nada some e o aviso oferece sair e entrar", async () => {
+    h.invoke = async () => ({ data: null, error: { context: { json: async () => ({ code: "reauth_required" }) } } });
+    await openApp();
+    fireEvent.click(screen.getByTitle("Minha conta"));
+    fireEvent.click(await screen.findByRole("button", { name: /Apagar conta e dados/ }));
+    fireEvent.change(await screen.findByLabelText("Digite APAGAR MINHA CONTA para confirmar"), { target: { value: "apagar minha conta" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apagar para sempre" }));
+    await screen.findByText(/entre de novo com sua senha/);
+    expect(screen.getByRole("button", { name: "Sair e entrar" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Transações/ })).toBeTruthy(); // continua logado
+    h.invoke = null;
   });
 });
