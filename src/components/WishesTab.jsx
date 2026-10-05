@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Check, ArrowRightLeft, Pencil, Trash2, Target, MoreHorizontal, X, Eye, EyeOff } from "lucide-react";
+import { Plus, Check, ArrowRightLeft, Pencil, Trash2, Target, MoreHorizontal, X, Eye, EyeOff, ArrowUp, ArrowDown } from "lucide-react";
 import { Card, Btn, BtnGhost, MoneyInput, ProgressBar, LinkifiedText, toDecimalStr, EmptyState, Segmented, PageHeader, IconButton, Modal, useArmed, MenuRow } from "./ui";
 import { TX, TX2, TX3, BD, BD2, R_CHIP, SI, SUCCESS, SUCCESS_FILL, SUCCESS_SURFACE, WARNING, WARNING_SURFACE, ERROR, DANGER_SURFACE, accentText } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
@@ -13,7 +13,7 @@ export default function WishesTab({
   wishes, sortedWishes, wishSortBy, showWishForm, wishForm, editingWish, expandedNotes, accent,
   wishFormSnapshotRef,
   setWishSortBy, setShowWishForm, setEditingWish, setWishForm,
-  onSave, onCancelForm, onToggleDone, onTransferToPlanned, onRequestDelete, onToggleNotes,
+  onSave, onCancelForm, onToggleDone, onTransferToPlanned, onRequestDelete, onToggleNotes, onMove,
 }) {
   const [menuItem, setMenuItem] = useState(null);
   const del = useArmed();
@@ -34,7 +34,7 @@ export default function WishesTab({
 
       {wishes.length > 1 && (
         <Segmented ariaLabel="Ordenar metas" size="sm" value={wishSortBy} onChange={setWishSortBy} style={{ width: "fit-content" }}
-          options={[{ value: "progress", label: "Progresso", tone: "accent" }, { value: "priority", label: "Prioridade", tone: "accent" }]} />
+          options={[{ value: "progress", label: "Progresso", tone: "accent" }, { value: "priority", label: "Prioridade", tone: "accent" }, { value: "manual", label: "Minha ordem", tone: "accent" }]} />
       )}
 
       {wishes.length === 0 && (
@@ -87,6 +87,14 @@ export default function WishesTab({
           <h2 style={{ margin: "0 0 2px 12px", fontSize: 16, fontWeight: 600, color: TX }}>{menuItem.name}</h2>
           <p style={{ margin: "0 0 10px 12px", fontSize: 13, color: TX2 }}>{fmt(menuItem.saved)} de {fmt(menuItem.price)}</p>
           <MenuRow icon={Pencil} title="Editar" hint="Nome, valores, prazo e prioridade" onClick={() => act(startEdit)} />
+          {(() => {
+            const i = sortedWishes.findIndex(w => w.id === menuItem.id);
+            const same = k => sortedWishes[k] && !!sortedWishes[k].done === !!menuItem.done;
+            return <>
+              {same(i - 1) && <MenuRow icon={ArrowUp} title="Subir na lista" hint={`Fica acima de ${sortedWishes[i - 1].name}`} onClick={() => act(it => onMove(it.id, -1))} />}
+              {same(i + 1) && <MenuRow icon={ArrowDown} title="Descer na lista" hint={`Fica abaixo de ${sortedWishes[i + 1].name}`} onClick={() => act(it => onMove(it.id, 1))} />}
+            </>;
+          })()}
           <MenuRow icon={ArrowRightLeft} title="Mover para Previstos" hint="Vira uma conta prevista num mês" onClick={() => act(onTransferToPlanned)} />
           {menuItem.notes && <MenuRow icon={expandedNotes[`wish-${menuItem.id}`] ? EyeOff : Eye} title={expandedNotes[`wish-${menuItem.id}`] ? "Esconder notas" : "Ver notas"} onClick={() => act(it => onToggleNotes(`wish-${it.id}`))} />}
           <MenuRow icon={Trash2} danger title={del.armed ? "Toque de novo para excluir" : "Excluir"} hint={del.armed ? "Vai para a lixeira, com Desfazer no aviso" : undefined}

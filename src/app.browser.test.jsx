@@ -255,7 +255,7 @@ describe("previsto com Até", () => {
 });
 
 describe("Metas e Parcelas na nova cara", () => {
-  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+  beforeEach(async () => { localStorage.clear(); h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
 
   test("meta: cadastrar, concluir mostra o selo, excluir pelo menu em dois toques", async () => {
     await openApp();
@@ -273,6 +273,23 @@ describe("Metas e Parcelas na nova cara", () => {
     expect(h.storage.peek()?.wishes).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: /Toque de novo para excluir/ }));
     await waitFor(() => expect(h.storage.peek()?.wishes ?? []).toHaveLength(0), SAVE_WAIT);
+  });
+
+  test("meta: Subir pelo menu muda a lista e grava a ordem em cada meta", async () => {
+    const w = (id, name, saved) => ({ id, name, price: 1000, saved, priority: "Média", monthsTarget: 0, notes: "", done: false });
+    h.storage = createFakeStorage({ wishes: [w(1, "Carro", 900), w(2, "Curso", 500), w(3, "Viagem", 100)] });
+    await openApp();
+    fireEvent.click(navBtn("Metas"));
+    const names = () => [...document.querySelectorAll(".main-content li")].map(li => li.querySelector("span")?.textContent);
+    await waitFor(() => expect(names()).toEqual(["Carro", "Curso", "Viagem"]));
+    fireEvent.click(screen.getByRole("button", { name: "Opções de Viagem" }));
+    fireEvent.click(screen.getByRole("button", { name: /Subir na lista/ }));
+    await waitFor(() => expect(names()).toEqual(["Carro", "Viagem", "Curso"]));
+    expect(screen.getByRole("button", { name: "Minha ordem" }).getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => {
+      const byId = Object.fromEntries(h.storage.peek().wishes.map(x => [x.id, x.order]));
+      expect(byId).toEqual({ 1: 0, 2: 2, 3: 1 });
+    }, SAVE_WAIT);
   });
 
   test("parcela: a folha cria as transações e a lista mostra quanto falta", async () => {

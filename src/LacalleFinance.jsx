@@ -236,18 +236,23 @@ function MainApp({user,setUser}){
   const deleteAccountBusyRef=useRef(false);
   const cancelEditTxRef=useRef(()=>{});
   const [expandedNotes,setExpandedNotes]=useState({});
-  const [wishSortBy,setWishSortBy]=useState("progress");
+  // A ordem escolhida fica neste aparelho (conveniência de tela, não dado da conta).
+  const [wishSortBy,setWishSortByState]=useState(()=>{try{return localStorage.getItem("lf.wishSort")||"progress";}catch{return"progress";}});
+  const setWishSortBy=v=>{setWishSortByState(v);try{localStorage.setItem("lf.wishSort",v);}catch{/* sem armazenamento local */}};
   // Mesma ideia do sortedPlannedItemsForMonth: memoiza a ordenação da lista
   // de Desejos em vez de reordenar a cada render do componente.
-  const sortedWishes=useMemo(()=>[...wishes].sort((a,b)=>{
+  // "manual" usa o campo `order` de cada meta (e não a posição no array):
+  // assim mudar a ordem carimba updatedAt e passa pela regra do mais recente.
+  const sortedWishes=useMemo(()=>wishes.map((w,i)=>[w,i]).sort(([a,ia],[b,ib])=>{
     if(!!a.done!==!!b.done)return a.done?1:-1;
+    if(wishSortBy==="manual")return(a.order??ia)-(b.order??ib);
     if(wishSortBy==="priority"){
       const order={"Alta":0,"Média":1,"Baixa":2};
       const diff=(order[a.priority]??1)-(order[b.priority]??1);
       if(diff!==0)return diff;
     }
     return Math.min(100,b.saved/b.price*100)-Math.min(100,a.saved/a.price*100);
-  }),[wishes,wishSortBy]);
+  }).map(([w])=>w),[wishes,wishSortBy]);
 
   const [plannedExpenses,setPlannedExpenses]=useState([]);
   const [plannedMonth,setPlannedMonth]=useState(monthKey(todayFn()));
@@ -1039,6 +1044,18 @@ function MainApp({user,setUser}){
     setWishes(p=>p.filter(x=>x.id!==id));
     if(item)moveToTrash("wish",item);
     deletedToast("Meta");
+  };
+  // Sobe ou desce uma meta na lista que está na tela; a partir daí a lista
+  // fica em "Minha ordem", começando da ordem que a pessoa estava vendo.
+  const moveWish=(id,dir)=>{
+    const list=[...sortedWishes];
+    const i=list.findIndex(w=>w.id===id),j=i+dir;
+    if(i<0||j<0||j>=list.length||!!list[i].done!==!!list[j].done)return;
+    [list[i],list[j]]=[list[j],list[i]];
+    const pos=new Map(list.map((w,k)=>[w.id,k]));
+    pushHistory();
+    setWishes(p=>p.map(w=>w.order===pos.get(w.id)?w:{...w,order:pos.get(w.id)}));
+    setWishSortBy("manual");
   };
   const toggleWishDone=id=>{pushHistory();setWishes(p=>p.map(x=>x.id===id?{...x,done:!x.done}:x));};
 
@@ -2563,7 +2580,7 @@ function MainApp({user,setUser}){
             wishForm={wishForm} editingWish={editingWish} expandedNotes={expandedNotes} accent={accent}
             wishFormSnapshotRef={wishFormSnapshotRef}
             setWishSortBy={setWishSortBy} setShowWishForm={setShowWishForm} setEditingWish={setEditingWish} setWishForm={setWishForm}
-            onSave={saveWish} onCancelForm={closeWishForm} onToggleDone={toggleWishDone}
+            onSave={saveWish} onCancelForm={closeWishForm} onToggleDone={toggleWishDone} onMove={moveWish}
             onTransferToPlanned={openTransferToPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes}
           />
         </TabPanel>
