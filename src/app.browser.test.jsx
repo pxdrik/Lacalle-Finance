@@ -36,12 +36,18 @@ async function openApp() {
 // botão de um destino na barra lateral (computador)
 const navBtn = name => within(screen.getByRole("navigation", { name: "Seções" })).getByRole("button", { name: new RegExp(name) });
 
-async function addTransaction(desc, value) {
+// O formulário abre numa folha pelo botão "Novo lançamento" (em Transações, o discreto).
+async function openNewTxSheet() {
   fireEvent.click(navBtn("Transações"));
-  const descInput = await screen.findByPlaceholderText("Descrição...");
-  fireEvent.change(descInput, { target: { value: desc } });
-  fireEvent.change(screen.getByPlaceholderText("R$"), { target: { value } });
-  fireEvent.click(screen.getByRole("button", { name: /Adicionar Saída/ }));
+  const main = within(document.querySelector(".main-content"));
+  fireEvent.click(await main.findByRole("button", { name: "Novo lançamento" }));
+  return within(await screen.findByRole("dialog", { name: "Novo lançamento" }));
+}
+async function addTransaction(desc, value) {
+  const sheet = await openNewTxSheet();
+  fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: desc } });
+  fireEvent.change(sheet.getByLabelText("Valor"), { target: { value } });
+  fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
 }
 
 describe("ciclo de salvamento pela tela", () => {
@@ -151,14 +157,15 @@ describe("contraste medido na tela", () => {
 
   test("seletor Saída/Entrada escolhido e botão Adicionar passam de 4,5:1", async () => {
     await openApp();
-    fireEvent.click(navBtn("Transações"));
-    const group = within(await screen.findByRole("group", { name: "Tipo de lançamento" }));
+    const sheet = await openNewTxSheet();
+    const group = within(sheet.getByRole("group", { name: "Tipo de lançamento" }));
     expect(ratio(group.getByRole("button", { name: "Saída", pressed: true }))).toBeGreaterThanOrEqual(4.5);
     fireEvent.click(group.getByRole("button", { name: "Entrada" }));
     expect(ratio(group.getByRole("button", { name: "Entrada", pressed: true }))).toBeGreaterThanOrEqual(4.5);
-    fireEvent.change(screen.getByPlaceholderText("Descrição..."), { target: { value: "Teste" } });
-    fireEvent.change(screen.getByPlaceholderText("R$"), { target: { value: "10" } });
-    expect(ratio(screen.getByRole("button", { name: /Adicionar Entrada/ }))).toBeGreaterThanOrEqual(4.5);
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Teste" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "10" } });
+    // mede depois da transição de cor do botão (0,15 s), não no meio dela
+    await waitFor(() => expect(ratio(sheet.getByRole("button", { name: /Adicionar Entrada/ }))).toBeGreaterThanOrEqual(4.5));
   });
 });
 

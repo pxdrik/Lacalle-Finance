@@ -21,7 +21,7 @@ import {
   GOLD,
   SUCCESS, WARNING, ERROR,
   ERROR_BG, SUCCESS_FILL,
-  MUTED, SUCCESS_SURFACE, DANGER_SURFACE, PALETTES, accentSurface, accentText, contrastRatio,
+  MUTED, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, PALETTES, accentSurface, accentText, contrastRatio,
 } from "./theme.js";
 
 const WHITE = "#FFFFFF";
@@ -125,6 +125,7 @@ describe("seletores e filtros (Segmented) — superfícies de estado", () => {
   const SEG = [
     [SUCCESS, SUCCESS_SURFACE, "Entrada escolhida"],
     [ERROR, DANGER_SURFACE, "Saída escolhida"],
+    [WARNING, WARNING_SURFACE, "selo de mudança (Descobertas)"],
     [TX, MUTED, "opção neutra escolhida"],
     [TX2, CARD, "opção não escolhida"],
   ];

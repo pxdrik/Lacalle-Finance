@@ -6,10 +6,10 @@
 // importa daqui em vez de redefinir os mesmos componentes.
 // ============================================================================
 import { useState, useRef, useEffect, forwardRef, Component } from "react";
-import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
+import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus, AlertTriangle } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { sanitizeMoneyInput } from "../lib/money";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA, MUTED, SUCCESS_SURFACE, DANGER_SURFACE, ERROR_BG, accentSurface, accentText, C2 } from "../lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA, MUTED, SUCCESS_SURFACE, DANGER_SURFACE, ERROR_BG, accentSurface, accentText, C2, WARNING_SURFACE } from "../lib/theme";
 import { DENSITIES, useDensity } from "../lib/density";
 import LogoSymbol from "./LogoSymbol";
 
@@ -744,41 +744,53 @@ export const DECISION_STATUS_COLOR={ok:SUCCESS,atencao:WARNING,critico:ERROR,neu
 // → por que aconteceu (reason) → "principais responsáveis" (transações reais,
 // visível sem precisar abrir nada) → recomendação → "Como cheguei a essa
 // conclusão" (expansível: cálculo linha a linha + checklist de dados usados).
+// Selo de cada tipo de descoberta: ícone e palavra (antes, um emoji e a cor
+// pintando o número inteiro e uma faixa no topo do card).
+const INSIGHT_TONE={
+  atencao:{icon:AlertTriangle,bg:DANGER_SURFACE,fg:ERROR},
+  mudanca:{icon:TrendingUp,bg:WARNING_SURFACE,fg:WARNING},
+  oportunidade:{icon:Lightbulb,bg:SUCCESS_SURFACE,fg:SUCCESS},
+  conquista:{icon:Check,bg:MUTED,fg:TX},
+};
 export function InsightCard({item,index=0,action}){
   const [expanded,setExpanded]=useState(false);
+  const accent=useAccent();
   const bd=item.breakdown||{};
   const lineItems=bd.lineItems||[];
   const calcRows=bd.calcRows||[];
+  const tone=INSIGHT_TONE[item.category]||INSIGHT_TONE.conquista;
+  const ToneIcon=tone.icon;
+  const smallTitle={fontSize:11,fontWeight:500,color:TX3,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:9};
   return(
-    <div className="fc-card insight-card-anim" style={{...cardStyle,padding:24,borderTop:`3px solid ${item.categoryColor}`,animationDelay:`${index*80}ms`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:8}}>
-        <span style={{fontSize:10.5,fontWeight:700,color:item.categoryColor,display:"flex",alignItems:"center",gap:5,letterSpacing:"0.03em",textTransform:"uppercase"}}>{item.categoryEmoji} {item.categoryLabel}</span>
-        <span style={{fontSize:10,color:TX3,fontWeight:600,whiteSpace:"nowrap"}}>{CONFIDENCE_LABEL[item.confidence]||""}</span>
+    <div className="fc-card insight-card-anim" style={{...cardStyle,boxShadow:"none",padding:20,animationDelay:`${index*80}ms`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:8}}>
+        <span style={{display:"inline-flex",alignItems:"center",gap:5,borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:600,background:tone.bg,color:tone.fg}}><ToneIcon size={12} aria-hidden="true"/>{item.categoryLabel}</span>
+        <span style={{fontSize:11,color:TX3,whiteSpace:"nowrap"}}>{CONFIDENCE_LABEL[item.confidence]||""}</span>
       </div>
-      <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:14,lineHeight:1.3,letterSpacing:"-0.01em"}}>{item.title}</div>
-      <HeroNumberAnimated heroNumber={item.heroNumber} color={item.categoryColor}/>
-      {item.comparison&&<ComparisonBar {...item.comparison} color={item.categoryColor}/>}
-      <div style={{fontSize:12.5,color:TX2,lineHeight:1.55,marginTop:item.comparison?12:14}}>{item.explanation}</div>
-      {item.reason&&<div style={{fontSize:11.5,color:TX3,lineHeight:1.5,marginTop:6}}>{item.reason}</div>}
+      <div style={{fontSize:15,fontWeight:600,color:TX,marginBottom:12,lineHeight:1.35,letterSpacing:"-0.01em"}}>{item.title}</div>
+      <HeroNumberAnimated heroNumber={item.heroNumber} color={TX}/>
+      {item.comparison&&<ComparisonBar {...item.comparison} color={tone.fg===TX?accent:tone.fg}/>}
+      <div style={{fontSize:13,color:TX2,lineHeight:1.55,marginTop:item.comparison?12:14}}>{item.explanation}</div>
+      {item.reason&&<div style={{fontSize:12,color:TX3,lineHeight:1.5,marginTop:6}}>{item.reason}</div>}
       {lineItems.length>0&&(
         <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${BD}`}}>
-          <div style={{fontSize:10,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:9}}>Principais responsáveis</div>
-          <LineItemsList items={lineItems} accentColor={item.categoryColor}/>
+          <div style={smallTitle}>Principais responsáveis</div>
+          <LineItemsList items={lineItems} accentColor={tone.fg===TX?TX3:tone.fg}/>
         </div>
       )}
       {item.recommendation&&(
-        <div style={{marginTop:16,padding:"12px 14px",background:`${item.categoryColor}12`,border:`1px solid ${item.categoryColor}2a`,borderRadius:R_BTN,display:"flex",alignItems:"flex-start",gap:9}}>
-          <Lightbulb size={13} color={item.categoryColor} style={{flexShrink:0,marginTop:1}}/>
-          <div style={{fontSize:12,color:TX,fontWeight:600,lineHeight:1.5}}>{item.recommendation}</div>
+        <div style={{marginTop:14,display:"flex",alignItems:"flex-start",gap:8}}>
+          <Lightbulb size={14} color={TX3} aria-hidden="true" style={{flexShrink:0,marginTop:2}}/>
+          <div style={{fontSize:13,color:TX,lineHeight:1.5}}>{item.recommendation}</div>
         </div>
       )}
       {action&&(
-        <button onClick={action.onClick} style={{marginTop:16,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:`${item.categoryColor}1a`,border:`1px solid ${item.categoryColor}45`,color:item.categoryColor,borderRadius:R_BTN,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer",transition:`filter .15s ${EASE_OUT}`}}>
+        <BtnGhost onClick={action.onClick} style={{marginTop:14,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,fontSize:13,color:TX}}>
           {action.label}<ArrowRight size={14}/>
-        </button>
+        </BtnGhost>
       )}
-      <button onClick={()=>setExpanded(p=>!p)} style={{marginTop:14,background:"none",border:"none",color:TX3,fontSize:11,fontWeight:600,cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4}}>
-        <Info size={11}/>Como cheguei a essa conclusão{expanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}
+      <button type="button" onClick={()=>setExpanded(p=>!p)} aria-expanded={expanded} className="touch-44" style={{position:"relative",marginTop:14,background:"none",border:"none",color:TX2,fontSize:12,cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,textDecoration:"underline",textUnderlineOffset:4}}>
+        Como cheguei a essa conclusão{expanded?<ChevronUp size={12}/>:<ChevronDown size={12}/>}
       </button>
       {expanded&&(
         <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${BD}`,display:"flex",flexDirection:"column",gap:14}}>

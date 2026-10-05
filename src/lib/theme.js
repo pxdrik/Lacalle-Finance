@@ -123,6 +123,7 @@ export const DATA_COMPARISON = BD2;
 export const MUTED = "#22272C";           // neutro escolhido / hover
 export const SUCCESS_SURFACE = "#1A332E"; // verde sobre isto: 7,02:1
 export const DANGER_SURFACE = "#362529";  // vermelho sobre isto: 5,22:1
+export const WARNING_SURFACE = "#36301E"; // amarelo sobre isto
 
 // ---- Contraste e mistura de cor ------------------------------------------
 // Fórmula WCAG de verdade (luminância relativa), usada aqui para derivar o

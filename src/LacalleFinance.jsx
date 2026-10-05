@@ -103,13 +103,14 @@ import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addMonthsStr, daysInMonth, MONTH_ORDER, MONTHS_ARR, PlannedStatus, monthIndex, monthAt } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
 import { Signature, FinanceMark } from "./components/Brand";
+import { IncomeExpenseChart } from "./components/charts";
 import InstallmentsTab from "./components/InstallmentsTab";
 import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, TabPanel, DensityToggle, Segmented, IconButton } from "./components/ui";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR } from "./lib/theme";
+import { Card, Modal, CategoryIcon, AnimatedValue, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, TabPanel, DensityToggle, Segmented, IconButton, PageHeader, SectionTitle, Field } from "./components/ui";
 import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
@@ -120,9 +121,8 @@ import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
 import { formatDay } from "./lib/dates";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
 import {
-  Wallet, TrendingUp, CreditCard, Calendar, Sparkles, Package, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Check, ChevronDown, ChevronUp, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, Lightbulb, ShieldCheck, CalendarDays, Bell, Target, MoreHorizontal, ChevronRight
+  TrendingUp, CreditCard, Calendar, Sparkles, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, CalendarDays, Bell, Target, MoreHorizontal, ChevronRight
 } from "lucide-react";
 
 const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
@@ -824,19 +824,28 @@ function MainApp({user,setUser}){
 
   // ---- Ações rápidas (Home) ----
   const qaDescRef=useRef(null);
+  // Novo lançamento numa folha que sobe de baixo, de qualquer tela (antes o
+  // formulário morava no topo de Transações e as ações rápidas do Início
+  // levavam até lá).
+  const [showNewTx,setShowNewTx]=useState(false);
+  const openNewTx=(type="despesa")=>quickAction(type);
+  const closeNewTx=()=>{
+    if(qaDesc.trim()||qaVal){setConfirmDiscard("newtx");return;}
+    setShowNewTx(false);
+  };
   const quickAction=type=>{
     if(type==="meta"){
       setTab("wishes");setEditingWish(null);setWishForm({name:"",price:"",saved:"",priority:"Média",monthsTarget:"",notes:""});setShowWishForm(true);
       return;
     }
-    setTab("transactions");
+    setShowNewTx(true);
     setEditingTx(null);
     resetQuickAddForm();
     if(type==="receita"){setQaType("Entrada");setQaCat("Salario / Entradas");}
     else if(type==="despesa"){setQaType("Saída");setQaCat("Alimentação");}
     else if(type==="resgate"){setQaCat("Investimento");setQaInvTipo("Resgate");setQaExpanded(true);}
     else if(type==="investimento"){setQaCat("Investimento");setQaInvTipo("Aporte");setQaExpanded(true);}
-    setTimeout(()=>{qaDescRef.current?.focus();},80);
+    setTimeout(()=>{qaValRef.current?.focus();},380);
   };
 
   const toggleNotes=key=>setExpandedNotes(p=>({...p,[key]:!p[key]}));
@@ -904,7 +913,11 @@ function MainApp({user,setUser}){
         setTransactions(p=>[...newTxs,...p]);
       }
       resetQuickAddForm();
-      showToast(editingTx!==null?"Lançamento atualizado!":"Lançamento adicionado!","success");
+      if(editingTx===null){
+        setShowNewTx(false);
+        const len=historyRef.current.length;
+        showToast("Lançamento adicionado.","success",{action:{label:"Desfazer",onClick:()=>undoIfLast(len)}});
+      }else showToast("Lançamento atualizado.","success");
     }catch(e){
       // Falha inesperada durante o commit: libera o lock na hora em vez de
       // deixar o botão travado até o fim do cooldown sem nenhuma transação
@@ -1448,13 +1461,13 @@ function MainApp({user,setUser}){
   // Btn/BtnGhost agora vêm de ../components/ui (usam AccentContext internamente)
 
   const renderFrequentPicks=(onPick)=>(
-    <div style={{marginBottom:16}}>
-      <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:TX2,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Repeat size={12}/>Frequentes</div>
-      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
+    <div>
+      <div id="freq-label" style={{fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Frequentes</div>
+      <div role="group" aria-labelledby="freq-label" style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
         {frequentTx.map((item,i)=>(
-          <button key={i} onClick={()=>onPick(item)} className="chip-btn" style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:2,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"9px 13px",cursor:"pointer",minWidth:112}}>
-            <span style={{fontSize:12,fontWeight:600,color:TX,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:140,display:"flex",alignItems:"center",gap:5}}><CategoryIcon cat={item.cat} size={12}/>{item.desc}</span>
-            <span className="num" style={{fontSize:12,color:TX2,fontVariantNumeric:"tabular-nums"}}>{fmt(item.val)}</span>
+          <button key={i} type="button" onClick={()=>onPick(item)} style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:2,background:"transparent",border:`1px solid ${BD}`,borderRadius:R_BTN,padding:"8px 12px",cursor:"pointer",minWidth:104,textAlign:"left"}}>
+            <span style={{fontSize:13,fontWeight:500,color:TX,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:150}}>{item.desc}</span>
+            <span className="num" style={{fontSize:12,color:TX3}}>{fmt(item.val)}</span>
           </button>
         ))}
       </div>
@@ -1462,52 +1475,53 @@ function MainApp({user,setUser}){
   );
 
   const renderTxForm=()=>(
-    <>
-      {!isEditing&&frequentTx.length>0&&renderFrequentPicks(applyFrequent)}
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {qaCat!=="Investimento"?(
-        <Segmented ariaLabel="Tipo de lançamento" value={qaType} onChange={setQaType} style={{marginBottom:16}}
+        <Segmented ariaLabel="Tipo de lançamento" value={qaType} onChange={setQaType}
           options={[{value:"Saída",label:"Saída",icon:ArrowDownCircle,tone:"out"},{value:"Entrada",label:"Entrada",icon:ArrowUpCircle,tone:"in"}]}/>
       ):(
         // Aporte tira dinheiro da conta (vermelho); resgate e rendimento trazem (verde).
-        <Segmented ariaLabel="Tipo de investimento" value={qaInvTipo} onChange={setQaInvTipo} style={{marginBottom:16}}
+        <Segmented ariaLabel="Tipo de investimento" value={qaInvTipo} onChange={setQaInvTipo}
           options={INV_TIPOS.map(t=>({value:t,label:t,icon:INV_TIPO_ICONS[t],tone:t==="Aporte"?"out":"in"}))}/>
       )}
-      <div style={{display:"flex",gap:10,marginBottom:12}}>
-        <input ref={qaDescRef} placeholder="Descrição..." value={qaDesc} maxLength={120} onChange={e=>setQaDesc(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={{...SI,flex:2}}/>
-        <MoneyInput ref={qaValRef} placeholder="R$" value={qaVal} onChange={setQaVal} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={{...SI,flex:1}}/>
-      </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}}>
-        {fullCats.map(c=>{const cc=catColor(c);return(
-          <button key={c} onClick={()=>setQaCat(c)} className="chip-btn" style={{padding:"7px 12px",borderRadius:R_CHIP,border:"none",fontSize:12,cursor:"pointer",background:qaCat===c?cc+"26":"rgba(255,255,255,0.03)",color:qaCat===c?cc:TX2,fontWeight:qaCat===c?700:500,display:"flex",alignItems:"center",gap:5}}><CategoryIcon cat={c} size={13}/>{c}</button>
-        );})}
-      </div>
-      <button onClick={()=>setQaExpanded(p=>!p)} style={{background:"none",border:"none",color:accent,fontSize:12,fontWeight:600,cursor:"pointer",padding:"4px 0",marginBottom:qaExpanded?12:4,display:"flex",alignItems:"center",gap:4}}>
-        {qaExpanded?<ChevronUp size={14}/>:<ChevronDown size={14}/>} data, forma, fixo/variável, repetir
-      </button>
-      {qaExpanded&&(
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:12}}>
-          <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Data</div><input type="date" value={qaDate} min={DATE_MIN} max={DATE_MAX} onChange={e=>setQaDate(e.target.value)} style={SI}/></div>
-          <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Forma</div><select value={qaForm} onChange={e=>setQaForm(e.target.value)} style={SI}>{["pix","debito","credito","dinheiro","deposito"].map(o=><option key={o}>{o}</option>)}</select></div>
-          <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Fixo/Variável</div><select value={qaFixed} onChange={e=>setQaFixed(e.target.value)} style={SI}><option value="Variavel">Variável</option><option value="Fixa">Fixa</option></select></div>
-          {!isEditing&&<div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Repetir</div><select value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option></select></div>}
+      {/* Valor primeiro, em número grande: é o que mais importa num lançamento. */}
+      <Field id="qa-val" label="Valor">{p=>(
+        <div className="amt-field">
+          <span aria-hidden="true">R$</span>
+          <MoneyInput ref={qaValRef} {...p} placeholder="0,00" value={qaVal} onChange={setQaVal} onKeyDown={e=>e.key==="Enter"&&quickAdd()}/>
         </div>
-      )}
-      {/* O botão continua com aparência "inativa" quando falta preencher algo,
-          mas NÃO usa `disabled`: um botão desabilitado engole o clique sem
-          explicar nada — quem chegava aqui achava que estava quebrado. Assim o
+      )}</Field>
+      <Field id="qa-desc" label="Descrição">{p=>(
+        <input ref={qaDescRef} {...p} placeholder="Ex.: Mercado" value={qaDesc} maxLength={120} onChange={e=>setQaDesc(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={SI}/>
+      )}</Field>
+      {!isEditing&&frequentTx.length>0&&renderFrequentPicks(applyFrequent)}
+      <div>
+        <div id="qa-cat-label" style={{fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Categoria</div>
+        <div role="group" aria-labelledby="qa-cat-label" style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {fullCats.map(c=>{const on=qaCat===c;return(
+            <button key={c} type="button" aria-pressed={on} onClick={()=>setQaCat(c)} className="cat-chip">
+              <i aria-hidden="true" style={{background:catColor(c)}}/>{c}
+            </button>
+          );})}
+        </div>
+      </div>
+      <details className="qa-more" open={qaExpanded} onToggle={e=>setQaExpanded(e.currentTarget.open)}>
+        <summary><ChevronRight size={14} aria-hidden="true"/>Data, forma de pagamento, fixo e repetir</summary>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:8}}>
+          <Field id="qa-date" label="Data">{p=><input {...p} type="date" value={qaDate} min={DATE_MIN} max={DATE_MAX} onChange={e=>setQaDate(e.target.value)} style={SI}/>}</Field>
+          <Field id="qa-form" label="Forma">{p=><select {...p} value={qaForm} onChange={e=>setQaForm(e.target.value)} style={SI}>{[["pix","Pix"],["debito","Débito"],["credito","Crédito"],["dinheiro","Dinheiro"],["deposito","Depósito"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>}</Field>
+          <Field id="qa-fixed" label="Tipo de gasto">{p=><select {...p} value={qaFixed} onChange={e=>setQaFixed(e.target.value)} style={SI}><option value="Variavel">Variável</option><option value="Fixa">Fixo</option></select>}</Field>
+          {!isEditing&&<Field id="qa-repeat" label="Repetir">{p=><select {...p} value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option></select>}</Field>}
+        </div>
+      </details>
+      {/* O botão parece inativo quando falta algo, mas não usa `disabled`: o
           clique sempre roda a validação, que diz exatamente o que falta. */}
-      {/* `disabled` real aqui é só o lock de duplo clique (isSubmittingTx) —
-          continua sem `disabled` para o caso "faltou preencher algo"
-          (aria-disabled), que é intencional (ver comentário acima). */}
-      <button onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",padding:"14px",borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:700,background:!canAdd?"rgba(255,255,255,0.04)":accent,color:!canAdd?TX2:BG,boxShadow:canAdd&&!isSubmittingTx?`0 2px 10px ${accent}40`:"none",opacity:isSubmittingTx?0.7:1,transition:"filter .15s ease, box-shadow .15s ease, opacity .15s ease"}}>
-        {isSubmittingTx?"Adicionando...":isEditing?"Salvar alterações":qaCat==="Investimento"?`+ ${qaInvTipo}`:`+ Adicionar ${qaType}`}
+      <button type="button" onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",height:48,borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:600,background:!canAdd?MUTED:accent,color:!canAdd?TX2:BG,opacity:isSubmittingTx?0.7:1}}>
+        {isSubmittingTx?"Adicionando...":isEditing?"Salvar alterações":qaCat==="Investimento"?`Adicionar ${qaInvTipo.toLowerCase()}`:`Adicionar ${qaType}`}
       </button>
-    </>
+    </div>
   );
 
-  // Navegação (nova cara, 05/10/2026). Computador: barra lateral em dois
-  // grupos, como a do LaCalle Life. Celular: 5 destinos com rótulo de 11px
-  // (o piso do Life; antes eram 6 com 9,5px), e Previstos e Parcelas no "Mais".
   const appTabs=[
     {id:"dashboard",label:"Início",icon:LayoutDashboard,group:"Dia a dia",mobile:true},
     {id:"transactions",label:"Transações",icon:Receipt,group:"Dia a dia",mobile:true},
@@ -1646,6 +1660,52 @@ function MainApp({user,setUser}){
         .hdr-btn{position:relative;display:inline-flex;align-items:center;gap:4px;background:none;border:none;border-radius:${R_BTN}px;padding:6px 8px;font-size:12px;}
         .hdr-avatar{display:none;}
         .bottom-nav{display:none;}
+        .only-mobile{display:none;}
+        .home-hero{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr));gap:20px;align-items:center;background:${CARD};border:1px solid ${BD};border-left:3px solid ${accent};border-radius:${R_CARD}px;padding:20px 20px 20px 28px;}
+        .home-metric{font-size:36px;line-height:1.1;letter-spacing:-0.02em;font-weight:600;margin-top:6px;white-space:nowrap;}
+        .home-hero-num{position:relative;display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;background:none;border:none;border-left:1px solid ${BD};padding:4px 0 4px 20px;cursor:pointer;min-width:0;color:${TX};}
+        .home-hero-num span{font-size:12px;color:${TX3};}
+        .home-hero-num b{font-size:18px;font-weight:600;white-space:nowrap;}
+        .home-hero-num:hover{filter:none !important;}
+        .home-hero-num:hover span{text-decoration:underline;text-underline-offset:3px;}
+        .home-grid{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:24px;align-items:start;}
+        .home-col{display:flex;flex-direction:column;gap:24px;min-width:0;}
+        .home-list{list-style:none;margin:0;padding:0;}
+        .home-li{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid ${BD};}
+        .home-li:first-child{border-top:none;}
+        .home-li-name{font-size:14px;color:${TX};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .home-li-meta{font-size:12px;color:${TX3};margin-top:1px;}
+        .home-li-val{font-size:13.5px;font-weight:600;white-space:nowrap;color:${TX};}
+        .home-li-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;background:none;border:none;padding:0;cursor:pointer;text-align:left;}
+        .home-li-btn:hover{filter:none !important;}
+        .home-li-btn:hover .home-li-name{text-decoration:underline;text-underline-offset:3px;}
+        .home-link{position:relative;background:none;border:none;font-size:12px;color:${TX2};text-decoration:underline;text-underline-offset:4px;cursor:pointer;padding:0;}
+        .home-link::after{content:"";position:absolute;left:50%;top:50%;width:100%;min-width:44px;height:44px;transform:translate(-50%,-50%);}
+        .amt-field{display:flex;align-items:baseline;gap:8px;height:60px;padding:0 14px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:rgba(255,255,255,0.03);}
+        .amt-field:focus-within{border-color:${accent}90;box-shadow:0 0 0 3px ${accent}22;}
+        .amt-field span{font-family:${NUM_FONT};color:${TX3};font-size:16px;line-height:60px;}
+        .amt-field input{flex:1;min-width:0;border:none !important;box-shadow:none !important;background:transparent;outline:none;font-family:${NUM_FONT};font-variant-numeric:tabular-nums;font-size:26px;font-weight:600;letter-spacing:-0.02em;height:58px;color:${TX};}
+        .cat-chip{position:relative;height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:${R_CHIP}px;border:1px solid ${BD};background:transparent;color:${TX2};font-size:12.5px;cursor:pointer;}
+        .cat-chip::after{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%);}
+        .cat-chip i{width:8px;height:8px;border-radius:50%;}
+        .cat-chip[aria-pressed="true"]{border-color:${accent}73;background:${accentSurface(accent)};color:${accentText(accent)};font-weight:600;}
+        .qa-more summary{list-style:none;cursor:pointer;font-size:13px;color:${TX2};display:flex;align-items:center;gap:6px;min-height:44px;}
+        .qa-more summary::-webkit-details-marker{display:none;}
+        .qa-more summary svg{transition:transform .25s ease;}
+        .qa-more[open] summary svg{transform:rotate(90deg);}
+        @media(max-width:1100px){
+          .home-grid{grid-template-columns:minmax(0,1fr);}
+          .home-hero{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:16px 16px 16px 24px;}
+          .home-hero-main{grid-column:1 / -1;padding-bottom:12px;border-bottom:1px solid ${BD};margin-bottom:4px;}
+          .home-hero-num{border-left:none;padding:4px 0;}
+          .home-hero-num b{font-size:13px;}
+          .home-hero-num span{font-size:11px;}
+        }
+        @media(max-width:760px){
+          .only-desktop{display:none;}
+          .only-mobile{display:block;}
+          .home-metric{font-size:28px;}
+        }
         .more-row{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:none;border-radius:${R_BTN}px;text-align:left;cursor:pointer;color:${TX};}
         .more-row:hover{background:${MUTED};filter:none !important;}
         .more-t{display:block;font-size:14px;font-weight:500;}
@@ -1727,6 +1787,15 @@ function MainApp({user,setUser}){
         </div>
       </header>
 
+      {showNewTx&&!isEditing&&(
+        <Modal align="sheet" onClose={closeNewTx} maxWidth={560} padding={20} label="Novo lançamento">
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+            <h2 style={{margin:0,fontSize:17,fontWeight:600,color:TX,letterSpacing:"-0.01em"}}>Novo lançamento</h2>
+            <IconButton icon={X} size={18} label="Fechar" onClick={closeNewTx}/>
+          </div>
+          {renderTxForm()}
+        </Modal>
+      )}
       {isEditing&&(
         <Modal onClose={requestCloseEditTx} maxWidth={420} padding={28}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
@@ -1780,6 +1849,7 @@ function MainApp({user,setUser}){
             <button onClick={()=>{
               if(confirmDiscard==="wish"){setShowWishForm(false);setEditingWish(null);}
               else if(confirmDiscard==="planned"){setShowPlannedForm(false);setEditingPlanned(null);}
+              else if(confirmDiscard==="newtx"){setShowNewTx(false);resetQuickAddForm();}
               else if(confirmDiscard==="tx")cancelEditTx();
               setConfirmDiscard(null);
             }} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Descartar</button>
@@ -2214,243 +2284,207 @@ function MainApp({user,setUser}){
           const firstName=(user.name||"").split(" ")[0]||user.name;
           const proj30=cashFlowProjections.find(p=>p.days===30);
           const bestCats=catDataDisplay.slice(0,5);
+          const todayLong=new Date(todayISO+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
+          const monthName=new Date(todayISO+"T12:00:00").toLocaleDateString("pt-BR",{month:"long"});
+          // Gráfico: os últimos 6 meses até o atual, com zero nos meses sem lançamento.
+          const curIdx=monthIndex(currentMonthKeyReal);
+          const byMonth=new Map(summary.map(m=>[m.month,m]));
+          const chartData=[5,4,3,2,1,0].map(i=>{const mk=monthAt(curIdx-i);const m=byMonth.get(mk);return{month:mk,in:m?.in||0,out:m?.out||0};});
+          const recentTx=[...transactions].filter(t=>t.date<=todayISO).sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id).slice(0,4);
+          const row=(key,left,meta,right,rightColor)=>(
+            <li key={key} className="home-li">
+              <div style={{minWidth:0}}><div className="home-li-name">{left}</div>{meta&&<div className="home-li-meta">{meta}</div>}</div>
+              <span className="num home-li-val" style={rightColor?{color:rightColor}:undefined}>{right}</span>
+            </li>
+          );
+          const money=(v,isIn)=>`${isIn?"+":"−"}${fmt(Math.abs(v))}`;
+          const newTxButton=(full)=>(
+            <Btn onClick={()=>openNewTx()} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,...(full?{width:"100%",height:48}:{})}}><Plus size={16}/>Novo lançamento</Btn>
+          );
           return(
-          <div style={{display:"flex",flexDirection:"column",gap:26}}>
+          <div className="stagger" style={{display:"flex",flexDirection:"column",gap:24}}>
+            <PageHeader icon={LayoutDashboard} title="Início" subtitle={`${todayLong.charAt(0).toUpperCase()+todayLong.slice(1)} · ${greeting}, ${firstName}`} actions={<span className="only-desktop">{newTxButton(false)}</span>}/>
 
-            <div>
-              <div style={{fontSize:22,fontWeight:800,color:TX,letterSpacing:"-0.02em"}}>{greeting}, {firstName} 👋</div>
-              <div style={{fontSize:13.5,color:TX2,marginTop:6}}>{resumoDoMes?resumoDoMes.text:"Aqui está o que importa hoje na sua vida financeira."}</div>
-            </div>
+            {resumoDoMes&&<p style={{margin:"-12px 0 0",fontSize:13,color:TX2,maxWidth:"70ch",lineHeight:1.55}}>{resumoDoMes.text}</p>}
 
-            {/* ---- Onboarding leve: só aparece pra quem ainda não tem nenhum dado cadastrado ---- */}
+            {/* ---- Primeiros passos: só para quem ainda não tem nenhum dado ---- */}
             {!onboardingDismissed&&transactions.length===0&&wishes.length===0&&plannedExpenses.length===0&&installments.length===0&&(
-              <div style={{background:`linear-gradient(135deg, ${accent}18, ${CARD} 70%)`,border:`1px solid ${accent}30`,borderRadius:R_CARD,padding:22,display:"flex",alignItems:"flex-start",gap:14}}>
-                <div style={{width:38,height:38,borderRadius:8,background:accent+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Sparkles size={18} color={accent}/></div>
+              <Card style={{padding:20,display:"flex",alignItems:"flex-start",gap:14,boxShadow:"none"}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:14.5,fontWeight:700,color:TX,marginBottom:6}}>Bem-vindo(a) ao {walletName}!</div>
-                  <div style={{fontSize:13,color:TX2,lineHeight:1.6,marginBottom:4}}>Pra começar: lance sua primeira <strong style={{color:TX}}>transação</strong> na aba "Transações", cadastre contas fixas em <strong style={{color:TX}}>"Previstos"</strong> e metas de longo prazo em <strong style={{color:TX}}>"Metas"</strong>. Os Insights e os gráficos vão aparecer sozinhos conforme você for usando.</div>
+                  <div style={{fontSize:15,fontWeight:600,color:TX,marginBottom:6}}>Bem-vindo(a) ao {walletName}</div>
+                  <div style={{fontSize:13,color:TX2,lineHeight:1.6}}>Comece com “Novo lançamento”. Contas fixas vão em <strong style={{color:TX}}>Previstos</strong> e objetivos em <strong style={{color:TX}}>Metas</strong>. As descobertas e os gráficos aparecem sozinhos conforme você usa.</div>
                 </div>
-                <button onClick={()=>setOnboardingDismissed(true)} title="Dispensar" className="touch-44" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,flexShrink:0}}><X size={16}/></button>
-              </div>
+                <IconButton icon={X} label="Dispensar" onClick={()=>setOnboardingDismissed(true)}/>
+              </Card>
             )}
 
-            {/* ---- Ações rápidas ---- */}
-            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:2}}>
-              {[
-                {label:"Nova Receita",icon:ArrowUpCircle,color:"#34D399",title:"Registrar uma nova receita",action:()=>quickAction("receita")},
-                {label:"Nova Despesa",icon:ArrowDownCircle,color:"#F87171",title:"Registrar uma nova despesa",action:()=>quickAction("despesa")},
-                // "Transferência" abria exatamente a mesma coisa que
-                // "Investimento" (um aporte) — dois botões diferentes para a
-                // mesma ação, o que fazia um deles parecer quebrado. O app não
-                // tem modelo de contas/carteiras, então transferência entre
-                // contas não existe aqui; o par que existe de verdade é
-                // aporte (dinheiro sai da conta) e resgate (dinheiro volta).
-                {label:"Aporte",icon:TrendingUp,color:"#3B82F6",title:"Investir: tirar da conta e aplicar",action:()=>quickAction("investimento")},
-                {label:"Resgate",icon:Repeat,color:"#A78BFA",title:"Resgatar: trazer dinheiro do investimento de volta para a conta",action:()=>quickAction("resgate")},
-                {label:"Nova Meta",icon:Sparkles,color:accent,title:"Criar uma nova meta",action:()=>quickAction("meta")},
-              ].map(qa=>(
-                <button key={qa.label} onClick={qa.action} title={qa.title} aria-label={qa.title} style={{flexShrink:0,display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderRadius:R_BTN,border:`1px solid ${BD2}`,background:"rgba(255,255,255,0.03)",color:TX,cursor:"pointer",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap"}}>
-                  <qa.icon size={14} color={qa.color}/>{qa.label}
+            {/* ---- Saldo: um card principal com filete (Card hero do LaCalle Life) e os três números do mês ---- */}
+            <section aria-label="Saldo" className="home-hero">
+              <div className="home-hero-main">
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12,color:TX2,fontWeight:500}}>
+                  Saldo atual
+                  <IconButton icon={Info} size={14} label="Como chegamos no saldo atual" onClick={()=>setExplainKey("saldoAtual")}/>
+                </div>
+                <div className="num home-metric" style={{color:balance<0?ERROR:TX}}><AnimatedValue value={balance}/></div>
+                {resumoDoMes&&<Comparison delta={resumoDoMes.stats.economia} formatMagnitude={fmt} label={`de economia em ${monthName}`} tone={resumoDoMes.stats.economia>=0?"positive":"negative"} style={{fontSize:12,marginTop:8}}/>}
+              </div>
+              <button type="button" className="home-hero-num" onClick={()=>setExplainKey("saldoLivre")}>
+                <span>Saldo livre</span><b className="num">{fmt(freeBalance)}</b>
+              </button>
+              <button type="button" className="home-hero-num" onClick={()=>setProjectionDrawer({key:"saldoPrevisto",daysAhead:daysToEndOfMonth,title:"Previsto no Fim do Mês"})}>
+                <span>Previsto no fim do mês</span><b className="num" style={{color:(projection?.expected??0)<0?ERROR:TX}}>{projection?fmt(projection.expected):"—"}</b>
+              </button>
+              {proj30&&(
+                <button type="button" className="home-hero-num" onClick={()=>setProjectionDrawer({key:"quantoPossoGastar",daysAhead:30,title:"Quanto você pode gastar"})}>
+                  <span>Pode gastar em 30 dias</span><b className="num" style={{color:proj30.value<0?ERROR:accentText(accent)}}>{fmt(Math.max(0,proj30.value))}</b>
                 </button>
-              ))}
+              )}
+            </section>
+            {proj30&&proj30.value<0&&(
+              <p role="status" style={{margin:"-12px 0 0",fontSize:13,color:ERROR,display:"flex",gap:6,alignItems:"center"}}><AlertTriangle size={14} aria-hidden="true"/>A projeção dos próximos 30 dias está negativa em {fmt(Math.abs(proj30.value))}. Evite gastos não essenciais.</p>
+            )}
+            <div className="only-mobile">{newTxButton(true)}</div>
+
+            <div className="home-grid">
+              <div className="home-col">
+                {chartData.some(d=>d.in||d.out)&&(
+                  <section>
+                    <SectionTitle action={<span style={{fontSize:12,color:TX3}}>últimos 6 meses</span>}>Receitas e gastos</SectionTitle>
+                    <Card style={{boxShadow:"none"}}><IncomeExpenseChart data={chartData}/></Card>
+                  </section>
+                )}
+                <section>
+                  <SectionTitle>Evolução do seu dinheiro</SectionTitle>
+                  <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                    <ul className="home-list">
+                      {moneySteps.map(s=>row(s.label,s.label,null,fmt(s.value),s.value<0?ERROR:TX))}
+                    </ul>
+                  </Card>
+                </section>
+              </div>
+              <div className="home-col">
+                <section>
+                  <SectionTitle>Patrimônio e metas</SectionTitle>
+                  <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                    <ul className="home-list">
+                      {row("pat","Patrimônio",null,resumoDoMes?fmt(resumoDoMes.stats.patrimonio):"—")}
+                      {resumoDoMes?.stats?.meta&&row("meta",`Meta ${resumoDoMes.stats.meta.name}`,null,`${resumoDoMes.stats.meta.pct}%`)}
+                      {row("desc","Descobertas do mês",null,String(consultantInsights.length))}
+                    </ul>
+                  </Card>
+                </section>
+                <section>
+                  <SectionTitle action={<button type="button" className="home-link" onClick={()=>setTab("planning")}>Linha do tempo</button>}>Próximos eventos</SectionTitle>
+                  <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                    {upcomingEvents.length===0?(
+                      <div style={{color:TX3,padding:"14px 0",fontSize:13}}>Nada agendado por enquanto.</div>
+                    ):(
+                      <ul className="home-list">
+                        {upcomingEvents.map(t=>row(t.id,t.desc,`${t.label} · ${formatDay(t.date,todayISO)}`,money(t.val,t.type==="Entrada"),t.type==="Entrada"?SUCCESS:undefined))}
+                      </ul>
+                    )}
+                  </Card>
+                </section>
+                {recentTx.length>0&&(
+                  <section>
+                    <SectionTitle action={<button type="button" className="home-link" onClick={()=>setTab("transactions")}>Ver todos</button>}>Últimos lançamentos</SectionTitle>
+                    <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                      <ul className="home-list">
+                        {recentTx.map(t=>row(t.id,t.desc,`${t.cat} · ${formatDay(t.date,todayISO)}`,money(t.val,t.type==="Entrada"),t.type==="Entrada"?SUCCESS:undefined))}
+                      </ul>
+                    </Card>
+                  </section>
+                )}
+              </div>
             </div>
 
-            {/* ---- Saldo: hero único (era 3 cards + o hero "Resumo do mês" separado) ----
-                 Consolidado num card por pedido do usuário (auditoria de
-                 04-06/09/2026): "Resumo do mês" + os 3 cards de saldo
-                 repetiam o mesmo padrão ícone+número+legenda 7 vezes antes de
-                 qualquer conteúdo real. Saldo Livre e Previsto no Fim do Mês
-                 continuam clicáveis (mesmos handlers de antes), só mudaram de
-                 card próprio para linha/texto. */}
-            <div className="fc-card" onClick={()=>setExplainKey("saldoAtual")} title="Toque para entender este número" style={{...cardStyle,padding:26,cursor:"pointer"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                <div style={{width:28,height:28,borderRadius:8,background:accent+"1f",display:"flex",alignItems:"center",justifyContent:"center"}}><Wallet size={14} color={accent}/></div>
-                <div style={{fontSize:11.5,color:TX2,fontWeight:600,flex:1}}>Saldo Atual</div>
-                <Info size={12} color={TX3}/>
-              </div>
-              <div className="num" style={{fontSize:32,fontWeight:800,color:balance>=0?"#34D399":"#F87171",letterSpacing:"-0.02em"}}><AnimatedValue value={balance}/></div>
-              <div style={{fontSize:12.5,color:TX2,marginTop:8,lineHeight:1.5}}>
-                {resumoDoMes&&(<Comparison delta={resumoDoMes.stats.economia} formatMagnitude={fmt} label="de economia este mês ·" tone={resumoDoMes.stats.economia>=0?"positive":"negative"} style={{fontWeight:700,display:"inline-flex"}}/>)}
-                <span onClick={e=>{e.stopPropagation();setExplainKey("saldoLivre");}} style={{textDecoration:"underline",textUnderlineOffset:2,cursor:"pointer"}}>Saldo livre {fmt(freeBalance)}</span>
-              </div>
-            </div>
-
-            {/* ---- Patrimônio, meta, descobertas e previsão: lista, não grid ---- */}
-            <Card style={{padding:22}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`}}>
-                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Patrimônio</span>
-                <span className="num" style={{fontSize:14,fontWeight:700,color:accent}}>{resumoDoMes?fmt(resumoDoMes.stats.patrimonio):"—"}</span>
-              </div>
-              {resumoDoMes?.stats?.meta&&(
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`,gap:12}}>
-                  <span style={{fontSize:12.5,color:TX2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Meta {resumoDoMes.stats.meta.name}</span>
-                  <span className="num" style={{fontSize:14,fontWeight:700,color:"#34D399",flexShrink:0}}>{resumoDoMes.stats.meta.pct}%</span>
-                </div>
-              )}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${BD}`}}>
-                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Descobertas este mês</span>
-                <span style={{fontSize:14,fontWeight:700,color:TX}}>{consultantInsights.length}</span>
-              </div>
-              <div onClick={()=>setProjectionDrawer({key:"saldoPrevisto",daysAhead:daysToEndOfMonth,title:"Previsto no Fim do Mês"})} title="Toque para ver de onde vem esse número" style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",cursor:"pointer"}}>
-                <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>Previsto no fim do mês</span>
-                <span className="num" style={{fontSize:14,fontWeight:700,color:(projection?projection.expected:0)>=0?"#34D399":"#F87171"}}>{projection?fmt(projection.expected):"—"}</span>
-              </div>
-            </Card>
-
-            {/* ---- Quanto posso gastar ---- */}
-            {proj30&&(
-              <div onClick={()=>setProjectionDrawer({key:"quantoPossoGastar",daysAhead:30,title:"Quanto você pode gastar"})} className="fc-card" title="Toque para ver de onde vem esse número" style={{...cardStyle,padding:26,cursor:"pointer",background:proj30.value>=0?`linear-gradient(120deg, ${accent}14, ${CARD} 70%)`:`linear-gradient(120deg, #F8717114, ${CARD} 70%)`,border:`1px solid ${proj30.value>=0?accent+"30":"#F8717140"}`}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                  <div style={{width:32,height:32,borderRadius:8,background:(proj30.value>=0?accent:"#F87171")+"1f",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{proj30.value>=0?<Check size={16} color={accent}/>:<AlertTriangle size={16} color="#F87171"/>}</div>
-                  <div style={{fontSize:13.5,fontWeight:700,color:TX,flex:1}}>Quanto você pode gastar?</div>
-                  <Info size={12} color={TX3}/>
-                </div>
-                <div className="num" style={{fontSize:30,fontWeight:800,color:proj30.value>=0?accent:"#F87171",letterSpacing:"-0.02em"}}>{fmt(Math.max(0,proj30.value))}</div>
-                <div style={{fontSize:12.5,color:TX2,marginTop:6,lineHeight:1.5}}>{proj30.value>=0?"nos próximos 30 dias, sem comprometer contas e parcelas já previstas.":`Sua projeção para os próximos 30 dias está negativa em ${fmt(Math.abs(proj30.value))}. Evite gastos não essenciais.`}</div>
-              </div>
-            )}
-
-            {/* ---- Evolução do dinheiro: lista, não caixas ligadas por seta ---- */}
-            <Card style={{padding:22}}>
-              <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:10,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={15} color={accent}/>Evolução do seu dinheiro</div>
-              {moneySteps.map((s,i)=>(
-                <div key={s.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:i<moneySteps.length-1?`1px solid ${BD}`:"none"}}>
-                  <span style={{fontSize:12.5,color:TX2,fontWeight:600}}>{s.label}</span>
-                  <span className="num" style={{fontSize:13.5,fontWeight:700,color:s.value>=0?"#34D399":"#F87171"}}>{fmt(s.value)}</span>
-                </div>
-              ))}
-            </Card>
-
-            {/* ---- Próximos eventos ---- */}
-            <Card style={{padding:26}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                <div style={{fontSize:14,fontWeight:700,color:TX,display:"flex",alignItems:"center",gap:8}}><CalendarDays size={16} color={accent}/>Próximos eventos</div>
-                <button onClick={()=>setTab("planning")} style={{background:"none",border:"none",color:accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>ver linha do tempo</button>
-              </div>
-              {upcomingEvents.length===0?(
-                <div style={{textAlign:"center",color:TX3,padding:20,fontSize:13}}>Nenhum evento futuro cadastrado.</div>
-              ):(
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {upcomingEvents.map(t=>(
-                    <div key={t.id} style={{display:"flex",alignItems:"center",gap:12}}>
-                      <span style={{width:8,height:8,borderRadius:"50%",background:t.color,flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</div>
-                        <div style={{fontSize:11,color:TX3,marginTop:2}}>{t.label} · {formatDay(t.date,todayISO)}</div>
-                      </div>
-                      <div className="num" style={{fontSize:13,fontWeight:700,color:t.color,flexShrink:0}}>{fmt(t.val)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-
-            {/* ---- Segundo plano: gráficos e detalhes ---- */}
-            <div style={{marginTop:6,fontSize:11.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:TX3}}>Detalhes e gráficos</div>
-
-            {summary.length>0&&(
-              <div className="chart-card" style={{...cardStyle,height:340}}>
-                <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:16}}>Receitas vs Gastos</div>
-                <div className="chart-fill">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={summary}>
-                      <defs>
-                        <linearGradient id="barInGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34D399" stopOpacity={1}/><stop offset="100%" stopColor="#16A34A" stopOpacity={0.85}/></linearGradient>
-                        <linearGradient id="barOutGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#F87171" stopOpacity={1}/><stop offset="100%" stopColor="#DC2626" stopOpacity={0.85}/></linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 6" stroke={BD} vertical={false}/>
-                      <XAxis dataKey="month" tick={{fill:TX2,fontSize:11}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={{fill:TX2,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
-                      <Tooltip content={<ChartTooltip/>}/><Legend wrapperStyle={{fontSize:12,color:TX2}}/>
-                      <Bar dataKey="in" name="Receitas" fill="url(#barInGrad)" radius={[6,6,0,0]} animationDuration={900}/>
-                      <Bar dataKey="out" name="Gastos" fill="url(#barOutGrad)" radius={[6,6,0,0]} animationDuration={900}/>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            <div className="rg-2col">
+            <div className="home-grid">
               {bestCats.length>0&&(
-                <Card style={{padding:24}}>
-                  <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:16}}>Principais categorias</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <section>
+                  <SectionTitle>Principais categorias</SectionTitle>
+                  <Card style={{boxShadow:"none",padding:20,display:"flex",flexDirection:"column",gap:12}}>
                     {bestCats.map(d=>{
                       const cc=d.name==="Outras categorias"?TX3:catColor(d.name);
-                      const maxV=bestCats[0].value||1;
-                      const pct=Math.round((d.value/maxV)*100);
+                      const pct=Math.round((d.value/(bestCats[0].value||1))*100);
                       return(
                         <div key={d.name}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                            <span style={{fontSize:12.5,color:TX,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>{d.name==="Outras categorias"?<Package size={12} color={cc}/>:<CategoryIcon cat={d.name} size={12} color={cc}/>}{d.name}</span>
-                            <span className="num" style={{fontSize:12.5,fontWeight:700,color:TX}}>{fmt(d.value)}</span>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:6}}>
+                            <span style={{fontSize:13,color:TX,display:"flex",alignItems:"center",gap:8,minWidth:0}}><i aria-hidden="true" style={{width:8,height:8,borderRadius:"50%",background:cc,flexShrink:0}}/>{d.name}</span>
+                            <span className="num" style={{fontSize:13,fontWeight:600,color:TX}}>{fmt(d.value)}</span>
                           </div>
                           <ProgressBar pct={pct} color={cc} height={5}/>
                         </div>
                       );
                     })}
-                  </div>
-                </Card>
+                  </Card>
+                </section>
               )}
-              <Card style={{padding:24}}>
-                <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><ShieldCheck size={15} color={accent}/>Saúde financeira</div>
-                <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  {healthIndicators.slice(0,5).map(h=>{
-                    const statusColor={"Excelente":"#34D399","Boa":accent,"Atenção":"#FBBF24","Crítica":"#F87171"}[h.status]||TX3;
-                    return(
-                      <div key={h.label} onClick={()=>setExplainKey(`health:${h.label}`)} title="Toque para entender este número" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,cursor:"pointer"}}>
-                        <div style={{fontSize:12.5,color:TX2,display:"flex",alignItems:"center",gap:5}}>{h.label}<Info size={10} color={TX3}/></div>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:13,fontWeight:700,color:TX}}>{h.value}</span>
-                          {h.status&&<span style={{fontSize:10,fontWeight:700,color:statusColor,background:statusColor+"1f",padding:"2px 8px",borderRadius:20}}>{h.status}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
+              <section>
+                <SectionTitle>Saúde financeira</SectionTitle>
+                <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                  <ul className="home-list">
+                    {healthIndicators.slice(0,5).map(hi=>{
+                      const tone={"Excelente":[SUCCESS_SURFACE,SUCCESS],"Boa":[MUTED,TX],"Atenção":[WARNING_SURFACE,WARNING],"Crítica":[DANGER_SURFACE,ERROR]}[hi.status]||[MUTED,TX2];
+                      return(
+                        <li key={hi.label} className="home-li">
+                          <button type="button" className="home-li-btn" onClick={()=>setExplainKey(`health:${hi.label}`)} aria-label={`${hi.label}: ${hi.value}${hi.status?`, ${hi.status}`:""}. Como é calculado`}>
+                            <span className="home-li-name" style={{color:TX2}}>{hi.label}</span>
+                            <span style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:13,fontWeight:600,color:TX}}>{hi.value}</span>
+                              {hi.status&&<span style={{fontSize:11,fontWeight:600,background:tone[0],color:tone[1],padding:"2px 8px",borderRadius:999}}>{hi.status}</span>}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </Card>
+              </section>
             </div>
 
             {(investmentStats||subscriptions)&&(
-              <div className="rg-2col">
+              <div className="home-grid">
                 {investmentStats&&(
-                  <Card style={{padding:24}}>
-                    <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:14,display:"flex",alignItems:"center",gap:8}}><TrendingUp size={15} color={accent}/>Investimentos</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Total investido</span><span className="num" style={{fontSize:13,fontWeight:700,color:TX}}>{fmt(investmentStats.aportes)}</span></div>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Rentabilidade cadastrada</span><span className="num" style={{fontSize:13,fontWeight:700,color:"#34D399"}}>{fmt(investmentStats.rendimentos)}</span></div>
-                      {investmentParticipacao!==null&&<div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Participação no patrimônio</span><span style={{fontSize:13,fontWeight:700,color:accent}}>{investmentParticipacao}%</span></div>}
-                    </div>
-                  </Card>
+                  <section>
+                    <SectionTitle>Investimentos</SectionTitle>
+                    <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                      <ul className="home-list">
+                        {row("inv-total","Total investido",null,fmt(investmentStats.aportes))}
+                        {row("inv-rend","Rentabilidade cadastrada",null,fmt(investmentStats.rendimentos),SUCCESS)}
+                        {investmentParticipacao!==null&&row("inv-part","Participação no patrimônio",null,`${investmentParticipacao}%`)}
+                      </ul>
+                    </Card>
+                  </section>
                 )}
                 {subscriptions&&(
-                  <Card style={{padding:24}}>
-                    <div style={{fontSize:13.5,fontWeight:700,color:TX,marginBottom:14,display:"flex",alignItems:"center",gap:8}}><Repeat size={15} color={accent}/>Assinaturas e recorrências</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Total mensal</span><span className="num" style={{fontSize:13,fontWeight:700,color:"#F87171"}}>{fmt(subscriptions.total)}</span></div>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Maior assinatura</span><span style={{fontSize:13,fontWeight:700,color:TX}}>{subscriptions.biggest?.desc}</span></div>
-                      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12.5,color:TX2}}>Pendentes este mês</span><span style={{fontSize:13,fontWeight:700,color:"#FBBF24"}}>{subscriptions.pendingCount}</span></div>
-                    </div>
-                  </Card>
+                  <section>
+                    <SectionTitle>Assinaturas</SectionTitle>
+                    <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                      <ul className="home-list">
+                        {row("sub-total","Total mensal",null,fmt(subscriptions.total))}
+                        {row("sub-big","Maior assinatura",null,subscriptions.biggest?`${subscriptions.biggest.desc} · ${fmt(subscriptions.biggest.val)}`:"—")}
+                        {row("sub-pend","Pendentes este mês",null,String(subscriptions.pendingCount))}
+                      </ul>
+                    </Card>
+                  </section>
                 )}
               </div>
             )}
 
-            {/* ---- Cartões de consultor: agora abaixo dos gráficos ---- */}
-            <div>
-              <div style={{fontSize:15,fontWeight:700,color:TX,marginBottom:4,display:"flex",alignItems:"center",gap:8,letterSpacing:"-0.01em"}}><Lightbulb size={17} color={accent}/>O que merece sua atenção hoje</div>
-              <div style={{fontSize:12,color:TX3,marginBottom:18}}>Poucos destaques, com o raciocínio completo por trás de cada um — não só a conclusão.</div>
+            {/* ---- Descobertas: poucos destaques, com o raciocínio completo de cada um ---- */}
+            <section>
+              <SectionTitle>Descobertas do mês</SectionTitle>
               {consultantInsights.length===0?(
-                <div style={{...cardStyle,padding:20,display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:18}}>🟢</span>
-                  <div style={{fontSize:13,color:TX2,fontWeight:600}}>Tudo certo por aqui! Nenhum destaque no momento.</div>
-                </div>
+                <Card style={{boxShadow:"none",padding:20,display:"flex",alignItems:"center",gap:10}}>
+                  <CheckCircle2 size={18} color={SUCCESS} aria-hidden="true"/>
+                  <div style={{fontSize:13,color:TX2}}>Tudo certo por aqui. Nenhum destaque no momento.</div>
+                </Card>
               ):(
                 <div className="insights-grid">
                   {consultantInsights.map((it,i)=><InsightCard key={it.key} item={it} index={i} action={insightActionFor(it)}/>)}
                 </div>
               )}
-            </div>
+            </section>
           </div>
           );
         })()}
@@ -2480,7 +2514,7 @@ function MainApp({user,setUser}){
         {tab==="transactions"&&(
         <TabPanel id="transactions" idPrefix="app">
           <TransactionsTab
-            renderTxForm={renderTxForm} accent={accent} catColor={catColor}
+            onNewTx={()=>openNewTx()} accent={accent} catColor={catColor}
             filterType={filterType} search={search} filterMonth={filterMonth} months={months} filterCat={filterCat}
             fullCats={fullCats} viewTotals={viewTotals} filtered={filtered} groupedByDate={groupedByDate} editingTx={editingTx}
             setFilterType={setFilterType} setSearch={setSearch} setFilterMonth={setFilterMonth} setFilterCat={setFilterCat}
