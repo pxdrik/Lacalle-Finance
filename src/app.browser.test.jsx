@@ -3,7 +3,7 @@
 // testes de lógica provam por função.
 import { StrictMode } from "react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within, cleanup } from "@testing-library/react";
 import { createFakeStorage } from "./test/fakeStorage.js";
 import { setViewport, DESKTOP_WIDTH, PHONE_WIDTHS, overflowX, hitTargetsAcross } from "./test/geometry.js";
 import { contrastRatio } from "./lib/theme.js";
@@ -255,7 +255,7 @@ describe("previsto com Até", () => {
 });
 
 describe("Metas e Parcelas na nova cara", () => {
-  beforeEach(async () => { localStorage.clear(); h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
 
   test("meta: cadastrar, concluir mostra o selo, excluir pelo menu em dois toques", async () => {
     await openApp();
@@ -405,6 +405,34 @@ describe("geometria da navegação", () => {
     fireEvent.click(within(nav).getByRole("button", { name: "Mais" }));
     fireEvent.click(await screen.findByRole("button", { name: /Previstos/ }));
     await waitFor(() => expect(within(nav).getByRole("button", { name: "Mais" }).getAttribute("aria-current")).toBe("page"));
+  });
+});
+
+describe("sem rede", () => {
+  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("lançar sem internet fica no aparelho; ao abrir de novo com internet, chega à nuvem", async () => {
+    await openApp();
+    h.storage.offline = true;
+    await addTransaction("Padaria", "12,50");
+    await screen.findByText("Salvo neste aparelho", {}, SAVE_WAIT);
+    expect(h.storage.peek()).toBeNull();
+    cleanup();
+    // abre de novo, já com internet: a cópia do aparelho é juntada e enviada
+    h.storage.offline = false;
+    await openApp();
+    await waitFor(() => expect(h.storage.peek()?.tx?.map(t => t.desc)).toEqual(["Padaria"]), SAVE_WAIT);
+    await screen.findByText("Sincronizado", {}, SAVE_WAIT);
+  });
+
+  test("abrir sem internet usa a cópia do aparelho em vez da tela de erro", async () => {
+    h.storage = createFakeStorage({ tx: [tx(1, "Mercado")] });
+    await openApp();
+    await screen.findAllByText("Mercado");
+    cleanup();
+    h.storage.offline = true;
+    await openApp();
+    expect((await screen.findAllByText("Mercado")).length).toBeGreaterThan(0);
   });
 });
 

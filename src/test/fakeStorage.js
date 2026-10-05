@@ -6,12 +6,14 @@ export function createFakeStorage(initial = null) {
   let n = 0;
   const s = {
     failGet: false,
+    offline: false, // sem rede: ler e gravar falham
     sets: 0,
     async get() {
-      if (s.failGet) throw new Error("sem conexão (simulado)");
+      if (s.failGet || s.offline) throw new Error("sem conexão (simulado)");
       return row ? { key: "k", value: row.value, version: row.version } : null;
     },
     async set(_k, value, expected) {
+      if (s.offline) throw new Error("sem conexão (simulado)");
       s.sets++;
       if ((row ? row.version : null) !== (expected ?? null)) return { conflict: true };
       row = { value, version: `v${++n}` };

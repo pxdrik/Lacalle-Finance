@@ -115,14 +115,14 @@ import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
-import { createSyncEngine } from "./lib/syncEngine";
+import { createSyncEngine, localCopy, hasPendingLocalCopy, clearLocalCopies } from "./lib/syncEngine";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
 import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
 import { formatDay } from "./lib/dates";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
 import {
-  TrendingUp, CreditCard, Calendar, Sparkles, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, CalendarDays, Bell, Target, MoreHorizontal, ChevronRight
+  TrendingUp, CreditCard, Calendar, Sparkles, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, CloudOff, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, CalendarDays, Bell, Target, MoreHorizontal, ChevronRight
 } from "lucide-react";
 
 const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
@@ -378,7 +378,13 @@ function MainApp({user,setUser}){
   // Um salvamento por vez, só quando o conteúdo mudou, e conflito entre
   // aparelhos resolvido item por item: o mais recente vence (lib/sync.js).
   const engineRef=useRef(null);
-  if(!engineRef.current)engineRef.current=createSyncEngine({storage,key:storageKey(user.email)});
+  // `local`: cópia no aparelho para o modo sem rede (lib/syncEngine.js). Sem
+  // localStorage (bloqueado), o app segue só com a nuvem, como antes.
+  if(!engineRef.current){
+    let local=null;
+    try{local=localCopy(storageKey(user.email));}catch{/* sem armazenamento local */}
+    engineRef.current=createSyncEngine({storage,key:storageKey(user.email),local});
+  }
   const engine=engineRef.current;
   const [loadError,setLoadError]=useState(null);
 
@@ -427,7 +433,7 @@ function MainApp({user,setUser}){
       applyDoc(engine.rebase(docRef.current));
       showToast("Juntamos o que você fez em outro aparelho.","info");
     }
-    if(r.status==="error"){setSyncStatus("error");return "error";}
+    if(r.status==="error"||r.status==="offline"){setSyncStatus(r.status);return r.status;}
     setSyncStatus(engine.isBusy()||saveTimerRef.current?"saving":"saved");
     return r.status;
   };
@@ -470,6 +476,9 @@ function MainApp({user,setUser}){
       }
     };
     document.addEventListener("visibilitychange",onVisibility);
+    // Voltou a conexão: envia o que ficou guardado no aparelho.
+    const onOnline=()=>{if(syncStatusRef.current==="offline"||syncStatusRef.current==="error")runSaveRef.current().catch(()=>{});};
+    window.addEventListener("online",onOnline);
     // Fallback: em navegadores/mobile onde `visibilitychange` não cobre a
     // navegação para fora do app (ex.: Safari iOS em alguns fluxos).
     window.addEventListener("pagehide",onVisibility);
@@ -484,6 +493,7 @@ function MainApp({user,setUser}){
       document.removeEventListener("visibilitychange",onVisibility);
       window.removeEventListener("pagehide",onVisibility);
       window.removeEventListener("beforeunload",warnIfDirty);
+      window.removeEventListener("online",onOnline);
     };
   },[]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -492,6 +502,7 @@ function MainApp({user,setUser}){
     setSyncStatus("saving");
     const status=await runSave();
     if(status==="saved"||status==="unchanged")showToast("Salvo na nuvem!","success");
+    else if(status==="offline")showToast("Ainda sem conexão. O que você fez está guardado neste aparelho e vai para a nuvem quando a internet voltar.","info");
     else showToast("Ainda não consegui salvar na nuvem. Verifique sua conexão e tente novamente.","error");
   };
 
@@ -1794,6 +1805,7 @@ function MainApp({user,setUser}){
           {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
           {syncStatus==="saving"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Salvando</span></>}
           {syncStatus==="saved"&&<><Cloud size={12} color={TX3}/><span className="sync-label">Sincronizado</span><IconButton icon={RefreshCw} size={12} label="Salvar agora" onClick={retrySave}/></>}
+          {syncStatus==="offline"&&<><CloudOff size={12} color={TX2}/><span className="sync-label">Salvo neste aparelho</span><IconButton icon={RefreshCw} size={12} label="Tentar enviar para a nuvem" onClick={retrySave}/></>}
           {syncStatus==="error"&&<><AlertTriangle size={12} color={WARNING}/><span className="sync-label" style={{color:WARNING}}>Erro ao salvar</span><IconButton icon={RefreshCw} size={12} color={WARNING} label="Tentar salvar de novo" onClick={retrySave}/></>}
         </div>
         <div className="hdr-actions">
@@ -2626,8 +2638,15 @@ export default function Root(){
   // O resto do app (MainApp) já sabe deslogar chamando setUser(null) — só
   // interceptamos essa chamada aqui pra também encerrar a sessão de verdade
   // no Supabase, sem precisar mudar nada dentro do MainApp.
+  // Ao sair, as cópias do modo sem rede saem do aparelho junto (dado
+  // financeiro não fica num aparelho compartilhado). Se alguma ainda não foi
+  // para a nuvem, pergunta antes, porque sair apagaria essas edições.
   const handleSetUser=value=>{
-    if(value===null)supabase.auth.signOut();
+    if(value===null){
+      if(hasPendingLocalCopy()&&!window.confirm("Há alterações feitas sem internet que ainda não chegaram à nuvem. Se sair agora, elas são apagadas deste aparelho. Sair mesmo assim?"))return;
+      clearLocalCopies();
+      supabase.auth.signOut();
+    }
     else setUser(value);
   };
 

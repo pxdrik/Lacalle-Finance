@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { createSyncEngine } from "./syncEngine.js";
+import { createSyncEngine, localCopy, clearLocalCopies, hasPendingLocalCopy } from "./syncEngine.js";
 import { stampChanges, mergeDocs, normalizeDoc, emptyDoc } from "./sync.js";
 
 // Armazenamento falso com a mesma trava do banco: gravar só passa se a
@@ -212,5 +212,70 @@ describe("dado estragado na nuvem", () => {
     assert.deepEqual(ids(final), [1, 3]);
     assert.equal(final.quarantine.length, 1);
     assert.equal(final.quarantine[0].record.id, 2);
+  });
+});
+
+describe("sem rede: a fila fica no aparelho", () => {
+  // localStorage falso (Map com a interface usada)
+  const memStore = () => {
+    const m = new Map();
+    return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k), key: i => [...m.keys()][i] ?? null, get length() { return m.size; } };
+  };
+  // nuvem que pode cair: offline=true faz get/set lançarem como fetch sem rede
+  const flaky = st => { const f = { offline: false, async get(k) { if (f.offline) throw new Error("Failed to fetch"); return st.get(k); }, async set(...a) { if (f.offline) throw new Error("Failed to fetch"); return st.set(...a); } }; return f; };
+  const mk = (storage, store) => createSyncEngine({ storage, key: "k", local: localCopy("k", store), now, retryDelayMs: 0 });
+
+  test("lançar sem rede, fechar o app e abrir com rede: o lançamento chega à nuvem", async () => {
+    const st = fakeStorage(), net = flaky(st), store = memStore();
+    const A = mk(net, store);
+    const d0 = await A.load();
+    net.offline = true;
+    const r = await A.save(ui(d0, { tx: [tx(1, "Padaria")] }));
+    assert.equal(r.status, "offline");
+    assert.ok(hasPendingLocalCopy(store));
+    // app fechado; abre de novo, já com rede
+    net.offline = false;
+    const A2 = mk(net, store);
+    const d1 = await A2.load();
+    assert.deepEqual(ids(d1), [1]);
+    assert.equal((await A2.save(d1)).status, "saved");
+    assert.deepEqual(ids(st.peek()), [1]);
+    assert.ok(!hasPendingLocalCopy(store));
+  });
+
+  test("abrir sem rede usa a cópia do aparelho; ao voltar junta com o que outro aparelho gravou", async () => {
+    const st = fakeStorage(), net = flaky(st), store = memStore();
+    const A = mk(net, store);
+    const a0 = await A.load();
+    await A.save(ui(a0, { tx: [tx(1, "Mercado")] }));
+    // outro aparelho lança enquanto este está sem rede
+    const B = engine(st);
+    const b0 = await B.load();
+    await B.save(ui(b0, { tx: [...b0.tx, tx(2, "Uber")] }));
+    net.offline = true;
+    const A2 = mk(net, store);
+    const off = await A2.load();
+    assert.deepEqual(ids(off), [1]);
+    assert.equal((await A2.save(ui(off, { tx: [...off.tx, tx(3, "Farmácia")] }))).status, "offline");
+    net.offline = false;
+    const r = await A2.save(ui(off, { tx: [...off.tx, tx(3, "Farmácia")] }));
+    assert.equal(r.status, "saved");
+    assert.deepEqual(ids(st.peek()), [1, 2, 3]);
+    assert.ok(r.adopt, "a tela adota o lançamento do outro aparelho");
+  });
+
+  test("abrir sem rede e sem cópia continua sendo erro, não conta vazia", async () => {
+    const net = flaky(fakeStorage()), store = memStore();
+    net.offline = true;
+    await assert.rejects(mk(net, store).load());
+  });
+
+  test("sair apaga as cópias do aparelho", () => {
+    const store = memStore();
+    localCopy("a", store).write({ doc: emptyDoc(), pending: true });
+    store.setItem("lf.wishSort", "manual");
+    clearLocalCopies(store);
+    assert.equal(store.length, 1);
+    assert.ok(!hasPendingLocalCopy(store));
   });
 });
