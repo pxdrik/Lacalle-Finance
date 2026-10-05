@@ -1362,7 +1362,7 @@ function MainApp({user,setUser}){
         console.error("LaCalle Finance — erro ao apagar conta:",e);
         deleteAccountBusyRef.current=false;
         setDeleteAccountBusy(false);
-        showToast("Não consegui apagar sua conta agora (falha de conexão com o servidor). Nada foi apagado — tente de novo em instantes.","error");
+        showToast("Não consegui apagar sua conta agora. Tente de novo em instantes.","error");
       }
     })();
   };

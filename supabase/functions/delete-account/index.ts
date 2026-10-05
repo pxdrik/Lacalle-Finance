@@ -104,7 +104,8 @@ Deno.serve(async (req) => {
     // Apaga primeiro os dados (a linha em user_data), depois a conta de
     // login em si. Se um dia a pessoa tiver dados em mais tabelas, adicione
     // a exclusão delas aqui também, antes de apagar o usuário.
-    await supabaseAdmin.from("user_data").delete().eq("user_id", user.id);
+    const { error: dataError } = await supabaseAdmin.from("user_data").delete().eq("user_id", user.id);
+    if (dataError) throw dataError;
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
     if (deleteError) throw deleteError;
 
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     // O detalhe vai para o log da função, não para o navegador.
     console.error("delete-account:", e);
-    return new Response(JSON.stringify({ error: "Erro ao apagar a conta. Nada foi apagado; tente de novo em instantes." }), {
+    return new Response(JSON.stringify({ error: "Erro ao apagar a conta. Tente de novo em instantes." }), {
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },
     });
