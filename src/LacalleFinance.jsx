@@ -845,6 +845,8 @@ function MainApp({user,setUser}){
     const q=searchQuery.trim().toLowerCase();
     if(!q)return null;
     return{
+      // txTotal: quantos casaram, para o "Ver todos" (a lista mostra só 6)
+      txTotal:transactions.filter(t=>t.desc.toLowerCase().includes(q)).length,
       txRes:transactions.filter(t=>t.desc.toLowerCase().includes(q)).slice(0,6),
       catRes:fullCats.filter(c=>c.toLowerCase().includes(q)).slice(0,6),
       wishRes:wishes.filter(w=>w.name.toLowerCase().includes(q)||(w.notes||"").toLowerCase().includes(q)).slice(0,6),
@@ -857,6 +859,7 @@ function MainApp({user,setUser}){
 
   const closeSearch=()=>{setShowSearch(false);setSearchQuery("");};
   const goToTx=t=>{setTab("transactions");setSearch(t.desc);closeSearch();};
+  const goToAllTx=()=>{setTab("transactions");setSearch(searchQuery.trim());closeSearch();};
   const goToCat=c=>{setTab("transactions");setFilterCat(c);closeSearch();};
   const goToWish=()=>{setTab("wishes");closeSearch();};
   const goToPlanned=p=>{setTab("planned");if(!p.recurring&&p.month)setPlannedMonth(p.month);closeSearch();};
@@ -1933,6 +1936,9 @@ function MainApp({user,setUser}){
                       <span className="num" style={{fontSize:12,color:t.type==="Entrada"?"#34D399":"#F87171",fontWeight:600}}>{fmt(t.val)}</span>
                     </button>
                   ))}
+                  {searchResults.txTotal>searchResults.txRes.length&&(
+                    <button type="button" onClick={goToAllTx} style={{background:"none",border:"none",color:TX2,fontSize:12,cursor:"pointer",padding:"8px 8px",textDecoration:"underline",textUnderlineOffset:3}}>Ver todos os {searchResults.txTotal} lançamentos</button>
+                  )}
                 </div>
               )}
               {searchResults&&searchResults.catRes.length>0&&(

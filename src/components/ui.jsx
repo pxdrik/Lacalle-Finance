@@ -143,6 +143,27 @@ export function Field({ id, label, error, hint, children, style }) {
   );
 }
 
+// ==================== useIncrementalReveal ====================
+// Lista longa aparece em blocos conforme a pessoa rola (padrão do LaCalle
+// Life, use-incremental-reveal.ts): um sentinela no fim da lista, observado
+// com 400px de folga, libera mais `step` itens. Não é um virtualizador: com
+// centenas a poucos milhares de linhas, desenhar em blocos basta e não muda
+// a rolagem nem a busca do navegador. `resetKey` volta ao primeiro bloco
+// (ao trocar de filtro).
+export function useIncrementalReveal(total, { step = 40, resetKey } = {}) {
+  const [count, setCount] = useState(step);
+  const sentinelRef = useRef(null);
+  useEffect(() => { setCount(step); }, [resetKey, step]);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || count >= total || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) setCount(c => c + step); }, { rootMargin: "400px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [count, total, step]);
+  return { visible: Math.min(count, total), sentinelRef };
+}
+
 // ==================== Tabs ====================
 // role="tablist"/"tab" com aria-selected, aria-controls e roving tabindex —
 // a semântica que faltava (brandbook, seção 43). O visual é o `.nav-tab` que

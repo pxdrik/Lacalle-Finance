@@ -1,5 +1,5 @@
 import { Upload, Download, Trash2, Search, CreditCard, Calendar, Pencil, X } from "lucide-react";
-import { Card, BtnGhost, AnimatedValue, CategoryIcon, ConfirmIconButton, Segmented } from "./ui";
+import { Card, BtnGhost, AnimatedValue, CategoryIcon, ConfirmIconButton, Segmented, useIncrementalReveal } from "./ui";
 import { TX, TX2, TX3, BD, CARD, R_BTN, R_INPUT, SH_SM, SI } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
 import { formatDayTitle, todayLocalISO } from "../lib/dates";
@@ -18,6 +18,15 @@ export default function TransactionsTab({
   setFilterType, setSearch, setFilterMonth, setFilterCat,
   onImportCSV, onExportCSV, onClearAll, onStartEditTx, onRequestDelete,
 }) {
+  // Desenha os lançamentos em blocos de 40 conforme a rolagem (ver useIncrementalReveal).
+  const { visible: revealed, sentinelRef } = useIncrementalReveal(filtered.length, { resetKey: `${filterMonth}|${filterCat}|${filterType}|${search}` });
+  const shownGroups = [];
+  let budget = revealed;
+  for (const [date, txs] of groupedByDate) {
+    if (budget <= 0) break;
+    shownGroups.push([date, txs.slice(0, budget)]);
+    budget -= txs.length;
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <Card style={{ padding: 26 }}>
@@ -68,7 +77,7 @@ export default function TransactionsTab({
           <div style={{ textAlign: "center", color: TX2, padding: 40, fontSize: 14 }}>Você ainda não tem nenhuma transação. Use o formulário acima para lançar a primeira.</div>
         );
       })()}
-      {groupedByDate.map(([date, txs]) => (
+      {shownGroups.map(([date, txs]) => (
         <div key={date}>
           <div style={{ fontSize: 11, color: TX3, fontWeight: 700, marginBottom: 10, paddingLeft: 2 }}>{formatDayTitle(date, todayLocalISO())}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -98,6 +107,7 @@ export default function TransactionsTab({
           </div>
         </div>
       ))}
+      {revealed < filtered.length && <div ref={sentinelRef} aria-hidden="true" style={{ height: 1 }} />}
     </div>
   );
 }

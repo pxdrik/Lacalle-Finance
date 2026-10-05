@@ -232,3 +232,25 @@ describe("apagar a conta pede login recente", () => {
     h.invoke = null;
   });
 });
+
+describe("lista longa e busca", () => {
+  const many = Array.from({ length: 100 }, (_, i) => tx(i + 1, `Café ${i + 1}`, 5));
+  beforeEach(async () => { h.storage = createFakeStorage({ tx: many }); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("Transações desenha 40 de cada vez e libera mais ao rolar até o fim", async () => {
+    await openApp();
+    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    await screen.findAllByRole("button", { name: /^Excluir Café/ });
+    expect(screen.getAllByRole("button", { name: /^Excluir Café/ }).length).toBe(40);
+    window.scrollTo(0, document.body.scrollHeight);
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Excluir Café/ }).length).toBeGreaterThan(40));
+  });
+
+  test("a busca mostra 6 e oferece ver todos, que leva a Transações filtrada", async () => {
+    await openApp();
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    fireEvent.change(await screen.findByPlaceholderText(/Buscar|Pesquisar/), { target: { value: "café" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Ver todos os 100 lançamentos" }));
+    await waitFor(() => expect(screen.getByRole("tab", { name: /Transações/ }).getAttribute("aria-selected")).toBe("true"));
+  });
+});
