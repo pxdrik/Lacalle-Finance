@@ -36,6 +36,10 @@ export default defineConfig({
         // Precache do "casco" do app (JS/CSS/HTML/ícones/fontes locais) para
         // abrir rápido e funcionar offline. Dados vêm do Supabase/localStorage.
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
+        // O app é em português: o cache do app instalado não precisa baixar as
+        // fontes de grego, cirílico e vietnamita (o navegador só as busca se
+        // um desses caracteres aparecer na tela, o que continua funcionando).
+        globIgnores: ["**/*-{greek,cyrillic,cyrillic-ext,vietnamese}-*.woff2"],
         navigateFallback: "/index.html",
         cleanupOutdatedCaches: true,
       },
