@@ -1590,8 +1590,6 @@ function MainApp({user,setUser}){
           .bento-half{grid-column:span 1;}
           .bento-wide{grid-column:span 4;}
         }
-        .chart-card{display:flex;flex-direction:column;}
-        .chart-card .chart-fill{flex:1;min-height:0;}
         .rg-2col{display:grid;grid-template-columns:1fr;gap:20px;}
         @media(min-width:900px){.rg-2col{grid-template-columns:1fr 1fr;}}
         .insights-grid{display:grid;grid-template-columns:1fr;gap:14px;}
