@@ -436,6 +436,31 @@ describe("sem rede", () => {
   });
 });
 
+describe("relatório do mês em PDF", () => {
+  beforeEach(async () => { h.storage = createFakeStorage({ tx: [tx(1, "Mercado", 80), { ...tx(2, "Cinema", 40), date: "2026-09-12" }] }); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("escolher o mês abre a impressão só com os lançamentos dele; fechar a impressão some com o relatório", async () => {
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    await openApp();
+    fireEvent.click(navBtn("Transações"));
+    fireEvent.click(await screen.findByRole("button", { name: "Relatório do mês em PDF" }));
+    const picker = within(await screen.findByRole("dialog", { name: "Relatório do mês" }));
+    fireEvent.change(picker.getByLabelText("Mês"), { target: { value: "set/26" } });
+    fireEvent.click(picker.getByRole("button", { name: "Gerar PDF" }));
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    // fora da tela (só aparece na impressão), então buscado pelo elemento
+    const el = document.querySelector(".print-report");
+    expect(el.getAttribute("aria-label")).toBe("Relatório de setembro de 2026");
+    const report = within(el);
+    expect(report.getByText("Cinema")).toBeTruthy();
+    expect(el.parentElement).toBe(document.body); // fora do #root, que a impressão esconde
+    expect(report.queryByText("Mercado")).toBeNull();
+    window.dispatchEvent(new Event("afterprint"));
+    await waitFor(() => expect(document.querySelector(".print-report")).toBeNull());
+    print.mockRestore();
+  });
+});
+
 describe("tela de login", () => {
   test("Enter no formulário entra; senha errada mostra o aviso traduzido", async () => {
     const calls = [];

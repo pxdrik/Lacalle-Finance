@@ -87,3 +87,12 @@ button, input, select, textarea {
 /* Folha que sobe de baixo (Modal align="sheet"). */
 .lc-dialog-sheet[open] { align-items: flex-end; padding: 0; }
 @keyframes sheetIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+/* Relatório mensal (MonthlyReport.jsx): fora da tela; na impressão, só ele. */
+.print-report { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; }
+  #root { display: none !important; }
+  .print-report { display: block !important; }
+}

@@ -1,4 +1,4 @@
-import { Upload, Download, Trash2, Search, CreditCard, Calendar, Pencil, X, Receipt, Plus } from "lucide-react";
+import { Upload, Download, FileText, Trash2, Search, CreditCard, Calendar, Pencil, X, Receipt, Plus } from "lucide-react";
 import { Card, BtnGhost, ConfirmIconButton, Segmented, useIncrementalReveal, PageHeader, IconButton, Totals } from "./ui";
 import { TX, TX2, TX3, BD, BD2, R_BTN, R_CARD, SI, SUCCESS, ERROR, MUTED, accentText } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
@@ -12,7 +12,7 @@ export default function TransactionsTab({
   accent, catColor,
   filterType, search, filterMonth, months, filterCat, fullCats, viewTotals, filtered, groupedByDate, editingTx,
   setFilterType, setSearch, setFilterMonth, setFilterCat,
-  onImportCSV, onExportCSV, onClearAll, onStartEditTx, onRequestDelete, onNewTx,
+  onImportCSV, onExportCSV, onClearAll, onStartEditTx, onRequestDelete, onNewTx, onReport,
 }) {
   // Desenha os lançamentos em blocos de 40 conforme a rolagem (ver useIncrementalReveal).
   const { visible: revealed, sentinelRef } = useIncrementalReveal(filtered.length, { resetKey: `${filterMonth}|${filterCat}|${filterType}|${search}` });
@@ -37,6 +37,7 @@ export default function TransactionsTab({
             <Upload size={16} aria-hidden="true" /><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}>Importar CSV</span>
             <input type="file" accept=".csv" style={{ display: "none" }} onChange={onImportCSV} />
           </label>
+          <IconButton icon={FileText} size={16} color={TX2} label="Relatório do mês em PDF" onClick={onReport} />
           <IconButton icon={Download} size={16} color={TX2} label="Exportar CSV" onClick={onExportCSV} />
           <IconButton icon={Trash2} size={16} color={ERROR} label="Apagar todas as transações" onClick={onClearAll} />
         </>}
