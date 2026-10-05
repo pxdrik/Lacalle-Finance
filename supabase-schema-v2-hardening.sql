@@ -1,3 +1,7 @@
+-- HISTÓRICO. A fonte do esquema agora é supabase/migrations/ (conferida contra
+-- produção em 05/10/2026 e testada no PGlite: npm run test:db). Este arquivo
+-- fica só como registro do que foi colado à mão no SQL Editor.
+
 -- ============================================================================
 -- LACALLE FINANCE — hardening v2 (rodar DEPOIS do supabase-schema.sql)
 -- ============================================================================

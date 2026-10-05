@@ -28,6 +28,9 @@ jobs:
       - name: Testes (financialEngine + regressões)
         run: npm test
 
+      - name: Testes de banco (RLS no PGlite, com as migrações)
+        run: npm run test:db
+
       - name: Navegador para os testes de tela
         run: npx playwright install --with-deps chromium
 
