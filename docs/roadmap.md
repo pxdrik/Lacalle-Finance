@@ -4,47 +4,37 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
-## ⏳ PENDENTE: trazer pontos do Lacalle Life para o Finance (04/10/2026)
+## 🔶 NA BRANCH, FALTA TESTAR: pontos do Lacalle Life no Finance (04/10/2026)
 
-Decidido em 04/10/2026, para fazer depois. Ainda não há lista fechada de
-quais pontos do Life entram: a escolha é o primeiro passo quando o item for
-retomado.
+Implementado na branch `melhorias-auditoria` a partir do protótipo
+(https://claude.ai/artifact/PVbbKMtz7Nmhy8ZiQu9fVt) e da auditoria Life →
+Finance (https://claude.ai/artifact/4Qe6abrgqN2uyK9kwxkZ3C). Só vai para o
+`main` (que publica no Netlify) depois do Pedro testar a prévia do PR.
 
-- **Protótipo antes de publicar.** Cada ponto escolhido vira protótipo e só
-  vai para o `main` (que publica direto no Netlify) depois de aprovado. O
-  protótipo parte dos componentes reais do Finance (`src/components/ui.jsx`,
-  `src/lib/theme.js`), não de um mockup genérico.
-- **Já portado, não repetir:** bounce de aba e press-scale do Motion System
-  v1 do Life (`d6bca30`).
-- Vale o mesmo filtro do item de motion abaixo: o Finance fica mais contido
-  que o Life, sem gamificação em metas ou saldo.
-- **Protótipo em revisão:** https://claude.ai/artifact/PVbbKMtz7Nmhy8ZiQu9fVt
-  (Início, novo lançamento, login, gráficos, três formatos de computador e a
-  lista do que muda, cada item marcado como correção ou decisão pendente).
-  Decidido até aqui: manter as 14 categorias atuais e o Investimento como
-  categoria; em Transações, o botão "Novo lançamento" fica abaixo do resumo
-  do mês, em versão só com contorno.
+- **Sincronização:** o mais recente vence, item por item (regra do Life),
+  com quarentena para registro malformado; modo sem rede com a cópia no
+  aparelho.
+- **Nova cara:** barra lateral no computador, Início novo, folhas para os
+  formulários, menu "..." por linha, login com a marca do Finance. As
+  decisões de marca estão em `docs/brandbook.md`, seção "Nova cara".
+- **Fase 4:** evolução do patrimônio, ordem manual das metas, relatório
+  mensal em PDF.
+- **Mantido como decidido:** as 14 categorias e o Investimento como
+  categoria; "Novo lançamento" discreto abaixo do resumo em Transações.
+- **Antes do merge:** aplicar a migration `20261005000000` e publicar a
+  função `delete-account` junto (as duas dependem de confirmação do Pedro).
 
 ---
 
-## ⏳ PENDENTE: previsto com data de fim ("Até") (04/10/2026)
+## 🔶 NA BRANCH, FALTA TESTAR: previsto com data de fim ("Até") (04/10/2026)
 
-Pedido do Pedro. Hoje um previsto recorrente não tem início nem fim: vale
-para todo mês. As únicas saídas são ignorar um mês (`ignored[mês]`) ou
-excluir, e excluir apaga o item de todos os meses, inclusive dos passados.
-
-- **Proposta (no protótipo acima, aba Previstos):** campo opcional `until`
-  (chave de mês, no formato de `MONTHS_ARR`, ex. `"nov/26"`). O recorrente
-  conta no mês se não tiver `until` ou se o mês vier até ele. Os meses
-  anteriores ficam como estão, inclusive os pagos. Excluir passa a avisar que
-  apaga tudo e oferece encerrar no lugar.
-- **Onde mexer:** a regra "recorrente vale em qualquer mês" está espalhada,
-  em filtros como `p.recurring||p.month===mk` (cerca de 46 usos de
-  `.recurring` em `financialEngine.js` e `LacalleFinance.jsx`). Centralizar
-  num `PlannedStatus.appliesTo(item, mês)` e trocar todos os usos por ele,
-  senão alguma projeção continua contando o item encerrado.
-- **Em aberto:** o recorrente também não tem mês de início, então aparece em
-  meses anteriores ao cadastro. Não foi pedido; decidir junto.
+- Campo `until` (último mês que conta) e `from` (mês de início, desde o
+  cadastro, como o Pedro escolheu). Uma regra só,
+  `PlannedStatus.appliesTo(item, mês)`, usada em todos os totais, projeções
+  e listas.
+- Na aba Previstos, "..." → "Encerrar em {mês}" grava o Até com Desfazer;
+  "Excluir" passou a dizer que apaga de todos os meses e aponta o Encerrar.
+- Encerrados aparecem numa linha abaixo da lista nos meses seguintes.
 
 ---
 

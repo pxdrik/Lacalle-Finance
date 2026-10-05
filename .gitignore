@@ -25,3 +25,4 @@ supabase/.branches
 
 # capturas de falha dos testes de navegador
 src/__screenshots__/
+.vitest-attachments/
