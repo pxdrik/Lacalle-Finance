@@ -103,7 +103,7 @@ import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
 import { FinancialEngine, InsightEngine, fmt, monthKey, addMonthsStr, daysInMonth, MONTH_ORDER, MONTHS_ARR, PlannedStatus, monthIndex, monthAt } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
 import { Signature, FinanceMark } from "./components/Brand";
-import { IncomeExpenseChart } from "./components/charts";
+import { IncomeExpenseChart, TrendChart } from "./components/charts";
 import InstallmentsTab from "./components/InstallmentsTab";
 import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
@@ -594,6 +594,12 @@ function MainApp({user,setUser}){
 
   const fixedVarSplit=useMemo(()=>FinancialEngine.ExpenseAnalyzer.fixedVarSplit(realized),[realized]);
   const patrimonioLiquido=balance+invNet;
+  // Evolução do patrimônio no Início: até 12 meses, a partir do primeiro com lançamento.
+  const patrimonySeries=useMemo(()=>{
+    const all=FinancialEngine.CashFlowAnalyzer.patrimonyByMonth(realized,monthKey(todayISO));
+    const start=all.findIndex(p=>p.hasData);
+    return start<0?[]:all.slice(start);
+  },[realized,todayISO]);
   const savingsRate=FinancialEngine.IncomeAnalyzer.savingsRate(balance,totalIn);
   const committedIncome=FinancialEngine.IncomeAnalyzer.committedRatio(totalIn,totalOut);
   const reservaFinanceira=useMemo(()=>wishes.reduce((s,w)=>s+(w.saved||0),0),[wishes]);
@@ -2359,6 +2365,7 @@ function MainApp({user,setUser}){
               <div className="home-col">
                 <section>
                   <SectionTitle>Patrimônio e metas</SectionTitle>
+                  {patrimonySeries.length>=2&&<Card style={{boxShadow:"none",marginBottom:10}}><TrendChart data={patrimonySeries} color={accent}/></Card>}
                   <Card style={{boxShadow:"none",padding:"6px 16px"}}>
                     <ul className="home-list">
                       {row("pat","Patrimônio",null,resumoDoMes?fmt(resumoDoMes.stats.patrimonio):"—")}

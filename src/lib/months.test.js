@@ -58,3 +58,24 @@ describe("previsto com começo e fim", () => {
     assert.equal(budget.subscriptions(planned, "nov/26").count, 1);
   });
 });
+
+describe("patrimônio mês a mês", () => {
+  const t = (date, type, val, extra = {}) => ({ id: date + val, date, type, val, cat: "Outros", fixed: "Variavel", form: "pix", invTipo: null, ...extra });
+  const flow = FinancialEngine.CashFlowAnalyzer;
+  test("cada mês soma tudo até o seu fim; aporte não reduz o patrimônio", () => {
+    const tx = [
+      t("2026-08-05", "Entrada", 5000), t("2026-08-20", "Saída", 1000),
+      t("2026-09-10", "Saída", 500, { cat: "Investimento", invTipo: "Aporte" }),
+      t("2026-10-02", "Saída", 300),
+    ];
+    const s = flow.patrimonyByMonth(tx, "out/26", 4);
+    assert.deepEqual(s.map(p => p.month), ["jul/26", "ago/26", "set/26", "out/26"]);
+    assert.deepEqual(s.map(p => p.value), [0, 4000, 4000, 3700]);
+    assert.deepEqual(s.map(p => p.hasData), [false, true, true, true]);
+  });
+  test("o último ponto bate com o patrimônio do Início", () => {
+    const tx = [t("2025-12-01", "Entrada", 900), t("2026-10-01", "Saída", 120, { cat: "Investimento", invTipo: "Aporte" })];
+    const last = flow.patrimonyByMonth(tx, "out/26").at(-1).value;
+    assert.equal(last, flow.totals(tx).balance + flow.investmentNet(tx));
+  });
+});

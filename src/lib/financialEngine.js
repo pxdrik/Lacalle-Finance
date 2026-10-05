@@ -296,6 +296,20 @@ export const FinancialEngine=(()=>{
       const totalOut=nI+ap-re;
       return{totalIn,totalOut,balance:totalIn-totalOut};
     },
+    // Patrimônio (saldo + líquido investido, a mesma conta do Início) no fim
+    // de cada um dos `n` meses que terminam em `endMonthKey`. Só o realizado:
+    // quem chama passa as transações com data <= hoje.
+    // ponytail: refaz as contas para cada mês (O(n·meses)); acumular numa
+    // passada só se o histórico ficar grande a ponto de pesar.
+    patrimonyByMonth(tx,endMonthKey,n=12){
+      const end=monthIndex(endMonthKey);
+      const byIdx=tx.map(t=>[monthIndex(monthKey(t.date)),t]);
+      return Array.from({length:n},(_,i)=>{
+        const idx=end-n+1+i;
+        const upTo=byIdx.filter(([m])=>m<=idx).map(([,t])=>t);
+        return{month:monthAt(idx),value:this.totals(upTo).balance+this.investmentNet(upTo),hasData:upTo.length>0};
+      });
+    },
     monthlySummary(tx){
       const m={};
       tx.forEach(t=>{
