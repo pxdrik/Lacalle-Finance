@@ -8,7 +8,7 @@ import { createFakeStorage } from "./test/fakeStorage.js";
 import { setViewport, DESKTOP_WIDTH, PHONE_WIDTHS, overflowX, hitTargetsAcross } from "./test/geometry.js";
 import { contrastRatio } from "./lib/theme.js";
 
-const h = vi.hoisted(() => ({ storage: null, invoke: null }));
+const h = vi.hoisted(() => ({ storage: null, invoke: null, signIn: null }));
 
 vi.mock("./lib/supabaseClient", () => ({
   openedFromRecoveryLink: false,
@@ -18,6 +18,7 @@ vi.mock("./lib/supabaseClient", () => ({
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
       updateUser: async () => ({ data: {}, error: null }),
       signOut: async () => ({ error: null }),
+      signInWithPassword: (...a) => h.signIn(...a),
     },
     functions: { invoke: (...a) => (h.invoke ? h.invoke(...a) : Promise.resolve({ data: null, error: null })) },
   },
@@ -25,6 +26,7 @@ vi.mock("./lib/supabaseClient", () => ({
 vi.mock("./lib/storage", () => ({ storage: new Proxy({}, { get: (_t, k) => h.storage[k].bind(h.storage) }) }));
 
 const { default: Root } = await import("./LacalleFinance.jsx");
+const { default: AuthScreen } = await import("./components/AuthScreen.jsx");
 
 const tx = (id, desc, val = 10) => ({ id, date: "2026-10-01", type: "Saída", fixed: "Variavel", cat: "Outros", desc, val, form: "pix", invTipo: null });
 const SAVE_WAIT = { timeout: 4000 };
@@ -386,5 +388,23 @@ describe("geometria da navegação", () => {
     fireEvent.click(within(nav).getByRole("button", { name: "Mais" }));
     fireEvent.click(await screen.findByRole("button", { name: /Previstos/ }));
     await waitFor(() => expect(within(nav).getByRole("button", { name: "Mais" }).getAttribute("aria-current")).toBe("page"));
+  });
+});
+
+describe("tela de login", () => {
+  test("Enter no formulário entra; senha errada mostra o aviso traduzido", async () => {
+    const calls = [];
+    h.signIn = async args => { calls.push(args); return { data: null, error: { message: "Invalid login credentials" } }; };
+    const onLogin = vi.fn();
+    render(<AuthScreen onLogin={onLogin} />);
+    fireEvent.change(screen.getByLabelText("Seu e-mail"), { target: { value: " Pedro@Exemplo.com " } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "segredo1" } });
+    fireEvent.submit(screen.getByLabelText("Senha").form);
+    expect((await screen.findByRole("alert")).textContent).toContain("E-mail ou senha incorretos.");
+    expect(calls[0]).toMatchObject({ email: "pedro@exemplo.com", password: "segredo1" });
+    expect(onLogin).not.toHaveBeenCalled();
+    h.signIn = async () => ({ data: { user: { email: "pedro@exemplo.com", user_metadata: { name: "Pedro" } } }, error: null });
+    fireEvent.submit(screen.getByLabelText("Senha").form);
+    await waitFor(() => expect(onLogin).toHaveBeenCalledWith("pedro@exemplo.com", "Pedro"));
   });
 });
