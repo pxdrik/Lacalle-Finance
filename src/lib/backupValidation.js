@@ -119,6 +119,10 @@ function checkPlanned(pl, i) {
   if (!pl.recurring) {
     if (!isMonthKey(pl.month)) errs.push(err(`${p}.month`, "precisa ser um mês (ex.: out/26)"));
   }
+  // "começa em" e "Até" do recorrente: opcionais, mas se vierem são meses
+  for (const k of ["from", "until"]) {
+    if (pl[k] != null && !isMonthKey(pl[k])) errs.push(err(`${p}.${k}`, "precisa ser um mês (ex.: out/26)"));
+  }
   return errs;
 }
 

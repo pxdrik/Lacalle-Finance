@@ -185,3 +185,33 @@ describe("modal sobre <dialog>", () => {
     expect(document.querySelector("dialog[open]")).not.toBeNull();
   });
 });
+
+describe("previsto com Até", () => {
+  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("cadastrar com Até: conta até o mês escolhido e some depois, com a linha de encerrado", async () => {
+    const { monthKey, monthIndex, monthAt } = await import("./lib/financialEngine.js");
+    const now = new Date();
+    const thisMonth = monthKey(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-15`);
+    const nextMonth = monthAt(monthIndex(thisMonth) + 1);
+    await openApp();
+    fireEvent.click(screen.getByRole("tab", { name: /Previstos/ }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Adicionar" }))[0]);
+    fireEvent.change(screen.getByPlaceholderText(/Smart Fit/), { target: { value: "Netflix" } });
+    fireEvent.change(screen.getAllByPlaceholderText("R$").at(-1), { target: { value: "55,90" } });
+    fireEvent.click(within(screen.getByRole("group", { name: "Repetição" })).getByRole("button", { name: /Todo mês/ }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Até quando" })).getByRole("button", { name: "Até um mês" }));
+    fireEvent.change(screen.getByLabelText("Último mês que conta"), { target: { value: nextMonth } });
+    expect(screen.getByText(/Conta todo mês até/).textContent).toContain("2 meses");
+    fireEvent.click(screen.getAllByRole("button", { name: "Adicionar" }).at(-1));
+    await waitFor(() => expect(h.storage.peek()?.planned?.[0]).toMatchObject({ desc: "Netflix", recurring: true, from: thisMonth, until: nextMonth }), SAVE_WAIT);
+    // mês seguinte: ainda conta
+    const next = () => fireEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
+    next();
+    await screen.findByText(`mensal até ${nextMonth}`, { exact: false });
+    // dois meses depois: sumiu, e aparece a linha de encerrado
+    next();
+    await screen.findByText(/Encerrado antes deste mês: Netflix/);
+    expect(screen.queryByText("Netflix")).toBeNull(); // saiu da lista do mês
+  });
+});

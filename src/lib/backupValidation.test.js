@@ -176,3 +176,10 @@ describe("backup exportado pelo app volta na importação", () => {
     assert.equal(buildBackup(appState).onboardingDismissed, true);
   });
 });
+
+describe("previsto com começo e fim no backup", () => {
+  test("from e until em monthKey passam; formato inválido é recusado", () => {
+    assert.equal(validateBackup({ planned: [{ ...validPlanned, from: "out/26", until: "mar/27" }] }).ok, true);
+    assert.equal(validateBackup({ planned: [{ ...validPlanned, until: "março" }] }).ok, false);
+  });
+});

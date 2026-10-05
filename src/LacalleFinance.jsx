@@ -101,7 +101,7 @@ import { supabase, openedFromRecoveryLink } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
 import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
 import LogoSymbol from "./components/LogoSymbol";
-import { FinancialEngine, InsightEngine, fmt, monthKey, addMonthsStr, daysInMonth, MONTH_ORDER, MONTHS_ARR, PlannedStatus } from "./lib/financialEngine";
+import { FinancialEngine, InsightEngine, fmt, monthKey, addMonthsStr, daysInMonth, MONTH_ORDER, MONTHS_ARR, PlannedStatus, monthIndex, monthAt } from "./lib/financialEngine";
 import ProjectionDrawer from "./components/ProjectionDrawer";
 import InstallmentsTab from "./components/InstallmentsTab";
 import WishesTab from "./components/WishesTab";
@@ -251,7 +251,7 @@ function MainApp({user,setUser}){
   const [plannedExpenses,setPlannedExpenses]=useState([]);
   const [plannedMonth,setPlannedMonth]=useState(monthKey(todayFn()));
   const [showPlannedForm,setShowPlannedForm]=useState(false);const [editingPlanned,setEditingPlanned]=useState(null);
-  const [plannedForm,setPlannedForm]=useState({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:monthKey(todayFn()),notes:""});
+  const [plannedForm,setPlannedForm]=useState({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:monthKey(todayFn()),from:monthKey(todayFn()),hasUntil:false,until:monthKey(todayFn()),notes:""});
   const plannedFormSnapshotRef=useRef(null);
 
   // ---- Lixeira (trash) ----
@@ -528,7 +528,7 @@ function MainApp({user,setUser}){
   // forma útil e só sujavam o seletor.
   const months=useMemo(()=>{
     const s=new Set(transactions.map(t=>monthKey(t.date)).filter(k=>k!=="???"));
-    return[...s].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+    return[...s].sort((a,b)=>monthIndex(a)-monthIndex(b));
   },[transactions]);
   const filtered=useMemo(()=>{let tx=filterMonth?transactions.filter(t=>monthKey(t.date)===filterMonth):transactions;if(filterCat)tx=tx.filter(t=>t.cat===filterCat);if(filterType)tx=tx.filter(t=>t.type===filterType);if(search.trim())tx=tx.filter(t=>t.desc.toLowerCase().includes(search.toLowerCase()));return tx;},[transactions,filterMonth,filterCat,filterType,search]);
 
@@ -612,8 +612,8 @@ function MainApp({user,setUser}){
   const txByDate=useMemo(()=>FinancialEngine.ForecastEngine.groupByDate(transactions),[transactions]);
 
   const nextMonthKeyReal=useMemo(()=>{
-    const idx=MONTH_ORDER.indexOf(currentMonthKeyReal);
-    return idx>=0&&idx+1<MONTH_ORDER.length?MONTH_ORDER[idx+1]:currentMonthKeyReal;
+    const idx=monthIndex(currentMonthKeyReal);
+    return idx>=0?monthAt(idx+1):currentMonthKeyReal;
   },[currentMonthKeyReal]);
 
   const committedNextMonth=useMemo(()=>FinancialEngine.BudgetAnalyzer.committedForMonth({transactions,plannedExpenses,month:nextMonthKeyReal,todayISO}),[transactions,plannedExpenses,nextMonthKeyReal,todayISO]);
@@ -746,7 +746,7 @@ function MainApp({user,setUser}){
   const freeBalance=useMemo(()=>FinancialEngine.CashFlowAnalyzer.freeBalance({transactions,plannedExpenses,balance,todayISO,currentMonthKey:currentMonthKeyReal}),[transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal]);
   const freeBalanceBreakdown=useMemo(()=>{
     const futureOut=transactions.filter(t=>t.date>todayISO&&t.type==="Saída"&&t.cat!=="Investimento").reduce((s,t)=>s+t.val,0);
-    const plannedPending=plannedExpenses.filter(p=>p.recurring||p.month===currentMonthKeyReal).reduce((s,p)=>s+(PlannedStatus.isPending(p,currentMonthKeyReal)?p.val:0),0);
+    const plannedPending=plannedExpenses.filter(p=>PlannedStatus.appliesTo(p,currentMonthKeyReal)).reduce((s,p)=>s+(PlannedStatus.isPending(p,currentMonthKeyReal)?p.val:0),0);
     return{futureOut,plannedPending};
   },[transactions,plannedExpenses,todayISO,currentMonthKeyReal]);
 
@@ -1042,6 +1042,7 @@ function MainApp({user,setUser}){
     if(!form.recurring&&!form.month){showToast("Escolha o mês previsto para concluir a transferência.","error");return;}
     pushHistory();
     const payload=wishToPlannedPayload(item,form);
+    if(payload.recurring)payload.from=plannedMonth; // começa no mês que está sendo visto
     // remoção da origem e criação no destino no mesmo lote de atualização,
     // sobre o mesmo snapshot de histórico -> operação atômica (undo desfaz as duas juntas)
     setPlannedExpenses(p=>[...p,{...payload,id:genId()}]);
@@ -1078,10 +1079,9 @@ function MainApp({user,setUser}){
     return `${year}-${String(mIdx+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
   };
   const shiftMonth=(mk,delta)=>{
-    let idx=MONTH_ORDER.indexOf(mk);
-    if(idx<0)idx=MONTH_ORDER.indexOf(monthKey(todayFn()));
-    const ni=Math.max(0,Math.min(MONTH_ORDER.length-1,idx+delta));
-    return MONTH_ORDER[ni];
+    let idx=monthIndex(mk);
+    if(idx<0)idx=monthIndex(monthKey(todayFn()));
+    return monthAt(idx+delta);
   };
   const savePlannedItem=()=>{
     const err=firstError([
@@ -1090,8 +1090,12 @@ function MainApp({user,setUser}){
       validateText(plannedForm.notes,{label:"nota",required:false,maxLen:MAX_NOTES_LEN}),
     ]);
     if(err){showToast(err,"error");return;}
+    const rec=plannedForm.recurring;
+    if(rec&&plannedForm.hasUntil&&plannedForm.from&&monthIndex(plannedForm.until)<monthIndex(plannedForm.from)){showToast("O último mês precisa ser igual ou depois do mês em que começa.","error");return;}
     pushHistory();
-    const base={desc:plannedForm.desc.trim(),val:roundMoney(parseNum(plannedForm.val)),cat:plannedForm.cat,form:plannedForm.form,recurring:plannedForm.recurring,month:plannedForm.recurring?null:plannedForm.month,notes:plannedForm.notes||""};
+    // Recorrente: `from` é o mês em que começa a contar e `until` o último
+    // (o "Até"). Ver PlannedStatus.appliesTo em lib/financialEngine.js.
+    const base={desc:plannedForm.desc.trim(),val:roundMoney(parseNum(plannedForm.val)),cat:plannedForm.cat,form:plannedForm.form,recurring:rec,month:rec?null:plannedForm.month,from:rec?(plannedForm.from||null):null,until:rec&&plannedForm.hasUntil?plannedForm.until:null,notes:plannedForm.notes||""};
     if(editingPlanned!==null){
       setPlannedExpenses(p=>p.map(x=>x.id===editingPlanned?{...x,...base}:x));
       setEditingPlanned(null);
@@ -1099,7 +1103,7 @@ function MainApp({user,setUser}){
       setPlannedExpenses(p=>[...p,{...base,id:genId(),paid:{},ignored:{}}]);
     }
     setShowPlannedForm(false);
-    setPlannedForm({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:plannedMonth,notes:""});
+    setPlannedForm({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:plannedMonth,from:plannedMonth,hasUntil:false,until:plannedMonth,notes:""});
     showToast("Previsto salvo!","success");
   };
   // Fecha o formulário de Previsto, mas confirma antes se algo foi digitado/
@@ -1111,7 +1115,8 @@ function MainApp({user,setUser}){
   };
   const startEditPlanned=item=>{
     setEditingPlanned(item.id);
-    const snap={desc:item.desc,val:toDecimalStr(item.val),cat:item.cat,form:item.form,recurring:item.recurring,month:item.month||plannedMonth,notes:item.notes||""};
+    // `from` vazio = "desde sempre" (recorrentes cadastrados antes desta regra)
+    const snap={desc:item.desc,val:toDecimalStr(item.val),cat:item.cat,form:item.form,recurring:item.recurring,month:item.month||plannedMonth,from:item.recurring?(item.from||""):plannedMonth,hasUntil:!!item.until,until:item.until||plannedMonth,notes:item.notes||""};
     setPlannedForm(snap);
     plannedFormSnapshotRef.current=JSON.stringify(snap);
     setShowPlannedForm(true);
@@ -1159,7 +1164,8 @@ function MainApp({user,setUser}){
   // ---- Transforma um previsto de "só este mês" em recorrente todo mês ----
   const makePlannedRecurring=item=>{
     pushHistory();
-    setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,recurring:true,month:null}:x));
+    // passa a contar a partir do mês em que estava previsto
+    setPlannedExpenses(p=>p.map(x=>x.id===item.id?{...x,recurring:true,month:null,from:x.month||null}:x));
     showToast(`"${item.desc}" agora é recorrente (todo mês).`,"success");
   };
 
@@ -2433,6 +2439,7 @@ function MainApp({user,setUser}){
             onSave={savePlannedItem} onCancelForm={closePlannedForm} onTogglePaid={togglePlannedPaid}
             onToggleIgnored={togglePlannedIgnoredForMonth} onTransferToWish={openTransferToWish}
             onStartEdit={startEditPlanned} onRequestDelete={performDelete} onToggleNotes={toggleNotes}
+            endedPlanned={plannedExpenses.filter(p=>p.recurring&&p.until&&monthIndex(plannedMonth)>monthIndex(p.until))}
           />
         </TabPanel>
         )}

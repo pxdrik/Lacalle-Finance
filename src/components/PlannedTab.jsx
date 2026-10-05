@@ -1,7 +1,7 @@
 import { Plus, ChevronLeft, ChevronRight, Repeat, Calendar, Check, Info, Eye, EyeOff, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
 import { Card, Btn, BtnGhost, MoneyInput, CategoryIcon, AnimatedValue, LinkifiedText, EmptyState, ConfirmIconButton, Segmented } from "./ui";
 import { TX, TX2, TX3, BD, BD2, CARD, R_INPUT, R_CHIP, SH_SM, SI, SUCCESS_FILL } from "../lib/theme";
-import { fmt, monthKey, MONTH_ORDER } from "../lib/financialEngine";
+import { fmt, monthKey, MONTH_ORDER, monthIndex } from "../lib/financialEngine";
 
 const todayFn = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
@@ -14,18 +14,25 @@ export default function PlannedTab({
   plannedItemsForMonth, sortedPlannedItemsForMonth, expandedNotes, accent,
   setPlannedForm, setEditingPlanned, setShowPlannedForm, plannedFormSnapshotRef,
   onShiftMonth, onGoToday, onSave, onCancelForm, onTogglePaid, onToggleIgnored,
-  onTransferToWish, onStartEdit, onRequestDelete, onToggleNotes,
+  onTransferToWish, onStartEdit, onRequestDelete, onToggleNotes, endedPlanned = [],
 }) {
+  const months = (from, to) => monthIndex(to) - monthIndex(from) + 1;
+  const untilNote = f => {
+    if (!f.hasUntil) return "Conta todo mês, até você encerrar.";
+    const start = f.from || plannedMonth;
+    const n = months(start, f.until);
+    return `Conta todo mês até ${f.until}${f.from ? ` (${n} ${n === 1 ? "mês" : "meses"} a partir de ${f.from})` : ""}. Depois some sozinho, e os meses anteriores ficam como estão.`;
+  };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: TX, letterSpacing: "-0.01em" }}>Gastos Previstos</div>
-        <Btn onClick={() => { const empty = { desc: "", val: "", cat: "Assinaturas", form: "pix", recurring: false, month: plannedMonth, notes: "" }; setEditingPlanned(null); setPlannedForm(empty); plannedFormSnapshotRef.current = JSON.stringify(empty); setShowPlannedForm(p => !p); }} style={{ paddingInline: 18, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Plus size={14} />Adicionar</Btn>
+        <Btn onClick={() => { const empty = { desc: "", val: "", cat: "Assinaturas", form: "pix", recurring: false, month: plannedMonth, from: plannedMonth, hasUntil: false, until: plannedMonth, notes: "" }; setEditingPlanned(null); setPlannedForm(empty); plannedFormSnapshotRef.current = JSON.stringify(empty); setShowPlannedForm(p => !p); }} style={{ paddingInline: 18, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Plus size={14} />Adicionar</Btn>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, background: CARD, border: `1px solid ${BD}`, borderRadius: R_INPUT, padding: "10px 14px", boxShadow: SH_SM }}>
-        <button onClick={() => onShiftMonth(-1)} className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronLeft size={15} /></button>
+        <button onClick={() => onShiftMonth(-1)} aria-label="Mês anterior" className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronLeft size={15} /></button>
         <div style={{ fontSize: 14, fontWeight: 700, color: TX, minWidth: 70, textAlign: "center" }}>{plannedMonth}</div>
-        <button onClick={() => onShiftMonth(1)} className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronRight size={15} /></button>
+        <button onClick={() => onShiftMonth(1)} aria-label="Próximo mês" className="touch-44" style={{ background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 12, width: 28, height: 28, color: TX2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><ChevronRight size={15} /></button>
         {plannedMonth !== monthKey(todayFn()) && <button onClick={onGoToday} style={{ background: "none", border: "none", color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>hoje</button>}
       </div>
       {/* ---- Resumo: 1 linha, não 3 cards (ajuste de 06/09/2026) ---- */}
@@ -58,10 +65,28 @@ export default function PlannedTab({
               <Segmented ariaLabel="Repetição" size="sm" value={plannedForm.recurring} onChange={v => setPlannedForm(p => ({ ...p, recurring: v }))}
                 options={[{ value: false, label: "Só este mês", tone: "accent" }, { value: true, label: "Todo mês", icon: Repeat, tone: "accent" }]} />
             </div>
-            {!plannedForm.recurring && (
+            {!plannedForm.recurring ? (
               <div><div style={{ fontSize: 11, color: TX2, marginBottom: 5 }}>Mês</div><select value={plannedForm.month} onChange={e => setPlannedForm(p => ({ ...p, month: e.target.value }))} style={SI}>{MONTH_ORDER.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+            ) : (
+              <div><label htmlFor="planned-from" style={{ display: "block", fontSize: 11, color: TX2, marginBottom: 5 }}>Começa em</label><select id="planned-from" value={plannedForm.from || ""} onChange={e => setPlannedForm(p => ({ ...p, from: e.target.value }))} style={SI}>{!plannedForm.from && <option value="">Desde sempre</option>}{MONTH_ORDER.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
             )}
           </div>
+          {plannedForm.recurring && (
+            <div style={{ marginBottom: 16 }}>
+              <div id="planned-until-label" style={{ fontSize: 11, color: TX2, marginBottom: 5 }}>Até quando?</div>
+              <Segmented ariaLabel="Até quando" size="sm" value={plannedForm.hasUntil} onChange={v => setPlannedForm(p => ({ ...p, hasUntil: v }))} style={{ maxWidth: 360 }}
+                options={[{ value: false, label: "Sem data de fim", tone: "accent" }, { value: true, label: "Até um mês", tone: "accent" }]} />
+              {plannedForm.hasUntil && (
+                <div style={{ marginTop: 10, maxWidth: 220 }}>
+                  <label htmlFor="planned-until" style={{ display: "block", fontSize: 11, color: TX2, marginBottom: 5 }}>Último mês que conta</label>
+                  <select id="planned-until" value={plannedForm.until} onChange={e => setPlannedForm(p => ({ ...p, until: e.target.value }))} style={SI}>
+                    {MONTH_ORDER.filter(m => !plannedForm.from || monthIndex(m) >= monthIndex(plannedForm.from)).map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+              )}
+              <div style={{ fontSize: 12, color: TX2, marginTop: 8, lineHeight: 1.5 }}>{untilNote(plannedForm)}</div>
+            </div>
+          )}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, color: TX2, marginBottom: 5 }}>Notas / Descrição (opcional)</div>
             <textarea value={plannedForm.notes || ""} maxLength={2000} onChange={e => setPlannedForm(p => ({ ...p, notes: e.target.value }))} rows={4} placeholder="Motivo do lançamento, observações, links, planejamento..." style={{ ...SI, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
@@ -95,7 +120,7 @@ export default function PlannedTab({
                   <div style={{ fontSize: 13, fontWeight: 600, color: isPaid ? TX2 : TX, textDecoration: isPaid || isIgnored ? "line-through" : "none", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word", lineHeight: 1.3 }}>{item.desc}</div>
                   <div style={{ fontSize: 11, color: TX2, marginTop: 3, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ color: itemColor, fontWeight: 600 }}>{item.cat}</span>
-                    {item.recurring && <span style={{ display: "flex", alignItems: "center", gap: 3, color: accent }}>· <Repeat size={10} />mensal</span>}
+                    {item.recurring && <span style={{ display: "flex", alignItems: "center", gap: 3, color: accent }}>· <Repeat size={10} />mensal{item.until ? ` até ${item.until}` : ""}</span>}
                     <span>· {item.form}</span>
                     {isIgnored && <span style={{ color: "#FBBF24", fontWeight: 600 }}>· ignorado este mês</span>}
                   </div>
@@ -118,6 +143,11 @@ export default function PlannedTab({
           );
         })}
       </div>
+      {endedPlanned.length > 0 && (
+        <div style={{ fontSize: 12, color: TX3, lineHeight: 1.5 }}>
+          Encerrado{endedPlanned.length > 1 ? "s" : ""} antes deste mês: {endedPlanned.map(p => `${p.desc} (contou até ${p.until})`).join(", ")}. Para voltar a contar, edite o previsto num mês em que ele aparece.
+        </div>
+      )}
     </div>
   );
 }
