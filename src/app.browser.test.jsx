@@ -3,9 +3,10 @@
 // testes de lógica provam por função.
 import { StrictMode } from "react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { createFakeStorage } from "./test/fakeStorage.js";
 import { setViewport, DESKTOP_WIDTH } from "./test/geometry.js";
+import { contrastRatio } from "./lib/theme.js";
 
 const h = vi.hoisted(() => ({ storage: null }));
 
@@ -136,5 +137,25 @@ describe("excluir em dois toques e desfazer pelo aviso", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Desfazer" }));
     await waitFor(() => expect(h.storage.peek().tx.map(t => t.desc)).toEqual(["Mercado"]), SAVE_WAIT);
     expect(h.storage.peek().trash.length).toBe(0);
+  });
+});
+
+describe("contraste medido na tela", () => {
+  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+  const hex = rgb => "#" + rgb.match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, "0")).join("");
+  // o fundo efetivo: a primeira cor de fundo opaca subindo pela árvore
+  const bgOf = el => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (!/rgba\(.*,\s*0\)|transparent/.test(c) && !/rgba\(.*,\s*0\.\d+\)/.test(c)) return hex(c); } return "#0b0d0f"; };
+  const ratio = el => contrastRatio(hex(getComputedStyle(el).color), bgOf(el));
+
+  test("seletor Saída/Entrada escolhido e botão Adicionar passam de 4,5:1", async () => {
+    await openApp();
+    fireEvent.click(screen.getByRole("tab", { name: /Transações/ }));
+    const group = within(await screen.findByRole("group", { name: "Tipo de lançamento" }));
+    expect(ratio(group.getByRole("button", { name: "Saída", pressed: true }))).toBeGreaterThanOrEqual(4.5);
+    fireEvent.click(group.getByRole("button", { name: "Entrada" }));
+    expect(ratio(group.getByRole("button", { name: "Entrada", pressed: true }))).toBeGreaterThanOrEqual(4.5);
+    fireEvent.change(screen.getByPlaceholderText("Descrição..."), { target: { value: "Teste" } });
+    fireEvent.change(screen.getByPlaceholderText("R$"), { target: { value: "10" } });
+    expect(ratio(screen.getByRole("button", { name: /Adicionar Entrada/ }))).toBeGreaterThanOrEqual(4.5);
   });
 });

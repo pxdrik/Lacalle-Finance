@@ -1,6 +1,6 @@
 import { Plus, Check, ArrowRightLeft, Pencil, Trash2, ChevronUp, ChevronDown, Sparkles } from "lucide-react";
-import { Card, Btn, BtnGhost, MoneyInput, ProgressBar, LinkifiedText, toDecimalStr, EmptyState, ConfirmIconButton } from "./ui";
-import { TX, TX2, BD, BD2, CARD, R_INPUT, R_CHIP, SI, SUCCESS_FILL } from "../lib/theme";
+import { Card, Btn, BtnGhost, MoneyInput, ProgressBar, LinkifiedText, toDecimalStr, EmptyState, ConfirmIconButton, Segmented } from "./ui";
+import { TX, TX2, BD, BD2, R_CHIP, SI, SUCCESS_FILL } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
 
 // Aba "Metas" (Desejos/Wishes) — extraída de LacalleFinance.jsx (Fase 2,
@@ -17,10 +17,8 @@ export default function WishesTab({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: TX, letterSpacing: "-0.01em" }}>Minhas Metas</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", borderRadius: R_INPUT, overflow: "hidden", background: CARD, border: `1px solid ${BD}` }}>
-            <button onClick={() => setWishSortBy("progress")} title="Ordenar por progresso" style={{ padding: "8px 14px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: wishSortBy === "progress" ? accent : "transparent", color: wishSortBy === "progress" ? "white" : TX2 }}>Progresso</button>
-            <button onClick={() => setWishSortBy("priority")} title="Ordenar por prioridade" style={{ padding: "8px 14px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: wishSortBy === "priority" ? accent : "transparent", color: wishSortBy === "priority" ? "white" : TX2 }}>Prioridade</button>
-          </div>
+          <Segmented ariaLabel="Ordenar metas" size="sm" value={wishSortBy} onChange={setWishSortBy}
+            options={[{ value: "progress", label: "Progresso", tone: "accent" }, { value: "priority", label: "Prioridade", tone: "accent" }]} />
           <Btn onClick={() => { const empty = { name: "", price: "", saved: "", priority: "Média", monthsTarget: "", notes: "" }; setEditingWish(null); setWishForm(empty); wishFormSnapshotRef.current = JSON.stringify(empty); setShowWishForm(p => !p); }} style={{ paddingInline: 18, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Plus size={14} />Adicionar</Btn>
         </div>
       </div>

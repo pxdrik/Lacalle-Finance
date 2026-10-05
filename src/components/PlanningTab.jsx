@@ -2,8 +2,8 @@ import {
   CalendarDays, Flag, TrendingUp, Briefcase, Bell, ChevronLeft, ChevronRight,
   Clock, Calendar, Hourglass, ShieldCheck, Target, Rocket,
 } from "lucide-react";
-import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, ChartTooltip, Table, TableRow, Comparison } from "./ui";
-import { TX, TX2, TX3, BD, CARD, R_CHIP, R_CARD, R_INPUT, SI } from "../lib/theme";
+import { Card, StatTile, ProgressBar, DecisionRow, MoneyInput, Btn, LedgerRows, LineItemsList, DataUsedChecklist, ChartTooltip, Table, TableRow, Comparison, Segmented } from "./ui";
+import { TX, TX2, TX3, BD, CARD, R_CARD, R_INPUT, SI } from "../lib/theme";
 import { fmt, FinancialEngine, formatMonths } from "../lib/financialEngine";
 import { parseNum } from "../lib/validation";
 import { formatDay } from "../lib/dates";
@@ -51,11 +51,8 @@ export default function PlanningTab({
         <div style={{ fontSize: 12.5, color: TX2, marginTop: 4 }}>Veja o futuro do seu dinheiro com base no que você já cadastrou.</div>
       </div>
 
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
-        {[["geral", "Visão Geral"], ["calendario", "Calendário"], ["timeline", "Timeline"], ["metas", "Metas"], ["decisoes", "Decisões"], ["ano", "Visão Anual"]].map(([id, label]) => (
-          <button key={id} onClick={() => setPlanTab(id)} style={{ padding: "9px 15px", borderRadius: R_CHIP, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", background: planTab === id ? accent : "rgba(255,255,255,0.03)", color: planTab === id ? "white" : TX2 }}>{label}</button>
-        ))}
-      </div>
+      <Segmented ariaLabel="Seções do planejamento" scroll value={planTab} onChange={setPlanTab}
+        options={[["geral", "Visão Geral"], ["calendario", "Calendário"], ["timeline", "Timeline"], ["metas", "Metas"], ["decisoes", "Decisões"], ["ano", "Visão Anual"]].map(([v, label]) => ({ value: v, label, tone: "accent" }))} />
 
       {planTab === "geral" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -268,11 +265,8 @@ export default function PlanningTab({
           <Card style={{ padding: 26 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: TX, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}><Rocket size={16} color={accent} />Simulação (E se...)</div>
             <div style={{ fontSize: 12, color: TX2, marginBottom: 16 }}>Simulação hipotética com os números que você informar — não é recomendação de investimento nem conselho financeiro.</div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-              {[["economizar_mais", "Economizar mais"], ["compra_grande", "Comprar parcelado"], ["investir_mensal", "Investir todo mês"]].map(([id, label]) => (
-                <button key={id} onClick={() => { setSimType(id); setSimResult(null); }} style={{ padding: "8px 14px", borderRadius: R_CHIP, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, background: simType === id ? accent : "rgba(255,255,255,0.03)", color: simType === id ? "white" : TX2 }}>{label}</button>
-              ))}
-            </div>
+            <Segmented ariaLabel="Tipo de simulação" size="sm" scroll value={simType} onChange={v => { setSimType(v); setSimResult(null); }} style={{ marginBottom: 16 }}
+              options={[["economizar_mais", "Economizar mais"], ["compra_grande", "Comprar parcelado"], ["investir_mensal", "Investir todo mês"]].map(([v, label]) => ({ value: v, label, tone: "accent" }))} />
             {simType === "economizar_mais" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
                 <select value={simGoalId} onChange={e => setSimGoalId(e.target.value)} style={SI}>

@@ -1,6 +1,6 @@
 import { Plus, CreditCard, X } from "lucide-react";
 import { Card, BtnGhost, AnimatedValue, MoneyInput, CategoryIcon, ProgressBar, EmptyState } from "./ui";
-import { TX, TX2, TX3, BD, R_INPUT, R_BTN, R_CHIP, SI } from "../lib/theme";
+import { TX, TX2, TX3, BD, R_INPUT, R_BTN, R_CHIP, SI, BG } from "../lib/theme";
 import { fmt, monthKey } from "../lib/financialEngine";
 import { DATE_MIN, DATE_MAX } from "../lib/validation";
 
@@ -49,7 +49,7 @@ export default function InstallmentsTab({
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <BtnGhost onClick={onCancelForm} style={{ flex: 1, paddingInline: 12, minWidth: 100 }}>Cancelar</BtnGhost>
-            <button onClick={onAdd} aria-disabled={!instDraft.desc || !instDraft.totalVal} style={{ flex: 2, padding: "11px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, background: (!instDraft.desc || !instDraft.totalVal) ? "rgba(255,255,255,0.04)" : accent, color: (!instDraft.desc || !instDraft.totalVal) ? TX3 : "white", minWidth: 180 }}>
+            <button onClick={onAdd} aria-disabled={!instDraft.desc || !instDraft.totalVal} style={{ flex: 2, padding: "11px", borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, background: (!instDraft.desc || !instDraft.totalVal) ? "rgba(255,255,255,0.04)" : accent, color: (!instDraft.desc || !instDraft.totalVal) ? TX2 : BG, minWidth: 180 }}>
               {monthlyPreview ? `Criar ${instDraft.numParcelas}x de ${fmt(monthlyPreview)}` : "Criar parcelamento"}
             </button>
           </div>

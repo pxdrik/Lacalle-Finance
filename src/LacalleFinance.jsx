@@ -108,8 +108,8 @@ import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE } from "./lib/theme";
-import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, Tabs, TabPanel, DensityToggle } from "./components/ui";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, HDR, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, R_MODAL, SH_MD, SH_LG, SI, cardStyle, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE, PALETTES } from "./lib/theme";
+import { Card, Modal, CategoryIcon, AnimatedValue, ChartTooltip, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, Tabs, TabPanel, DensityToggle, Segmented } from "./components/ui";
 import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
@@ -134,20 +134,11 @@ const COLORS=["#60A5FA","#818CF8","#34D399","#FB7185","#FBBF24","#A78BFA","#FB92
 // dispositivo: sempre 12 meses pra trás e 36 meses pra frente a partir de
 // hoje, recalculada a cada carregamento do app — nunca fica velha.
 const INV_TIPOS=["Aporte","Resgate","Rendimento"];
-const INV_TIPO_COLORS={"Aporte":"#3B82F6","Resgate":"#FBBF24","Rendimento":"#34D399"};
 const INV_TIPO_ICONS={"Aporte":PiggyBank,"Resgate":Undo2,"Rendimento":TrendingUp};
 // "gold" é a identidade fixa do Finance (Brand System V2, 10/09/2026) e o
 // padrão pra conta nova — as outras seis continuam existindo como
 // personalização por conta, não como identidade do produto.
-const PALETTES={
-  gold:{name:"Gold",base:"#D4A017",dark:"#8A640C"},
-  blue:{name:"Azul",base:"#3B82F6",dark:"#2563EB"},
-  teal:{name:"Teal",base:"#2DD4BF",dark:"#14B8A6"},
-  purple:{name:"Roxo",base:"#8B5CF6",dark:"#7C3AED"},
-  pink:{name:"Rosa",base:"#EC4899",dark:"#DB2777"},
-  orange:{name:"Laranja",base:"#FBBF24",dark:"#FBBF24"},
-  green:{name:"Verde",base:"#34D399",dark:"#16A34A"},
-};
+// PALETTES (as sete cores do perfil) mora em lib/theme.js, com o teste de contraste.
 // parseNum/DATE_MIN/DATE_MAX agora vêm de lib/validation.js (fonte única,
 // compartilhada com as validações de formulário e coberta por testes).
 // Gerador de ID: Date.now() sozinho pode colidir se dois itens forem criados
@@ -1454,21 +1445,12 @@ function MainApp({user,setUser}){
     <>
       {!isEditing&&frequentTx.length>0&&renderFrequentPicks(applyFrequent)}
       {qaCat!=="Investimento"?(
-        <div style={{display:"flex",marginBottom:16,borderRadius:R_INPUT,overflow:"hidden",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`}}>
-          {["Saída","Entrada"].map(t=>(
-            <button key={t} onClick={()=>setQaType(t)} style={{flex:1,padding:"11px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:qaType===t?(t==="Saída"?"#F87171":"#34D399"):"transparent",color:qaType===t?"white":TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              {t==="Saída"?<ArrowDownCircle size={15}/>:<ArrowUpCircle size={15}/>}{t}
-            </button>
-          ))}
-        </div>
+        <Segmented ariaLabel="Tipo de lançamento" value={qaType} onChange={setQaType} style={{marginBottom:16}}
+          options={[{value:"Saída",label:"Saída",icon:ArrowDownCircle,tone:"out"},{value:"Entrada",label:"Entrada",icon:ArrowUpCircle,tone:"in"}]}/>
       ):(
-        <div style={{display:"flex",marginBottom:16,borderRadius:R_INPUT,overflow:"hidden",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`}}>
-          {INV_TIPOS.map(t=>{const Ic=INV_TIPO_ICONS[t];return(
-            <button key={t} onClick={()=>setQaInvTipo(t)} style={{flex:1,padding:"11px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:qaInvTipo===t?INV_TIPO_COLORS[t]:"transparent",color:qaInvTipo===t?"white":TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              <Ic size={14}/>{t}
-            </button>
-          );})}
-        </div>
+        // Aporte tira dinheiro da conta (vermelho); resgate e rendimento trazem (verde).
+        <Segmented ariaLabel="Tipo de investimento" value={qaInvTipo} onChange={setQaInvTipo} style={{marginBottom:16}}
+          options={INV_TIPOS.map(t=>({value:t,label:t,icon:INV_TIPO_ICONS[t],tone:t==="Aporte"?"out":"in"}))}/>
       )}
       <div style={{display:"flex",gap:10,marginBottom:12}}>
         <input ref={qaDescRef} placeholder="Descrição..." value={qaDesc} maxLength={120} onChange={e=>setQaDesc(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} style={{...SI,flex:2}}/>
@@ -1497,7 +1479,7 @@ function MainApp({user,setUser}){
       {/* `disabled` real aqui é só o lock de duplo clique (isSubmittingTx) —
           continua sem `disabled` para o caso "faltou preencher algo"
           (aria-disabled), que é intencional (ver comentário acima). */}
-      <button onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",padding:"14px",borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:700,background:!canAdd?"rgba(255,255,255,0.04)":isEditing?"#FBBF24":accent,color:!canAdd?TX3:"white",boxShadow:canAdd&&!isSubmittingTx?`0 2px 10px ${isEditing?"#FBBF24":accent}40`:"none",opacity:isSubmittingTx?0.7:1,transition:"filter .15s ease, box-shadow .15s ease, opacity .15s ease"}}>
+      <button onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",padding:"14px",borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:700,background:!canAdd?"rgba(255,255,255,0.04)":accent,color:!canAdd?TX2:BG,boxShadow:canAdd&&!isSubmittingTx?`0 2px 10px ${accent}40`:"none",opacity:isSubmittingTx?0.7:1,transition:"filter .15s ease, box-shadow .15s ease, opacity .15s ease"}}>
         {isSubmittingTx?"Adicionando...":isEditing?"Salvar alterações":qaCat==="Investimento"?`+ ${qaInvTipo}`:`+ Adicionar ${qaType}`}
       </button>
     </>
@@ -1839,10 +1821,8 @@ function MainApp({user,setUser}){
             <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Forma</div><select value={transferWish.form.form} onChange={e=>setTransferWish(p=>({...p,form:{...p.form,form:e.target.value}}))} style={SI}>{["pix","debito","credito","dinheiro","deposito"].map(o=><option key={o}>{o}</option>)}</select></div>
             <div>
               <div style={{fontSize:11,color:TX2,marginBottom:5}}>Repetição</div>
-              <div style={{display:"flex",borderRadius:R_INPUT,overflow:"hidden",background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`}}>
-                <button onClick={()=>setTransferWish(p=>({...p,form:{...p.form,recurring:false}}))} style={{flex:1,padding:"9px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:!transferWish.form.recurring?accent:"transparent",color:!transferWish.form.recurring?"white":TX2}}>Só um mês</button>
-                <button onClick={()=>setTransferWish(p=>({...p,form:{...p.form,recurring:true}}))} style={{flex:1,padding:"9px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:transferWish.form.recurring?accent:"transparent",color:transferWish.form.recurring?"white":TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}><Repeat size={12}/>Todo mês</button>
-              </div>
+              <Segmented ariaLabel="Repetição" size="sm" value={transferWish.form.recurring} onChange={v=>setTransferWish(p=>({...p,form:{...p.form,recurring:v}}))}
+                options={[{value:false,label:"Só um mês",tone:"accent"},{value:true,label:"Todo mês",icon:Repeat,tone:"accent"}]}/>
             </div>
             {!transferWish.form.recurring&&(
               <div><div style={{fontSize:11,color:TX2,marginBottom:5}}>Mês previsto *</div><select value={transferWish.form.month} onChange={e=>setTransferWish(p=>({...p,form:{...p.form,month:e.target.value}}))} style={SI}>{MONTH_ORDER.map(m=><option key={m} value={m}>{m}</option>)}</select></div>

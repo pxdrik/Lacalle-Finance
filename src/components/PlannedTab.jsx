@@ -1,5 +1,5 @@
 import { Plus, ChevronLeft, ChevronRight, Repeat, Calendar, Check, Info, Eye, EyeOff, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
-import { Card, Btn, BtnGhost, MoneyInput, CategoryIcon, AnimatedValue, LinkifiedText, EmptyState, ConfirmIconButton } from "./ui";
+import { Card, Btn, BtnGhost, MoneyInput, CategoryIcon, AnimatedValue, LinkifiedText, EmptyState, ConfirmIconButton, Segmented } from "./ui";
 import { TX, TX2, TX3, BD, BD2, CARD, R_INPUT, R_CHIP, SH_SM, SI, SUCCESS_FILL } from "../lib/theme";
 import { fmt, monthKey, MONTH_ORDER } from "../lib/financialEngine";
 
@@ -55,10 +55,8 @@ export default function PlannedTab({
             <div><div style={{ fontSize: 11, color: TX2, marginBottom: 5 }}>Forma</div><select value={plannedForm.form} onChange={e => setPlannedForm(p => ({ ...p, form: e.target.value }))} style={SI}>{["pix", "debito", "credito", "dinheiro", "deposito"].map(o => <option key={o}>{o}</option>)}</select></div>
             <div>
               <div style={{ fontSize: 11, color: TX2, marginBottom: 5 }}>Repetição</div>
-              <div style={{ display: "flex", borderRadius: R_INPUT, overflow: "hidden", background: "rgba(255,255,255,0.03)", border: `1px solid ${BD}` }}>
-                <button onClick={() => setPlannedForm(p => ({ ...p, recurring: false }))} style={{ flex: 1, padding: "9px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: !plannedForm.recurring ? accent : "transparent", color: !plannedForm.recurring ? "white" : TX2 }}>Só este mês</button>
-                <button onClick={() => setPlannedForm(p => ({ ...p, recurring: true }))} style={{ flex: 1, padding: "9px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: plannedForm.recurring ? accent : "transparent", color: plannedForm.recurring ? "white" : TX2, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}><Repeat size={12} />Todo mês</button>
-              </div>
+              <Segmented ariaLabel="Repetição" size="sm" value={plannedForm.recurring} onChange={v => setPlannedForm(p => ({ ...p, recurring: v }))}
+                options={[{ value: false, label: "Só este mês", tone: "accent" }, { value: true, label: "Todo mês", icon: Repeat, tone: "accent" }]} />
             </div>
             {!plannedForm.recurring && (
               <div><div style={{ fontSize: 11, color: TX2, marginBottom: 5 }}>Mês</div><select value={plannedForm.month} onChange={e => setPlannedForm(p => ({ ...p, month: e.target.value }))} style={SI}>{MONTH_ORDER.map(m => <option key={m} value={m}>{m}</option>)}</select></div>

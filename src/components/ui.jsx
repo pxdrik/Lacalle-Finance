@@ -9,7 +9,7 @@ import { useState, useRef, useEffect, forwardRef, Component } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { sanitizeMoneyInput } from "../lib/money";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA } from "../lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_MD, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA, MUTED, SUCCESS_SURFACE, DANGER_SURFACE, ERROR_BG, accentSurface, accentText } from "../lib/theme";
 import { DENSITIES, useDensity } from "../lib/density";
 import LogoSymbol from "./LogoSymbol";
 
@@ -80,6 +80,66 @@ export function ConfirmIconButton({ icon: Icon, label, confirmText = "Excluir?",
       {armed ? confirmText : <Icon size={iconSize} />}
       {armed && <span aria-hidden="true" className="disarm-bar" style={{ "--disarm-ms": `${DISARM_AFTER_MS}ms`, position: "absolute", left: 6, right: 6, bottom: 2, height: 2, borderRadius: 2, background: ERROR }} />}
     </button>
+  );
+}
+
+// ==================== Segmented ====================
+// O seletor de opções (Entrada/Saída, filtros, ordenação, sub-abas) que
+// estava copiado à mão em seis lugares, quase sempre com texto branco sobre a
+// cor cheia (de 1,67:1 a 2,77:1). Aqui o escolhido ganha um fundo escuro do
+// mesmo tom e o texto na cor (padrão do LaCalle Life), com contraste coberto
+// por tokens.test.js. `tone` por opção: "in" (verde), "out" (vermelho),
+// "accent" (cor escolhida pela pessoa) ou nada (neutro).
+// `scroll`: muitas opções (sub-abas do Planejamento) rolam de lado em vez de espremer.
+export function Segmented({ options, value, onChange, ariaLabel, size = "md", scroll = false, style }) {
+  const accent = useAccent();
+  const h = size === "sm" ? 32 : 38;
+  const tones = {
+    in: { background: SUCCESS_SURFACE, color: SUCCESS },
+    out: { background: DANGER_SURFACE, color: ERROR },
+    accent: { background: accentSurface(accent), color: accentText(accent) },
+    neutral: { background: MUTED, color: TX },
+  };
+  return (
+    <div role="group" aria-label={ariaLabel} style={{ display: "flex", gap: 4, padding: 3, border: `1px solid ${BD}`, borderRadius: R_BTN, background: CARD, ...(scroll ? { overflowX: "auto", scrollbarWidth: "none" } : {}), ...style }}>
+      {options.map(o => {
+        const on = o.value === value;
+        const Icon = o.icon;
+        return (
+          <button key={String(o.value)} type="button" aria-pressed={on} onClick={() => onChange(o.value)} className="touch-44"
+            style={{ flex: scroll ? "0 0 auto" : 1, minWidth: 0, height: h, border: "none", borderRadius: R_CHIP, cursor: "pointer", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, paddingInline: 10, transition: `background .15s ${EASE_OUT}, color .15s ${EASE_OUT}`, ...(on ? tones[o.tone || "neutral"] : { background: "transparent", color: TX2 }) }}>
+            {Icon && <Icon size={14} aria-hidden="true" />}{o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ==================== IconButton / BtnDanger / Field ====================
+/** Botão só de ícone: nome acessível obrigatório e área de toque de 44px. */
+export function IconButton({ icon: Icon, label, onClick, size = 14, color = TX3, style, ...rest }) {
+  return (
+    <button type="button" aria-label={label} title={label} onClick={onClick} className="touch-44" {...rest}
+      style={{ background: "none", border: "none", color, cursor: "pointer", padding: 4, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: R_CHIP, ...style }}>
+      <Icon size={size} aria-hidden="true" />
+    </button>
+  );
+}
+/** Ação destrutiva sem volta (apagar tudo, apagar conta): fundo ERROR_BG, branco mede 4,83:1. */
+export const BtnDanger = ({ style, ...props }) => (
+  <button type="button" {...props} style={{ flex: 1, padding: "12px", borderRadius: R_BTN, border: "none", cursor: props.disabled ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700, background: props.disabled ? `${ERROR_BG}40` : ERROR_BG, color: "white", ...style }} />
+);
+/** Rótulo visível ligado ao campo, e a mensagem de erro ligada por aria-describedby. */
+export function Field({ id, label, error, hint, children, style }) {
+  const describedBy = error ? `${id}-err` : hint ? `${id}-hint` : undefined;
+  return (
+    <div style={style}>
+      <label htmlFor={id} style={{ display: "block", fontSize: 12, color: TX2, fontWeight: 500, marginBottom: 6 }}>{label}</label>
+      {typeof children === "function" ? children({ id, "aria-describedby": describedBy, "aria-invalid": !!error || undefined }) : children}
+      {error ? <div id={`${id}-err`} role="alert" style={{ fontSize: 12, color: ERROR, marginTop: 6 }}>{error}</div>
+        : hint ? <div id={`${id}-hint`} style={{ fontSize: 12, color: TX3, marginTop: 6 }}>{hint}</div> : null}
+    </div>
   );
 }
 

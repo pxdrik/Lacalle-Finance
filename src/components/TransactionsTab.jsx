@@ -1,5 +1,5 @@
 import { Upload, Download, Trash2, Search, CreditCard, Calendar, Pencil, X } from "lucide-react";
-import { Card, BtnGhost, AnimatedValue, CategoryIcon, ConfirmIconButton } from "./ui";
+import { Card, BtnGhost, AnimatedValue, CategoryIcon, ConfirmIconButton, Segmented } from "./ui";
 import { TX, TX2, TX3, BD, CARD, R_BTN, R_INPUT, SH_SM, SI } from "../lib/theme";
 import { fmt } from "../lib/financialEngine";
 import { formatDayTitle, todayLocalISO } from "../lib/dates";
@@ -31,11 +31,8 @@ export default function TransactionsTab({
         <button onClick={onExportCSV} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: CARD, border: `1px solid ${BD}`, color: TX2, padding: "12px", borderRadius: R_BTN, cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: SH_SM }}><Download size={15} />Exportar</button>
         <button onClick={onClearAll} title="Apagar todas as transações" className="touch-44" style={{ display: "flex", alignItems: "center", justifyContent: "center", background: CARD, border: `1px solid ${BD}`, color: "#F87171", padding: "12px 17px", borderRadius: R_BTN, cursor: "pointer", boxShadow: SH_SM }}><Trash2 size={15} /></button>
       </div>
-      <div style={{ display: "flex", borderRadius: R_INPUT, overflow: "hidden", background: CARD, border: `1px solid ${BD}`, width: "fit-content" }}>
-        {[["", "Todos"], ["Entrada", "Entrada"], ["Saída", "Saída"]].map(([val, label]) => (
-          <button key={val || "all"} onClick={() => setFilterType(val)} style={{ padding: "8px 16px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", background: filterType === val ? (val === "Entrada" ? "#34D399" : val === "Saída" ? "#F87171" : accent) : "transparent", color: filterType === val ? "white" : TX2 }}>{label}</button>
-        ))}
-      </div>
+      <Segmented ariaLabel="Filtrar por tipo" size="sm" value={filterType} onChange={setFilterType} style={{ width: "fit-content" }}
+        options={[{ value: "", label: "Todos", tone: "accent" }, { value: "Entrada", label: "Entrada", tone: "in" }, { value: "Saída", label: "Saída", tone: "out" }]} />
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
           <Search size={14} color={TX3} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
