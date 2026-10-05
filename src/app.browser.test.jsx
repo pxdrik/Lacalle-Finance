@@ -159,3 +159,29 @@ describe("contraste medido na tela", () => {
     expect(ratio(screen.getByRole("button", { name: /Adicionar Entrada/ }))).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe("modal sobre <dialog>", () => {
+  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("prende o foco, trava a página de trás, fecha com Esc e destrava", async () => {
+    const { userEvent } = await import("vitest/browser");
+    await openApp();
+    fireEvent.click(screen.getByTitle("Minha conta"));
+    const dialog = await waitFor(() => { const d = document.querySelector("dialog[open]"); if (!d) throw new Error("sem dialog"); return d; });
+    expect(document.body.style.overflow).toBe("hidden");
+    await userEvent.keyboard("{Tab}");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(document.querySelector("dialog[open]")).toBeNull());
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  test("modal sem onClose (importar backup) não fecha com Esc", async () => {
+    const { Modal } = await import("./components/ui.jsx");
+    const { userEvent } = await import("vitest/browser");
+    render(<Modal><p>Confirma a importação?</p><button>Importar</button></Modal>);
+    await screen.findByText("Confirma a importação?");
+    await userEvent.keyboard("{Escape}");
+    expect(document.querySelector("dialog[open]")).not.toBeNull();
+  });
+});

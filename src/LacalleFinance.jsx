@@ -1683,7 +1683,7 @@ function MainApp({user,setUser}){
       </div>
 
       {isEditing&&(
-        <Modal onClose={requestCloseEditTx} maxWidth={420} padding={28} zIndex={100}>
+        <Modal onClose={requestCloseEditTx} maxWidth={420} padding={28}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <div style={{fontSize:16,fontWeight:700,color:TX,letterSpacing:"-0.01em"}}>Editar lançamento</div>
             <button onClick={requestCloseEditTx} style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4}}><X size={20}/></button>
@@ -1692,7 +1692,7 @@ function MainApp({user,setUser}){
         </Modal>
       )}
       {pendingImport&&(
-        <Modal maxWidth={360} padding={32} zIndex={190} contentStyle={{textAlign:"center"}}>
+        <Modal maxWidth={360} padding={32} contentStyle={{textAlign:"center"}}>
           <div style={{width:46,height:46,borderRadius:12,background:"#FBBF2418",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Upload size={20} color="#FBBF24"/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Importar backup?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:10,lineHeight:1.5}}>Isso vai <strong style={{color:TX}}>substituir</strong> todos os seus dados atuais (transações, previstos, parcelamentos, desejos, categorias) pelos dados desse arquivo.</div>
@@ -1704,7 +1704,7 @@ function MainApp({user,setUser}){
         </Modal>
       )}
       {showClearConfirm&&(
-        <Modal maxWidth={340} padding={32} zIndex={100} contentStyle={{textAlign:"center"}}>
+        <Modal maxWidth={340} padding={32} contentStyle={{textAlign:"center"}}>
           <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#F87171"/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar tudo?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Todas as transações serão removidas permanentemente.</div>
@@ -1895,7 +1895,7 @@ function MainApp({user,setUser}){
         />
       )}
       {showSearch&&(
-        <Modal onClose={closeSearch} maxWidth={560} padding={0} align="top" scroll={false} contentStyle={{maxHeight:"70vh",display:"flex",flexDirection:"column",overflow:"hidden"}} zIndex={200}>
+        <Modal onClose={closeSearch} maxWidth={560} padding={0} align="top" scroll={false} contentStyle={{maxHeight:"70vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"16px 18px",borderBottom:`1px solid ${BD}`,flexShrink:0}}>
               <Search size={16} color={TX3}/>
               <input autoFocus value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Buscar transações, categorias, metas, previstos, investimentos..." style={{flex:1,background:"none",border:"none",outline:"none",color:TX,fontSize:14}}/>
@@ -1996,7 +1996,7 @@ function MainApp({user,setUser}){
         </Modal>
       )}
       {delInstId&&instToDelete&&(
-        <Modal maxWidth={360} padding={28} zIndex={100}>
+        <Modal maxWidth={360} padding={28}>
           <div style={{fontSize:15,fontWeight:700,color:TX,marginBottom:8,letterSpacing:"-0.01em"}}>Apagar "{instToDelete.desc}"?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:22}}>{instTxCount} transações vinculadas.</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>

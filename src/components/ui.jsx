@@ -389,28 +389,41 @@ export function StatTile({label,value,color=TX,caption,size=16,textAlign}){
 //   2) selecionar texto de dentro do modal e soltar o mouse fora também
 //      disparava o fechamento, perdendo o que estava preenchido.
 // Guardando o alvo do mousedown, só fecha quem realmente começou o gesto fora.
-export const Modal=({onClose,children,maxWidth=420,align="center",zIndex=170,padding=28,scroll=true,contentStyle,label})=>{
-  const pressedOnOverlay=useRef(false);
+// Sobre o <dialog> nativo (showModal), como o Dialog do LaCalle Life: o
+// navegador prende o foco dentro do modal, devolve o foco a quem abriu, põe
+// o resto da página fora do alcance do teclado e do leitor de tela, e o Esc
+// vira o evento "cancel". A página de trás para de rolar enquanto ele está
+// aberto. Modais abertos depois ficam por cima (top layer), sem zIndex.
+// Sem `onClose` (importar backup, por exemplo), Esc e clique fora não fecham.
+export const Modal=({onClose,children,maxWidth=420,align="center",padding=28,scroll=true,contentStyle,label})=>{
+  const ref=useRef(null);
+  const pressedOnBackdrop=useRef(false);
+  useEffect(()=>{
+    const d=ref.current;
+    if(d&&!d.open){try{d.showModal();}catch{/* já aberto */}}
+    const prevOverflow=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    return()=>{document.body.style.overflow=prevOverflow;if(d?.open)d.close();};
+  },[]);
   return(
-    <div
-      role="presentation"
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex,display:"flex",alignItems:align==="top"?"flex-start":"center",justifyContent:"center",padding:align==="top"?"10vh 20px 20px":20,animation:"overlayIn .15s ease-out"}}
-      onMouseDown={e=>{pressedOnOverlay.current=e.target===e.currentTarget;}}
+    <dialog
+      ref={ref}
+      aria-label={label}
+      className={`lc-dialog${align==="top"?" lc-dialog-top":""}`}
+      onCancel={e=>{e.preventDefault();onClose?.();}}
+      onMouseDown={e=>{pressedOnBackdrop.current=e.target===e.currentTarget;}}
       onMouseUp={e=>{
-        if(pressedOnOverlay.current&&e.target===e.currentTarget)onClose?.();
-        pressedOnOverlay.current=false;
+        if(pressedOnBackdrop.current&&e.target===e.currentTarget)onClose?.();
+        pressedOnBackdrop.current=false;
       }}
     >
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
         onMouseDown={e=>e.stopPropagation()}
-        style={{background:CARD,border:`1px solid ${BD2}`,borderRadius:R_MODAL,padding,width:"100%",maxWidth,...(scroll?{maxHeight:"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:`modalIn .2s ${EASE_OUT}`,...contentStyle}}
+        style={{background:CARD,border:`1px solid ${BD2}`,borderRadius:R_MODAL,padding,width:"100%",maxWidth,boxSizing:"border-box",...(scroll?{maxHeight:"85vh",overflowY:"auto"}:{}),boxShadow:SH_LG,animation:`modalIn .2s ${EASE_OUT}`,color:TX,textAlign:"left",...contentStyle}}
       >
         {children}
       </div>
-    </div>
+    </dialog>
   );
 };
 
