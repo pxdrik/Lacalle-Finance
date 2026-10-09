@@ -155,7 +155,7 @@ const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounte
 const DEFAULT_ACCOUNT="principal";
 const DEFAULT_ACCOUNTS=[{id:DEFAULT_ACCOUNT,name:"Conta principal"}];
 const accountOf=r=>r.account||DEFAULT_ACCOUNT;
-const BANK_SUGGESTIONS=["Itaú","Nubank","Mercado Pago","Inter","Bradesco","Banco do Brasil","Caixa","Santander","C6 Bank","PicPay"];
+const BANK_SUGGESTIONS=["Itaú","Nubank","Mercado Pago","Inter","Bradesco","Banco do Brasil","Santander","C6 Bank","PicPay"];
 
 // ==================== MAPEAMENTO: Desejo <-> Previsto ====================
 // Funções puras de conversão entre os dois modelos de dado, usadas pela
@@ -1772,6 +1772,9 @@ function MainApp({user,setUser}){
         .hdr-add-bank{position:relative;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;flex-shrink:0;border-radius:${R_BTN}px;border:1px dashed ${BD2};background:transparent;color:${TX2};font-size:12.5px;font-weight:500;cursor:pointer;}
         .hdr-add-bank:hover{color:${accentText(accent)};border-color:${accent}73;filter:none !important;}
         .hdr-add-bank::after{content:"";position:absolute;left:50%;top:50%;width:100%;min-width:44px;height:44px;transform:translate(-50%,-50%);}
+        .bank-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:14px;}
+        .bank-grid .cat-chip{justify-content:center;height:auto;min-height:36px;padding:4px 6px;line-height:1.2;text-align:center;}
+        @media(max-width:420px){.bank-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
         .hdr-account-wrap{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto;}
         .hdr-account{min-width:0;flex:0 1 auto;max-width:180px;height:36px;padding:0 10px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:${CARD};color:${TX};font-size:13px;font-weight:600;cursor:pointer;}
         .bottom-nav{display:none;}
@@ -1954,7 +1957,7 @@ function MainApp({user,setUser}){
               <p style={{margin:0,fontSize:13,color:TX2,lineHeight:1.5}}>Cada banco tem seus lançamentos, previstos e parcelamentos. Você troca entre eles no topo.</p>
             </div>
           </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+          <div className="bank-grid">
             {BANK_SUGGESTIONS.filter(b=>!accounts.some(a=>a.name.trim().toLowerCase()===b.toLowerCase())).map(b=>(
               <button key={b} type="button" className="cat-chip" aria-pressed={!bankOther&&newAccountName===b} onClick={()=>{setBankOther(false);setNewAccountName(b);}}>{b}</button>
             ))}
