@@ -1,0 +1,6 @@
+# App privado: nenhuma página deve aparecer em buscador.
+# Quem impede a indexação é o "noindex" (cabeçalho X-Robots-Tag no
+# vercel.json e meta robots no index.html). Aqui o buscador é liberado de
+# propósito: se fosse bloqueado, ele nunca leria o "noindex".
+User-agent: *
+Allow: /
