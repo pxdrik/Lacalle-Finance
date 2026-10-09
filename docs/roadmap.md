@@ -4,19 +4,20 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
-## 🔶 MUDANÇA DE HOSPEDAGEM: Netlify → Vercel (09/10/2026)
+## ✅ MUDANÇA DE HOSPEDAGEM: Netlify → Vercel (09/10/2026)
 
 O Netlify pulou o deploy do `main` por falta de cota (de novo). O site agora
 publica pela Vercel: https://lacalle-finance.vercel.app (projeto
 `lacalle-finance`, ligado ao GitHub; cada push no `main` publica e cada PR
 ganha prévia). `vercel.json` repete os cabeçalhos do `netlify.toml`.
 
-Falta (Pedro, nos painéis):
-- Cloudflare Turnstile: autorizar o domínio `lacalle-finance.vercel.app`
-  no widget. O Supabase exige CAPTCHA no login; sem isso ninguém entra.
-- Supabase → Authentication → URL Configuration: Site URL e Redirect URLs
-  com o endereço novo (e-mail de recuperação de senha).
-- Segredo `ALLOWED_ORIGINS` da função `delete-account` com o endereço novo.
+Feito em 09/10/2026 nos painéis:
+- Cloudflare Turnstile: `lacalle-finance.vercel.app` autorizado no widget
+  "LaCalle Finance - Signup" (o mesmo widget atende o Life). O Supabase
+  exige CAPTCHA no login; o widget mostra "Success!" no endereço novo.
+- Supabase Auth: Site URL = Vercel; Redirect URLs com Vercel e Netlify.
+- `ALLOWED_ORIGINS` da `delete-account`: Vercel e Netlify (CORS testado).
+
 - Depois: desligar o Netlify do GitHub e apagar `netlify.toml`.
 
 ---
