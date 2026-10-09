@@ -109,13 +109,14 @@ import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR } from "./lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, DUR_SIGNATURE, DUR_STANDARD, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, TabPanel, DensityToggle, Segmented, IconButton, PageHeader, SectionTitle, Field } from "./components/ui";
 import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
 import MonthlyReport from "./components/MonthlyReport";
+import WalletArt from "./components/WalletArt";
 import { buildMonthlyReport } from "./lib/report";
 import { createSyncEngine, localCopy, hasPendingLocalCopy, clearLocalCopies } from "./lib/syncEngine";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
@@ -211,7 +212,14 @@ function MainApp({user,setUser}){
   const [accounts,setAccounts]=useState(DEFAULT_ACCOUNTS);
   const [activeAccountPick,setActiveAccountPick]=useState(()=>{try{return localStorage.getItem("lf.account")||DEFAULT_ACCOUNT;}catch{return DEFAULT_ACCOUNT;}});
   const activeAccount=accounts.some(a=>a.id===activeAccountPick)?activeAccountPick:DEFAULT_ACCOUNT;
-  const setActiveAccount=id=>{setActiveAccountPick(id);try{localStorage.setItem("lf.account",id);}catch{/* sem armazenamento local */}};
+  const setActiveAccount=id=>{
+    setActiveAccountPick(id);
+    try{localStorage.setItem("lf.account",id);}catch{/* sem armazenamento local */}
+    // A tela "troca de carteira": some um pouco e volta subindo. Sem remontar
+    // as abas (filtros e formulários abertos continuam como estavam).
+    const reduce=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if(!reduce)requestAnimationFrame(()=>document.querySelector(".main-content")?.animate?.([{opacity:0.35,transform:"translateY(8px)"},{opacity:1,transform:"none"}],{duration:DUR_SIGNATURE,easing:EASE_OUT}));
+  };
   const activeAccountRef=useRef(activeAccount);
   activeAccountRef.current=activeAccount;
   const [allTx,setAllTx]=useState([]);
@@ -1669,6 +1677,13 @@ function MainApp({user,setUser}){
         .chip-btn:hover{background:${HOVER}66 !important;}
         @keyframes spin{to{transform:rotate(360deg)}}
         .spin{animation:spin 1s linear infinite;}
+        @keyframes walletCardIn{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+        @keyframes walletCoinIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:none}}
+        @keyframes walletSettle{0%,100%{transform:none}50%{transform:translateY(1.5px) scaleY(.96)}}
+        .wl-card{animation:walletCardIn ${DUR_SIGNATURE}ms ${EASE_OUT} both;}
+        .wl-coin{animation:walletCoinIn ${DUR_SIGNATURE}ms ${EASE_OUT} 220ms both;}
+        .wl-body{transform-box:fill-box;transform-origin:50% 100%;animation:walletSettle ${DUR_STANDARD}ms ${EASE_OUT} 360ms both;}
+        .wl-still{animation:none;}
         @keyframes toastIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         @keyframes modalIn{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
         @keyframes overlayIn{from{opacity:0}to{opacity:1}}
@@ -1749,6 +1764,7 @@ function MainApp({user,setUser}){
         .hdr-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
         .hdr-btn{position:relative;display:inline-flex;align-items:center;gap:4px;background:none;border:none;border-radius:${R_BTN}px;padding:6px 8px;font-size:12px;}
         .hdr-avatar{display:none;}
+        .hdr-account-wrap{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto;}
         .hdr-account{min-width:0;flex:0 1 auto;max-width:180px;height:36px;padding:0 10px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:${CARD};color:${TX};font-size:13px;font-weight:600;cursor:pointer;}
         .bottom-nav{display:none;}
         .only-mobile{display:none;}
@@ -1865,9 +1881,12 @@ function MainApp({user,setUser}){
       <header className="app-header">
         {/* No celular o topo não comporta logo e seletor juntos: com mais de uma conta, o nome da conta ocupa o lugar do logo. */}
         {accounts.length>1?(
-          <select className="hdr-account" aria-label="Conta bancária" value={activeAccount} onChange={e=>setActiveAccount(e.target.value)}>
-            {accounts.map(a=><option key={a.id} value={a.id}>{a.name||"Sem nome"}</option>)}
-          </select>
+          <span className="hdr-account-wrap">
+            <WalletArt key={activeAccount} size={24} compact accent={accent}/>
+            <select className="hdr-account" aria-label="Conta bancária" value={activeAccount} onChange={e=>setActiveAccount(e.target.value)}>
+              {accounts.map(a=><option key={a.id} value={a.id}>{a.name||"Sem nome"}</option>)}
+            </select>
+          </span>
         ):<span className="hdr-sig"><Signature size={18}/></span>}
         <div className="hdr-sync" aria-live="polite">
           {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
@@ -2254,7 +2273,8 @@ function MainApp({user,setUser}){
             <div style={{fontSize:12,color:TX3,marginBottom:10,lineHeight:1.5}}>Com mais de uma, você troca de conta no topo do app. Cada conta tem seus lançamentos, previstos e parcelamentos; as metas são as mesmas.</div>
             <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
               {accounts.map(a=>(
-                <div key={a.id} style={{display:"flex",gap:6}}>
+                <div key={a.id} style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <WalletArt size={26} compact animate={false} accent={a.id===activeAccount?accent:TX3}/>
                   <input aria-label={`Nome da conta ${a.name}`} value={a.name} onChange={e=>setAccounts(p=>p.map(x=>x.id===a.id?{...x,name:e.target.value}:x))} style={{...SI,flex:1}}/>
                   {a.id!==DEFAULT_ACCOUNT&&<IconButton icon={Trash2} size={14} label={`Remover conta ${a.name}`} onClick={()=>removeAccount(a.id)}/>}
                 </div>
@@ -2435,7 +2455,18 @@ function MainApp({user,setUser}){
             {resumoDoMes&&<p style={{margin:"-12px 0 0",fontSize:13,color:TX2,maxWidth:"70ch",lineHeight:1.55}}>{resumoDoMes.text}</p>}
 
             {/* ---- Primeiros passos: só para quem ainda não tem nenhum dado ---- */}
-            {!onboardingDismissed&&transactions.length===0&&wishes.length===0&&plannedExpenses.length===0&&installments.length===0&&(
+            {/* ---- Conta nova, ainda vazia: a carteira aparece e explica que o que entrar aqui fica só nesta conta ---- */}
+            {accounts.length>1&&transactions.length===0&&plannedExpenses.length===0&&installments.length===0&&(
+              <Card style={{padding:24,display:"flex",alignItems:"center",gap:24,flexWrap:"wrap",boxShadow:"none"}}>
+                <WalletArt key={activeAccount} size={104} accent={accent}/>
+                <div style={{flex:"1 1 240px",minWidth:0}}>
+                  <div style={{fontSize:16,fontWeight:600,color:TX,marginBottom:6}}>{accounts.find(a=>a.id===activeAccount)?.name||"Esta conta"} está pronta</div>
+                  <div style={{fontSize:13,color:TX2,lineHeight:1.6,marginBottom:14}}>Ainda não tem nada aqui. O que você lançar agora fica só nesta conta; para voltar às outras, troque no topo.</div>
+                  {newTxButton(false)}
+                </div>
+              </Card>
+            )}
+            {accounts.length<2&&!onboardingDismissed&&transactions.length===0&&wishes.length===0&&plannedExpenses.length===0&&installments.length===0&&(
               <Card style={{padding:20,display:"flex",alignItems:"flex-start",gap:14,boxShadow:"none"}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:15,fontWeight:600,color:TX,marginBottom:6}}>Bem-vindo(a) ao {walletName}</div>

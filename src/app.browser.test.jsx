@@ -126,6 +126,17 @@ describe("contas bancárias", () => {
     await waitFor(() => expect(h.storage.peek().tx.map(t => t.desc)).toEqual(["Do Itaú"]), SAVE_WAIT);
   });
 
+  test("conta nova e vazia mostra a carteira no Início; com lançamento, ela some", async () => {
+    await openApp();
+    expect(screen.queryByText("Mercado Pago está pronta")).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "Conta bancária" }), { target: { value: "mp" } });
+    await screen.findByText("Mercado Pago está pronta");
+    await addTransaction("Primeira venda", "19,99");
+    fireEvent.click(navBtn("Início"));
+    await screen.findByRole("heading", { name: "Início" });
+    expect(screen.queryByText("Mercado Pago está pronta")).toBeNull();
+  });
+
   test("celular 320px: o seletor de conta com nome longo cabe no topo", async () => {
     h.storage = createFakeStorage({ tx: [], accounts: [{ id: "principal", name: "Conta corrente Itaú Personnalité" }, ...accounts.slice(1)] });
     await setViewport(320, 800);
