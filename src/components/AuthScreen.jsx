@@ -13,7 +13,7 @@ import { checkNewPassword } from "../lib/authRecovery";
 //   2. Cole o "Secret key" em Supabase → Authentication → Attack Protection
 //      → Enable CAPTCHA protection.
 //   3. Coloque o "Site key" em VITE_TURNSTILE_SITE_KEY no .env e nas
-//      variáveis de ambiente do Netlify, e faça um novo deploy.
+//      variáveis de ambiente da Vercel, e faça um novo deploy.
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 const TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js";
 

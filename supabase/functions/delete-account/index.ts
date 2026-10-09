@@ -15,7 +15,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // Origem(ns) autorizada(s) a chamar esta função a partir do navegador. Ajuste
-// para o domínio real de produção (e, se quiser, o preview do Netlify) antes
+// para o domínio real de produção (e, se quiser, a prévia da Vercel) antes
 // de implantar — nunca use "*" aqui: essa função aceita credenciais
 // (Authorization), então uma origem coringa permitiria qualquer site chamar
 // a API em nome de quem estiver logado nele.

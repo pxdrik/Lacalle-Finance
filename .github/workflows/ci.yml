@@ -41,7 +41,7 @@ jobs:
         run: npm run build
         env:
           # Chaves de exemplo só para o build conseguir rodar em CI — o app
-          # real usa as variáveis configuradas no Netlify, não estas aqui.
+          # real usa as variáveis configuradas na Vercel, não estas aqui.
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder-anon-key
 

@@ -1,4 +1,4 @@
-# Lacalle Finance — passo a passo do lançamento (Supabase + Netlify)
+# Lacalle Finance — passo a passo do lançamento (Supabase + Vercel)
 
 Este projeto já está migrado e testado: o `npm run build` roda limpo. Falta
 só você criar as contas e ligar os fios. Siga na ordem.
@@ -79,46 +79,22 @@ apareceu, está tudo funcionando.
 
 ---
 
-## Parte 3 — Publicar no Netlify
+## Parte 3 — Publicar na Vercel
 
-### Opção A — Via GitHub (recomendado, fica com deploy automático)
+Publicado em **https://lacalle-finance.vercel.app** (projeto `lacalle-finance`
+na Vercel, ligado a este repositório no GitHub). Até 09/10/2026 era o
+Netlify; saiu porque a cota acabava e o deploy do `main` era pulado.
 
-1. Suba este projeto pra um repositório no GitHub (pode ser privado).
-   ```bash
-   git init
-   git add .
-   git commit -m "Lacalle Finance"
-   git branch -M main
-   git remote add origin <url-do-seu-repositorio>
-   git push -u origin main
-   ```
-   *(o `.env` não vai junto — ele já está no `.gitignore` de propósito,
-   porque tem informação sensível)*
-2. Vá em **[app.netlify.com](https://app.netlify.com)** e crie uma conta.
-3. Clique em **"Add new site" → "Import an existing project"**.
-4. Escolha o GitHub e selecione o repositório que você acabou de criar.
-5. O Netlify já vai detectar automaticamente (por causa do `netlify.toml`):
-   - **Build command**: `npm run build`
-   - **Publish directory**: `dist`
-6. Antes de clicar em "Deploy", vá em **"Add environment variables"** e
-   adicione as duas mesmas variáveis do seu `.env`:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-7. Clique em **Deploy site**. Em 1-2 minutos seu site está no ar, num
-   endereço tipo `nome-aleatorio.netlify.app` (dá pra trocar depois em
-   **Site settings → Change site name**, ou colocar um domínio próprio de
-   graça em **Domain settings**).
-
-### Opção B — Deploy manual (mais rápido pra testar, sem GitHub)
-
-```bash
-npm run build
-```
-
-Isso cria uma pasta `dist/`. Vá em [app.netlify.com/drop](https://app.netlify.com/drop)
-e arraste a pasta `dist` pra lá — o site sobe na hora. *(Só que aqui você
-precisaria repetir esse processo manualmente toda vez que mudar algo — a
-Opção A com GitHub é melhor a longo prazo.)*
+- Cada push no `main` publica sozinho; cada PR ganha uma prévia (que usa o
+  banco de produção).
+- O `vercel.json` define build (`npm run build`, pasta `dist`), o
+  redirecionamento da página única e os cabeçalhos de segurança (CSP, HSTS…).
+- Variáveis de ambiente (Production e Preview): `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY` e `VITE_TURNSTILE_SITE_KEY`.
+- Endereço novo precisa entrar em três lugares: Supabase → Authentication →
+  URL Configuration; o segredo `ALLOWED_ORIGINS` da função `delete-account`;
+  e os hostnames do widget no Cloudflare Turnstile (sem isso o login, que
+  exige CAPTCHA, não funciona).
 
 ---
 
@@ -133,13 +109,13 @@ Opção A com GitHub é melhor a longo prazo.)*
 - **Ver os dados salvos**: Supabase → **Table Editor → user_data**.
 - **Se algo não carregar**: abra o console do navegador (F12) — se aparecer
   erro sobre `VITE_SUPABASE_URL`, é sinal que as variáveis de ambiente não
-  foram configuradas certinho no Netlify (Parte 3, passo 6).
+  foram configuradas certinho na Vercel (Parte 3).
 
 ## Parte 4 — Checklist pós-auditoria (fazer antes de abrir pra mais gente)
 
 Estes passos vieram de uma auditoria de segurança e **não dá pra fazer só
 editando código** — são configurações que só você, logado no painel do
-Supabase/Netlify, consegue mudar. O código já está preparado para todos
+Supabase/Vercel, consegue mudar. O código já está preparado para todos
 eles; falta só ligar.
 
 ### 1. Rodar o SQL de hardening
@@ -165,11 +141,11 @@ facilita cadastro em massa e uso de e-mails alheios.
    escolha o modo "Managed". Anote o **Site Key** e o **Secret Key**.
 2. No Supabase: **Authentication → Attack Protection → Enable CAPTCHA
    protection**, cole o **Secret Key**, escolha provedor "Turnstile".
-3. No `.env` local e nas variáveis de ambiente do Netlify, adicione:
+3. No `.env` local e nas variáveis de ambiente da Vercel, adicione:
    ```
    VITE_TURNSTILE_SITE_KEY=seu-site-key-aqui
    ```
-4. Faça um novo deploy (Netlify) / rode `npm run dev` de novo localmente.
+4. Faça um novo deploy (Vercel) / rode `npm run dev` de novo localmente.
 
 O widget só aparece na tela de login se essa variável estiver definida — sem
 ela, o app continua funcionando exatamente como antes.
@@ -183,18 +159,17 @@ você precisa reimplantar a função e configurar a(s) origem(ns) permitida(s):
 ```bash
 npx supabase login
 npx supabase link --project-ref mspkkvpmjruuxgggsxdr
-npx supabase secrets set ALLOWED_ORIGINS=https://SEU-SITE.netlify.app
+npx supabase secrets set ALLOWED_ORIGINS=https://lacalle-finance.vercel.app
 npx supabase functions deploy delete-account
 ```
 
-Troque `https://SEU-SITE.netlify.app` pelo domínio real onde o site está
-publicado (pode listar mais de um separado por vírgula, ex.: incluindo um
+Use o domínio real onde o site está publicado (pode listar mais de um separado por vírgula, ex.: incluindo um
 domínio próprio, se tiver). **Nunca use `*` aqui** — essa função aceita o
 token de login de quem chama.
 
 ### 5. Headers de segurança e dependências
 
-Já feito no código (`netlify.toml` ganhou CSP/HSTS/X-Frame-Options, e o
+Já feito no código (`vercel.json` tem CSP/HSTS/X-Frame-Options, e o
 `vite` foi atualizado para a versão sem as CVEs conhecidas) — só publicar de
 novo (`git push` / novo deploy) já aplica.
 

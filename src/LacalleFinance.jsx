@@ -5,7 +5,7 @@
  * módulos reais nem conexão de rede além de `window.storage`. A "arquitetura
  * em camadas" abaixo existe como SEÇÕES NOMEADAS dentro do mesmo arquivo —
  * cada seção foi desenhada para virar um arquivo próprio quando o projeto for
- * migrado para um repositório real (React + Vite + Netlify + Supabase).
+ * migrado para um repositório real (React + Vite + Vercel + Supabase).
  *
  * SPRINT ATUAL — INSIGHTS EXPLICÁVEIS (consultor financeiro auditável)
  * ----------------------------------------------------------------------------
