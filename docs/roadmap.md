@@ -4,6 +4,30 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
+## ⏳ PR: correções da auditoria de melhorias (09/10/2026)
+
+Auditoria só de leitura (https://claude.ai/artifact/VHiHfP3jxqAJq6twtHEk31);
+o Pedro escolheu F1, F3, F4, F5, F7 e F8. Branch `auditoria-2026-10-09`,
+esperando o teste na prévia.
+
+- F1: oito testes de navegador do dinheiro (lançar, editar, excluir, saldo
+  do Início, reabrir, toque duplo, duplicado, descartar, valor vazio, meta
+  para Previstos). Não existe transferência entre contas bancárias.
+- F3: axe-core nas telas dos testes, esperando as animações (no meio do
+  fade ele acusava contraste falso).
+- F4: `<main>` no login e no app logado; a marca é o `<h1>` de Entrar e
+  Criar conta.
+- F5: `noindex` no cabeçalho (vercel.json) e na página; robots.txt válido
+  que libera o buscador para ele ler o `noindex`.
+- F7: proteção contra senha vazada só existe no plano Pro do Supabase; o
+  Pedro decidiu não pagar por enquanto.
+- F8: `npm audit` zerado, só versões de correção.
+
+Ficaram de fora por decisão: F2 (dividir o arquivo grande, depois dos
+testes), F9 (React, Vite e outros pacotes grandes), F10 (Motion System).
+
+---
+
 ## ✅ MUDANÇA DE HOSPEDAGEM: Netlify → Vercel (09/10/2026)
 
 O Netlify pulou o deploy do `main` por falta de cota (de novo). O site agora
