@@ -4,9 +4,11 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
-## 🔶 EM PRÉVIA: contas bancárias e categorias no Início (09/10/2026)
+## ✅ EM PRODUÇÃO: contas bancárias e categorias no Início (09/10/2026)
 
-Branch `contas-bancarias`, esperando o teste do Pedro na prévia do PR.
+PR #4, aprovado pelo Pedro no protótipo
+(https://claude.ai/artifact/HD1CC5oowS8JaXTgPfnftE) em vez da prévia do
+Netlify, que usa o banco de produção.
 
 - **Contas bancárias:** em "Minha Conta" dá para criar contas (ex.: Itaú e
   Mercado Pago). Com mais de uma, um seletor no topo troca a conta aberta.
@@ -17,6 +19,9 @@ Branch `contas-bancarias`, esperando o teste do Pedro na prévia do PR.
   principal, para dinheiro nunca sumir da tela.
 - **Início:** "Principais categorias" subiu para a coluna da esquerda e
   mostra todas as categorias; "Saúde financeira" foi para o fim da direita.
+- **Carteira:** desenho animado (`WalletArt`) no seletor do topo, na lista
+  de contas e no Início de uma conta nova ainda vazia; a tela entra de novo
+  ao trocar de conta.
 - **Não feito:** visão "todas as contas somadas" e mover um lançamento de
   uma conta para outra.
 
