@@ -19,6 +19,8 @@ Netlify, que usa o banco de produção.
   principal, para dinheiro nunca sumir da tela.
 - **Início:** "Principais categorias" subiu para a coluna da esquerda e
   mostra todas as categorias; "Saúde financeira" foi para o fim da direita.
+- **Novo banco:** botão no topo (aparece já com uma conta só) abre uma
+  janela com bancos sugeridos; a conta criada já abre.
 - **Carteira:** desenho animado (`WalletArt`) no seletor do topo, na lista
   de contas e no Início de uma conta nova ainda vazia; a tela entra de novo
   ao trocar de conta.

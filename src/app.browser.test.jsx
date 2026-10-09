@@ -126,6 +126,20 @@ describe("contas bancárias", () => {
     await waitFor(() => expect(h.storage.peek().tx.map(t => t.desc)).toEqual(["Do Itaú"]), SAVE_WAIT);
   });
 
+  test("com uma conta só, o botão Novo banco do topo cria a segunda e já abre nela", async () => {
+    h.storage = createFakeStorage({ tx: [tx(1, "Do Itaú")] });
+    await openApp();
+    expect(screen.queryByRole("combobox", { name: "Conta bancária" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Novo banco" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Novo banco" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Mercado Pago" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Adicionar banco" }));
+    const select = await screen.findByRole("combobox", { name: "Conta bancária" });
+    expect(select.selectedOptions[0].textContent).toBe("Mercado Pago");
+    await screen.findByText("Mercado Pago está pronta");
+    await waitFor(() => expect(h.storage.peek().accounts?.map(a => a.name)).toEqual(["Conta principal", "Mercado Pago"]), SAVE_WAIT);
+  });
+
   test("conta nova e vazia mostra a carteira no Início; com lançamento, ela some", async () => {
     await openApp();
     expect(screen.queryByText("Mercado Pago está pronta")).toBeNull();

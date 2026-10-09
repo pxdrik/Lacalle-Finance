@@ -155,6 +155,7 @@ const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounte
 const DEFAULT_ACCOUNT="principal";
 const DEFAULT_ACCOUNTS=[{id:DEFAULT_ACCOUNT,name:"Conta principal"}];
 const accountOf=r=>r.account||DEFAULT_ACCOUNT;
+const BANK_SUGGESTIONS=["Itaú","Nubank","Mercado Pago","Inter","Bradesco","Banco do Brasil","Caixa","Santander","C6 Bank","PicPay"];
 
 // ==================== MAPEAMENTO: Desejo <-> Previsto ====================
 // Funções puras de conversão entre os dois modelos de dado, usadas pela
@@ -583,6 +584,7 @@ function MainApp({user,setUser}){
         // pessoa achar que cancelou uma exclusão que já está em andamento).
         if(!deleteAccountBusyRef.current){setDeleteAccountOpen(false);setDeleteAccountPhrase("");}
         setProjectionDrawer(null);
+        setShowAddBank(false);
         cancelEditTxRef.current();
       }
     };
@@ -1419,6 +1421,7 @@ function MainApp({user,setUser}){
     showToast("Categoria criada!","success");
   };
   const [newAccountName,setNewAccountName]=useState("");
+  const [showAddBank,setShowAddBank]=useState(false);
   const addAccount=()=>{
     const name=newAccountName.trim();
     if(!name)return;
@@ -1426,6 +1429,7 @@ function MainApp({user,setUser}){
     setAccounts(p=>[...p,{id,name}]);
     setActiveAccount(id);
     setNewAccountName("");
+    setShowAddBank(false);
     showToast(`Conta "${name}" criada. Você já está nela.`,"success");
   };
   // Só remove conta vazia: apagar a conta não apaga lançamentos (eles ficariam
@@ -1764,6 +1768,9 @@ function MainApp({user,setUser}){
         .hdr-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
         .hdr-btn{position:relative;display:inline-flex;align-items:center;gap:4px;background:none;border:none;border-radius:${R_BTN}px;padding:6px 8px;font-size:12px;}
         .hdr-avatar{display:none;}
+        .hdr-add-bank{position:relative;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;flex-shrink:0;border-radius:${R_BTN}px;border:1px dashed ${BD2};background:transparent;color:${TX2};font-size:12.5px;font-weight:500;cursor:pointer;}
+        .hdr-add-bank:hover{color:${accentText(accent)};border-color:${accent}73;filter:none !important;}
+        .hdr-add-bank::after{content:"";position:absolute;left:50%;top:50%;width:100%;min-width:44px;height:44px;transform:translate(-50%,-50%);}
         .hdr-account-wrap{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto;}
         .hdr-account{min-width:0;flex:0 1 auto;max-width:180px;height:36px;padding:0 10px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:${CARD};color:${TX};font-size:13px;font-weight:600;cursor:pointer;}
         .bottom-nav{display:none;}
@@ -1825,6 +1832,8 @@ function MainApp({user,setUser}){
           .hdr-sig{display:inline-flex;}
           .sync-label{display:none;}
           .hdr-avatar{display:flex;}
+          .hdr-add-label{display:none;}
+          .hdr-add-bank{padding:0 10px;}
           .main-content{padding:20px 16px calc(84px + env(safe-area-inset-bottom)) !important;}
           .toast-wrap{bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
           /* fundo sólido no tom da marca (o azul-marinho antigo sobrava aqui);
@@ -1888,6 +1897,7 @@ function MainApp({user,setUser}){
             </select>
           </span>
         ):<span className="hdr-sig"><Signature size={18}/></span>}
+        <button type="button" className="hdr-add-bank" onClick={()=>{setNewAccountName("");setShowAddBank(true);}} aria-label="Novo banco" title="Adicionar uma conta bancária"><Plus size={14} aria-hidden="true"/><span className="hdr-add-label">Novo banco</span></button>
         <div className="hdr-sync" aria-live="polite">
           {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
           {syncStatus==="saving"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Salvando</span></>}
@@ -1931,6 +1941,28 @@ function MainApp({user,setUser}){
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setPendingImport(null)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
             <Btn onClick={confirmImportAll} style={{flex:1,paddingInline:12,fontSize:13}}>Importar</Btn>
+          </div>
+        </Modal>
+      )}
+      {showAddBank&&(
+        <Modal onClose={()=>setShowAddBank(false)} maxWidth={400} padding={24} label="Novo banco">
+          <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
+            <WalletArt size={56} accent={accent}/>
+            <div>
+              <h2 style={{margin:"0 0 4px",fontSize:17,fontWeight:600,color:TX}}>Novo banco</h2>
+              <p style={{margin:0,fontSize:13,color:TX2,lineHeight:1.5}}>Cada banco tem seus lançamentos, previstos e parcelamentos. Você troca entre eles no topo.</p>
+            </div>
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+            {BANK_SUGGESTIONS.filter(b=>!accounts.some(a=>a.name.trim().toLowerCase()===b.toLowerCase())).map(b=>(
+              <button key={b} type="button" className="cat-chip" aria-pressed={newAccountName===b} onClick={()=>setNewAccountName(b)}>{b}</button>
+            ))}
+          </div>
+          <label htmlFor="new-bank-name" style={{display:"block",fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Nome</label>
+          <input id="new-bank-name" autoFocus placeholder="Ex.: Mercado Pago" value={newAccountName} onChange={e=>setNewAccountName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAccount()} style={{...SI,marginBottom:20}}/>
+          <div style={{display:"flex",gap:10}}>
+            <BtnGhost onClick={()=>setShowAddBank(false)} style={{flex:1,fontSize:14}}>Cancelar</BtnGhost>
+            <Btn onClick={addAccount} disabled={!newAccountName.trim()} style={{flex:2,fontSize:14,...(newAccountName.trim()?{}:{opacity:0.5,cursor:"not-allowed"})}}>Adicionar banco</Btn>
           </div>
         </Modal>
       )}
