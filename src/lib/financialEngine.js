@@ -534,12 +534,6 @@ export const FinancialEngine=(()=>{
       if(invNet>0)m["Investimento"]=invNet;
       return Object.entries(m).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
     },
-    displayTop(catData,limit=8){
-      if(catData.length<=limit)return catData;
-      const top=catData.slice(0,limit-1);
-      const restSum=catData.slice(limit-1).reduce((s,d)=>s+d.value,0);
-      return [...top,{name:"Outras categorias",value:restSum}];
-    },
     fixedVarSplit(filteredTx){
       let fixed=0,variavel=0;
       filteredTx.forEach(t=>{

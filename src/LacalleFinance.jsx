@@ -109,13 +109,14 @@ import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR } from "./lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, DUR_SIGNATURE, DUR_STANDARD, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, TabPanel, DensityToggle, Segmented, IconButton, PageHeader, SectionTitle, Field } from "./components/ui";
 import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
 import MonthlyReport from "./components/MonthlyReport";
+import WalletArt from "./components/WalletArt";
 import { buildMonthlyReport } from "./lib/report";
 import { createSyncEngine, localCopy, hasPendingLocalCopy, clearLocalCopies } from "./lib/syncEngine";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
@@ -150,6 +151,11 @@ const INV_TIPO_ICONS={"Aporte":PiggyBank,"Resgate":Undo2,"Rendimento":TrendingUp
 // compara id===id em outros lugares).
 let _idCounter=0;
 const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounter;};
+
+const DEFAULT_ACCOUNT="principal";
+const DEFAULT_ACCOUNTS=[{id:DEFAULT_ACCOUNT,name:"Conta principal"}];
+const accountOf=r=>r.account||DEFAULT_ACCOUNT;
+const BANK_SUGGESTIONS=["Itaú","Nubank","Mercado Pago","Inter","Bradesco","Banco do Brasil","Santander","C6 Bank","PicPay"];
 
 // ==================== MAPEAMENTO: Desejo <-> Previsto ====================
 // Funções puras de conversão entre os dois modelos de dado, usadas pela
@@ -197,9 +203,47 @@ function MainApp({user,setUser}){
   const [syncStatus,setSyncStatus]=useState("loading");
   const [tab,setTab]=useState("dashboard");
   const [showMore,setShowMore]=useState(false);
-  const [transactions,setTransactions]=useState([]);
+  // ---- Contas bancárias ----
+  // Lançamentos, previstos e parcelamentos guardam `account` (id da conta);
+  // sem o campo, são da conta "principal" (tudo que existia antes das contas).
+  // O estado `all*` tem todas as contas; `transactions`/`installments`/
+  // `plannedExpenses` são só a conta escolhida, e é isso que o app inteiro lê.
+  // Os setters de fora carimbam a conta escolhida em todo item novo; os
+  // `setAll*` gravam como veio (carregar, desfazer, importar, restaurar).
+  const [accounts,setAccounts]=useState(DEFAULT_ACCOUNTS);
+  const [activeAccountPick,setActiveAccountPick]=useState(()=>{try{return localStorage.getItem("lf.account")||DEFAULT_ACCOUNT;}catch{return DEFAULT_ACCOUNT;}});
+  const activeAccount=accounts.some(a=>a.id===activeAccountPick)?activeAccountPick:DEFAULT_ACCOUNT;
+  const setActiveAccount=id=>{
+    setActiveAccountPick(id);
+    try{localStorage.setItem("lf.account",id);}catch{/* sem armazenamento local */}
+    // A tela "troca de carteira": some um pouco e volta subindo. Sem remontar
+    // as abas (filtros e formulários abertos continuam como estavam).
+    const reduce=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if(!reduce)requestAnimationFrame(()=>document.querySelector(".main-content")?.animate?.([{opacity:0.35,transform:"translateY(8px)"},{opacity:1,transform:"none"}],{duration:DUR_SIGNATURE,easing:EASE_OUT}));
+  };
+  const activeAccountRef=useRef(activeAccount);
+  activeAccountRef.current=activeAccount;
+  const [allTx,setAllTx]=useState([]);
+  const [allInst,setAllInst]=useState([]);
+  const [allPlanned,setAllPlanned]=useState([]);
+  // Item de uma conta que não existe mais (removida, ou ainda não chegou de
+  // outro aparelho) aparece na principal em vez de sumir.
+  const inActiveAccount=useMemo(()=>{
+    const ids=new Set(accounts.map(a=>a.id));
+    return r=>{const a=ids.has(accountOf(r))?accountOf(r):DEFAULT_ACCOUNT;return a===activeAccount;};
+  },[accounts,activeAccount]);
+  const transactions=useMemo(()=>allTx.filter(inActiveAccount),[allTx,inActiveAccount]);
+  const installments=useMemo(()=>allInst.filter(inActiveAccount),[allInst,inActiveAccount]);
+  const plannedExpenses=useMemo(()=>allPlanned.filter(inActiveAccount),[allPlanned,inActiveAccount]);
+  const stampAccount=setAll=>u=>setAll(prev=>{
+    const next=typeof u==="function"?u(prev):u;
+    const known=new Set(prev.map(r=>r.id));
+    return next.map(r=>r.account||known.has(r.id)?r:{...r,account:activeAccountRef.current});
+  });
+  const setTransactions=stampAccount(setAllTx);
+  const setInstallments=stampAccount(setAllInst);
+  const setPlannedExpenses=stampAccount(setAllPlanned);
   const [wishes,setWishes]=useState([]);
-  const [installments,setInstallments]=useState([]);
   const [filterMonth,setFilterMonth]=useState("");const [filterCat,setFilterCat]=useState("");
   const [filterType,setFilterType]=useState("");const [search,setSearch]=useState("");
   const [showProfile,setShowProfile]=useState(false);const [newName,setNewName]=useState(user.name);
@@ -261,7 +305,6 @@ function MainApp({user,setUser}){
     return Math.min(100,b.saved/b.price*100)-Math.min(100,a.saved/a.price*100);
   }).map(([w])=>w),[wishes,wishSortBy]);
 
-  const [plannedExpenses,setPlannedExpenses]=useState([]);
   const [plannedMonth,setPlannedMonth]=useState(monthKey(todayFn()));
   const [showPlannedForm,setShowPlannedForm]=useState(false);const [editingPlanned,setEditingPlanned]=useState(null);
   const [plannedForm,setPlannedForm]=useState({desc:"",val:"",cat:"Assinaturas",form:"pix",recurring:false,month:monthKey(todayFn()),from:monthKey(todayFn()),hasUntil:false,until:monthKey(todayFn()),notes:""});
@@ -280,20 +323,21 @@ function MainApp({user,setUser}){
     const entry=trash.find(t=>t.trashId===trashId);
     if(!entry)return;
     pushHistory();
+    // setAll*: o item volta para a conta de onde saiu, não para a conta aberta.
     if(entry.type==="wish")setWishes(p=>[...p,entry.item]);
-    else if(entry.type==="planned")setPlannedExpenses(p=>[...p,entry.item]);
+    else if(entry.type==="planned")setAllPlanned(p=>[...p,entry.item]);
     else if(entry.type==="tx"){
-      setTransactions(p=>[entry.item,...p]);
+      setAllTx(p=>[entry.item,...p]);
       // Espelha exatamente o desconto feito em deleteTx: se a parcela
       // restaurada pertencia a um parcelamento que ainda existe, devolve a
       // "vaga" nele — sem isso ela voltaria órfã (installmentId apontando
       // pra um pai que não sabe mais dela).
-      if(entry.item.installmentId)setInstallments(p=>restoreTxToInstallments(p,entry.item));
+      if(entry.item.installmentId)setAllInst(p=>restoreTxToInstallments(p,entry.item));
     }
     else if(entry.type==="installment"){
       const{_trashedTxs,...inst}=entry.item;
-      setInstallments(p=>[...p,inst]);
-      if(_trashedTxs?.length)setTransactions(p=>[..._trashedTxs,...p]);
+      setAllInst(p=>[...p,inst]);
+      if(_trashedTxs?.length)setAllTx(p=>[..._trashedTxs,...p]);
     }
     setTrash(p=>p.filter(t=>t.trashId!==trashId));
     showToast("Item restaurado.","success");
@@ -353,7 +397,7 @@ function MainApp({user,setUser}){
   const pushHistory=()=>{
     // A lixeira entra no retrato: sem ela, desfazer uma exclusão deixava o
     // item na lista E na lixeira, e "Restaurar" depois o duplicava.
-    const snap={tx:[...transactions],wishes:[...wishes],inst:[...installments],planned:[...plannedExpenses],customCats:[...customCats],trash:[...trash]};
+    const snap={tx:allTx,wishes,inst:allInst,planned:allPlanned,customCats,trash,accounts};
     const newH=[...historyRef.current.slice(-14),snap];
     historyRef.current=newH;
     setHistoryLen(newH.length);
@@ -377,7 +421,7 @@ function MainApp({user,setUser}){
     // Sem "bandeira" que pula o salvamento: o desfazer é gravado na nuvem como
     // qualquer outra mudança (antes a tela dizia "Sincronizado" e a nuvem
     // continuava com o estado anterior).
-    setTransactions(prev.tx);setWishes(prev.wishes);setInstallments(prev.inst);setPlannedExpenses(prev.planned||[]);setCustomCats(prev.customCats||[]);if(prev.trash)setTrash(prev.trash);
+    setAllTx(prev.tx);setWishes(prev.wishes);setAllInst(prev.inst);setAllPlanned(prev.planned||[]);setCustomCats(prev.customCats||[]);if(prev.trash)setTrash(prev.trash);setAccounts(prev.accounts);
   };
 
   const saveTimerRef=useRef(null);
@@ -398,13 +442,14 @@ function MainApp({user,setUser}){
   // O estado da tela no formato do documento salvo. Lido por ref pelos
   // ouvintes registrados uma vez só (visibilidade, salvar agora).
   const docRef=useRef(null);
-  docRef.current={tx:transactions,wishes,inst:installments,planned:plannedExpenses,trash,customCats,name:user.name,accentKey,walletName,onboardingDismissed};
+  docRef.current={tx:allTx,wishes,inst:allInst,planned:allPlanned,trash,customCats,name:user.name,accentKey,walletName,accounts,onboardingDismissed};
 
   const applyDoc=d=>{
-    setTransactions(d.tx||[]);
+    setAllTx(d.tx||[]);
     setWishes(d.wishes||[]);
-    setInstallments(d.inst||[]);
-    setPlannedExpenses(d.planned||[]);
+    setAllInst(d.inst||[]);
+    setAllPlanned(d.planned||[]);
+    setAccounts(d.accounts?.length?d.accounts:DEFAULT_ACCOUNTS);
     setCustomCats(d.customCats||[]);
     setAccentKey(d.accentKey||"gold");
     setWalletName(d.walletName||"LaCalle Finance");
@@ -459,7 +504,7 @@ function MainApp({user,setUser}){
       if(status==="error")showToast("Falha ao salvar na nuvem. Toque no ícone de atualizar ao lado do status para tentar de novo.","error");
     },1200);
     return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};
-  },[transactions,wishes,installments,plannedExpenses,customCats,user.name,accentKey,walletName,trash,onboardingDismissed,isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps -- só os dados disparam o salvamento; as funções são lidas atuais
+  },[allTx,wishes,allInst,allPlanned,customCats,user.name,accentKey,walletName,accounts,trash,onboardingDismissed,isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps -- só os dados disparam o salvamento; as funções são lidas atuais
 
   // ---- BUG-02: ao esconder a aba, grava na hora o que ainda estava no
   // intervalo de espera (1,2 s), em vez de arriscar perder no fechamento.
@@ -539,6 +584,7 @@ function MainApp({user,setUser}){
         // pessoa achar que cancelou uma exclusão que já está em andamento).
         if(!deleteAccountBusyRef.current){setDeleteAccountOpen(false);setDeleteAccountPhrase("");}
         setProjectionDrawer(null);
+        setShowAddBank(false);
         cancelEditTxRef.current();
       }
     };
@@ -585,7 +631,6 @@ function MainApp({user,setUser}){
   // insight de maior categoria — ambos globais. Antes saía de `filtered`, então
   // um filtro esquecido na aba Transações reescrevia o Dashboard inteiro.
   const catDataGlobal=useMemo(()=>FinancialEngine.ExpenseAnalyzer.byCategory(realized,invNet),[realized,invNet]);
-  const catDataDisplay=useMemo(()=>FinancialEngine.ExpenseAnalyzer.displayTop(catDataGlobal),[catDataGlobal]);
   const groupedByDate=useMemo(()=>{const g={};[...filtered].forEach(t=>{if(!g[t.date])g[t.date]=[];g[t.date].push(t);});return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));},[filtered]);
   const txMap=useMemo(()=>new Map(transactions.map(t=>[t.id,t])),[transactions]);
   const instStats=useMemo(()=>FinancialEngine.BudgetAnalyzer.installmentStats(installments,txMap,todayFn()),[installments,txMap]);
@@ -1375,13 +1420,35 @@ function MainApp({user,setUser}){
     setNewCatInput("");
     showToast("Categoria criada!","success");
   };
+  const [newAccountName,setNewAccountName]=useState("");
+  const [showAddBank,setShowAddBank]=useState(false);
+  const [bankOther,setBankOther]=useState(false); // "Outro": o nome é digitado
+  const addAccount=()=>{
+    const name=newAccountName.trim();
+    if(!name)return;
+    const id=`c${genId()}`;
+    setAccounts(p=>[...p,{id,name}]);
+    setActiveAccount(id);
+    setNewAccountName("");
+    setShowAddBank(false);
+    showToast(`Conta "${name}" criada. Você já está nela.`,"success");
+  };
+  // Só remove conta vazia: apagar a conta não apaga lançamentos (eles ficariam
+  // sem conta visível); a pessoa move ou exclui os itens antes.
+  const removeAccount=id=>{
+    if([allTx,allInst,allPlanned].some(list=>list.some(r=>accountOf(r)===id))){
+      showToast("Essa conta ainda tem lançamentos, previstos ou parcelamentos. Exclua-os antes de remover a conta.","error");
+      return;
+    }
+    setAccounts(p=>p.filter(a=>a.id!==id));
+  };
   const removeCustomCat=name=>{
     pushHistory();
     setCustomCats(p=>p.filter(c=>c!==name));
   };
   const exportAllBackup=()=>{
     try{
-      const data=buildBackup({tx:transactions,wishes,inst:installments,planned:plannedExpenses,customCats,name:user.name,accentKey,walletName,trash,onboardingDismissed});
+      const data=buildBackup({tx:allTx,wishes,inst:allInst,planned:allPlanned,customCats,name:user.name,accentKey,walletName,accounts,trash,onboardingDismissed});
       const json=JSON.stringify(data,null,2);
       const blob=new Blob([json],{type:"application/json"});
       const url=URL.createObjectURL(blob);const a=document.createElement("a");
@@ -1431,10 +1498,11 @@ function MainApp({user,setUser}){
     const newWalletName=d.walletName||walletName;
     const newUserName=d.name||user.name;
     const newTrash=d.trash||[];
-    setTransactions(newTx);
+    setAllTx(newTx);
     setWishes(newWishes);
-    setInstallments(newInst);
-    setPlannedExpenses(newPlanned);
+    setAllInst(newInst);
+    setAllPlanned(newPlanned);
+    setAccounts(d.accounts?.length?d.accounts:DEFAULT_ACCOUNTS);
     setCustomCats(newCustomCats);
     setAccentKey(newAccentKey);
     setWalletName(newWalletName);
@@ -1614,6 +1682,13 @@ function MainApp({user,setUser}){
         .chip-btn:hover{background:${HOVER}66 !important;}
         @keyframes spin{to{transform:rotate(360deg)}}
         .spin{animation:spin 1s linear infinite;}
+        @keyframes walletCardIn{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+        @keyframes walletCoinIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:none}}
+        @keyframes walletSettle{0%,100%{transform:none}50%{transform:translateY(1.5px) scaleY(.96)}}
+        .wl-card{animation:walletCardIn ${DUR_SIGNATURE}ms ${EASE_OUT} both;}
+        .wl-coin{animation:walletCoinIn ${DUR_SIGNATURE}ms ${EASE_OUT} 220ms both;}
+        .wl-body{transform-box:fill-box;transform-origin:50% 100%;animation:walletSettle ${DUR_STANDARD}ms ${EASE_OUT} 360ms both;}
+        .wl-still{animation:none;}
         @keyframes toastIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         @keyframes modalIn{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
         @keyframes overlayIn{from{opacity:0}to{opacity:1}}
@@ -1694,6 +1769,14 @@ function MainApp({user,setUser}){
         .hdr-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
         .hdr-btn{position:relative;display:inline-flex;align-items:center;gap:4px;background:none;border:none;border-radius:${R_BTN}px;padding:6px 8px;font-size:12px;}
         .hdr-avatar{display:none;}
+        .hdr-add-bank{position:relative;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;flex-shrink:0;border-radius:${R_BTN}px;border:1px dashed ${BD2};background:transparent;color:${TX2};font-size:12.5px;font-weight:500;cursor:pointer;}
+        .hdr-add-bank:hover{color:${accentText(accent)};border-color:${accent}73;filter:none !important;}
+        .hdr-add-bank::after{content:"";position:absolute;left:50%;top:50%;width:100%;min-width:44px;height:44px;transform:translate(-50%,-50%);}
+        .bank-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:14px;}
+        .bank-grid .cat-chip{justify-content:center;height:auto;min-height:36px;padding:4px 6px;line-height:1.2;text-align:center;}
+        @media(max-width:420px){.bank-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        .hdr-account-wrap{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto;}
+        .hdr-account{min-width:0;flex:0 1 auto;max-width:180px;height:36px;padding:0 10px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:${CARD};color:${TX};font-size:13px;font-weight:600;cursor:pointer;}
         .bottom-nav{display:none;}
         .only-mobile{display:none;}
         .home-hero{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr));gap:20px;align-items:center;background:${CARD};border:1px solid ${BD};border-left:3px solid ${accent};border-radius:${R_CARD}px;padding:20px 20px 20px 28px;}
@@ -1753,6 +1836,8 @@ function MainApp({user,setUser}){
           .hdr-sig{display:inline-flex;}
           .sync-label{display:none;}
           .hdr-avatar{display:flex;}
+          .hdr-add-label{display:none;}
+          .hdr-add-bank{padding:0 10px;}
           .main-content{padding:20px 16px calc(84px + env(safe-area-inset-bottom)) !important;}
           .toast-wrap{bottom:calc(84px + env(safe-area-inset-bottom)) !important;}
           /* fundo sólido no tom da marca (o azul-marinho antigo sobrava aqui);
@@ -1807,7 +1892,16 @@ function MainApp({user,setUser}){
 
       <div className="app-main">
       <header className="app-header">
-        <span className="hdr-sig"><Signature size={18}/></span>
+        {/* No celular o topo não comporta logo e seletor juntos: com mais de uma conta, o nome da conta ocupa o lugar do logo. */}
+        {accounts.length>1?(
+          <span className="hdr-account-wrap">
+            <WalletArt key={activeAccount} size={24} compact accent={accent}/>
+            <select className="hdr-account" aria-label="Conta bancária" value={activeAccount} onChange={e=>setActiveAccount(e.target.value)}>
+              {accounts.map(a=><option key={a.id} value={a.id}>{a.name||"Sem nome"}</option>)}
+            </select>
+          </span>
+        ):<span className="hdr-sig"><Signature size={18}/></span>}
+        <button type="button" className="hdr-add-bank" onClick={()=>{setNewAccountName("");setBankOther(false);setShowAddBank(true);}} aria-label="Novo banco" title="Adicionar uma conta bancária"><Plus size={14} aria-hidden="true"/><span className="hdr-add-label">Novo banco</span></button>
         <div className="hdr-sync" aria-live="polite">
           {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
           {syncStatus==="saving"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Salvando</span></>}
@@ -1854,6 +1948,34 @@ function MainApp({user,setUser}){
           </div>
         </Modal>
       )}
+      {showAddBank&&(
+        <Modal onClose={()=>setShowAddBank(false)} maxWidth={400} padding={24} label="Novo banco">
+          <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
+            <WalletArt size={56} accent={accent}/>
+            <div>
+              <h2 style={{margin:"0 0 4px",fontSize:17,fontWeight:600,color:TX}}>Novo banco</h2>
+              <p style={{margin:0,fontSize:13,color:TX2,lineHeight:1.5}}>Cada banco tem seus lançamentos, previstos e parcelamentos. Você troca entre eles no topo.</p>
+            </div>
+          </div>
+          <div className="bank-grid">
+            {BANK_SUGGESTIONS.filter(b=>!accounts.some(a=>a.name.trim().toLowerCase()===b.toLowerCase())).map(b=>(
+              <button key={b} type="button" className="cat-chip" aria-pressed={!bankOther&&newAccountName===b} onClick={()=>{setBankOther(false);setNewAccountName(b);}}>{b}</button>
+            ))}
+            <button type="button" className="cat-chip" aria-pressed={bankOther} onClick={()=>{setBankOther(true);setNewAccountName("");}}><Plus size={12} aria-hidden="true"/>Outro</button>
+          </div>
+          {bankOther&&(
+            <>
+              <label htmlFor="new-bank-name" style={{display:"block",fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Nome do banco</label>
+              <input id="new-bank-name" autoFocus placeholder="Ex.: Sicredi" value={newAccountName} onChange={e=>setNewAccountName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAccount()} style={{...SI,marginBottom:6}}/>
+            </>
+          )}
+          <div style={{height:14}}/>
+          <div style={{display:"flex",gap:10}}>
+            <BtnGhost onClick={()=>setShowAddBank(false)} style={{flex:1,fontSize:14}}>Cancelar</BtnGhost>
+            <Btn onClick={addAccount} disabled={!newAccountName.trim()} style={{flex:2,fontSize:14,...(newAccountName.trim()?{}:{opacity:0.5,cursor:"not-allowed"})}}>Adicionar banco</Btn>
+          </div>
+        </Modal>
+      )}
       {reportPick!==null&&(
         <Modal onClose={()=>setReportPick(null)} maxWidth={380} padding={24} label="Relatório do mês">
           <h2 style={{margin:"0 0 6px",fontSize:17,fontWeight:600,color:TX}}>Relatório do mês</h2>
@@ -1873,10 +1995,10 @@ function MainApp({user,setUser}){
         <Modal maxWidth={340} padding={32} contentStyle={{textAlign:"center"}}>
           <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#F87171"/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar tudo?</div>
-          <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Todas as transações serão removidas permanentemente.</div>
+          <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>{accounts.length>1?`Todas as transações de ${accounts.find(a=>a.id===activeAccount)?.name||"esta conta"} serão removidas.`:"Todas as transações serão removidas permanentemente."}</div>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setShowClearConfirm(false)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
-            <button onClick={()=>{pushHistory();setTransactions([]);setShowClearConfirm(false);showToast("Tudo apagado.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo</button>
+            <button onClick={()=>{pushHistory();setAllTx(p=>p.filter(t=>!inActiveAccount(t)));setShowClearConfirm(false);showToast("Tudo apagado.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo</button>
           </div>
         </Modal>
       )}
@@ -2189,6 +2311,22 @@ function MainApp({user,setUser}){
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Nome da sua conta (aparece no topo do app)</div>
             <input value={walletName} onChange={e=>setWalletName(e.target.value)} style={{...SI,marginBottom:20}}/>
 
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:4}}>Contas bancárias</div>
+            <div style={{fontSize:12,color:TX3,marginBottom:10,lineHeight:1.5}}>Com mais de uma, você troca de conta no topo do app. Cada conta tem seus lançamentos, previstos e parcelamentos; as metas são as mesmas.</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
+              {accounts.map(a=>(
+                <div key={a.id} style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <WalletArt size={26} compact animate={false} accent={a.id===activeAccount?accent:TX3}/>
+                  <input aria-label={`Nome da conta ${a.name}`} value={a.name} onChange={e=>setAccounts(p=>p.map(x=>x.id===a.id?{...x,name:e.target.value}:x))} style={{...SI,flex:1}}/>
+                  {a.id!==DEFAULT_ACCOUNT&&<IconButton icon={Trash2} size={14} label={`Remover conta ${a.name}`} onClick={()=>removeAccount(a.id)}/>}
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:22}}>
+              <input placeholder="Nova conta (ex.: Mercado Pago)" value={newAccountName} onChange={e=>setNewAccountName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAccount()} style={{...SI,flex:1}}/>
+              <button onClick={addAccount} aria-label="Adicionar conta" style={{background:"rgba(255,255,255,0.05)",border:`1px solid ${BD2}`,color:accent,borderRadius:R_INPUT,padding:"0 18px",cursor:"pointer"}}><Plus size={16}/></button>
+            </div>
+
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Cor de destaque</div>
             <div style={{display:"flex",gap:10,marginBottom:22,flexWrap:"wrap"}}>
               {Object.entries(PALETTES).map(([key,p])=>(
@@ -2334,7 +2472,7 @@ function MainApp({user,setUser}){
           const greeting=hour<5?"Boa noite":hour<12?"Bom dia":hour<18?"Boa tarde":"Boa noite";
           const firstName=(user.name||"").split(" ")[0]||user.name;
           const proj30=cashFlowProjections.find(p=>p.days===30);
-          const bestCats=catDataDisplay.slice(0,5);
+          const bestCats=catDataGlobal;
           const todayLong=new Date(todayISO+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
           const monthName=new Date(todayISO+"T12:00:00").toLocaleDateString("pt-BR",{month:"long"});
           // Gráfico: os últimos 6 meses até o atual, com zero nos meses sem lançamento.
@@ -2359,7 +2497,18 @@ function MainApp({user,setUser}){
             {resumoDoMes&&<p style={{margin:"-12px 0 0",fontSize:13,color:TX2,maxWidth:"70ch",lineHeight:1.55}}>{resumoDoMes.text}</p>}
 
             {/* ---- Primeiros passos: só para quem ainda não tem nenhum dado ---- */}
-            {!onboardingDismissed&&transactions.length===0&&wishes.length===0&&plannedExpenses.length===0&&installments.length===0&&(
+            {/* ---- Conta nova, ainda vazia: a carteira aparece e explica que o que entrar aqui fica só nesta conta ---- */}
+            {accounts.length>1&&transactions.length===0&&plannedExpenses.length===0&&installments.length===0&&(
+              <Card style={{padding:24,display:"flex",alignItems:"center",gap:24,flexWrap:"wrap",boxShadow:"none"}}>
+                <WalletArt key={activeAccount} size={104} accent={accent}/>
+                <div style={{flex:"1 1 240px",minWidth:0}}>
+                  <div style={{fontSize:16,fontWeight:600,color:TX,marginBottom:6}}>{accounts.find(a=>a.id===activeAccount)?.name||"Esta conta"} está pronta</div>
+                  <div style={{fontSize:13,color:TX2,lineHeight:1.6,marginBottom:14}}>Ainda não tem nada aqui. O que você lançar agora fica só nesta conta; para voltar às outras, troque no topo.</div>
+                  {newTxButton(false)}
+                </div>
+              </Card>
+            )}
+            {accounts.length<2&&!onboardingDismissed&&transactions.length===0&&wishes.length===0&&plannedExpenses.length===0&&installments.length===0&&(
               <Card style={{padding:20,display:"flex",alignItems:"flex-start",gap:14,boxShadow:"none"}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:15,fontWeight:600,color:TX,marginBottom:6}}>Bem-vindo(a) ao {walletName}</div>
@@ -2412,6 +2561,26 @@ function MainApp({user,setUser}){
                     </ul>
                   </Card>
                 </section>
+                {bestCats.length>0&&(
+                  <section>
+                    <SectionTitle>Principais categorias</SectionTitle>
+                    <Card style={{boxShadow:"none",padding:20,display:"flex",flexDirection:"column",gap:12}}>
+                      {bestCats.map(d=>{
+                        const cc=catColor(d.name);
+                        const pct=Math.round((d.value/(bestCats[0].value||1))*100);
+                        return(
+                          <div key={d.name}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:6}}>
+                              <span style={{fontSize:13,color:TX,display:"flex",alignItems:"center",gap:8,minWidth:0}}><i aria-hidden="true" style={{width:8,height:8,borderRadius:"50%",background:cc,flexShrink:0}}/>{d.name}</span>
+                              <span className="num" style={{fontSize:13,fontWeight:600,color:TX}}>{fmt(d.value)}</span>
+                            </div>
+                            <ProgressBar pct={pct} color={cc} height={5}/>
+                          </div>
+                        );
+                      })}
+                    </Card>
+                  </section>
+                )}
               </div>
               <div className="home-col">
                 <section>
@@ -2447,51 +2616,28 @@ function MainApp({user,setUser}){
                     </Card>
                   </section>
                 )}
-              </div>
-            </div>
-
-            <div className="home-grid">
-              {bestCats.length>0&&(
                 <section>
-                  <SectionTitle>Principais categorias</SectionTitle>
-                  <Card style={{boxShadow:"none",padding:20,display:"flex",flexDirection:"column",gap:12}}>
-                    {bestCats.map(d=>{
-                      const cc=d.name==="Outras categorias"?TX3:catColor(d.name);
-                      const pct=Math.round((d.value/(bestCats[0].value||1))*100);
-                      return(
-                        <div key={d.name}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:6}}>
-                            <span style={{fontSize:13,color:TX,display:"flex",alignItems:"center",gap:8,minWidth:0}}><i aria-hidden="true" style={{width:8,height:8,borderRadius:"50%",background:cc,flexShrink:0}}/>{d.name}</span>
-                            <span className="num" style={{fontSize:13,fontWeight:600,color:TX}}>{fmt(d.value)}</span>
-                          </div>
-                          <ProgressBar pct={pct} color={cc} height={5}/>
-                        </div>
-                      );
-                    })}
+                  <SectionTitle>Saúde financeira</SectionTitle>
+                  <Card style={{boxShadow:"none",padding:"6px 16px"}}>
+                    <ul className="home-list">
+                      {healthIndicators.slice(0,5).map(hi=>{
+                        const tone={"Excelente":[SUCCESS_SURFACE,SUCCESS],"Boa":[MUTED,TX],"Atenção":[WARNING_SURFACE,WARNING],"Crítica":[DANGER_SURFACE,ERROR]}[hi.status]||[MUTED,TX2];
+                        return(
+                          <li key={hi.label} className="home-li">
+                            <button type="button" className="home-li-btn" onClick={()=>setExplainKey(`health:${hi.label}`)} aria-label={`${hi.label}: ${hi.value}${hi.status?`, ${hi.status}`:""}. Como é calculado`}>
+                              <span className="home-li-name" style={{color:TX2}}>{hi.label}</span>
+                              <span style={{display:"flex",alignItems:"center",gap:8}}>
+                                <span style={{fontSize:13,fontWeight:600,color:TX}}>{hi.value}</span>
+                                {hi.status&&<span style={{fontSize:11,fontWeight:600,background:tone[0],color:tone[1],padding:"2px 8px",borderRadius:999}}>{hi.status}</span>}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </Card>
                 </section>
-              )}
-              <section>
-                <SectionTitle>Saúde financeira</SectionTitle>
-                <Card style={{boxShadow:"none",padding:"6px 16px"}}>
-                  <ul className="home-list">
-                    {healthIndicators.slice(0,5).map(hi=>{
-                      const tone={"Excelente":[SUCCESS_SURFACE,SUCCESS],"Boa":[MUTED,TX],"Atenção":[WARNING_SURFACE,WARNING],"Crítica":[DANGER_SURFACE,ERROR]}[hi.status]||[MUTED,TX2];
-                      return(
-                        <li key={hi.label} className="home-li">
-                          <button type="button" className="home-li-btn" onClick={()=>setExplainKey(`health:${hi.label}`)} aria-label={`${hi.label}: ${hi.value}${hi.status?`, ${hi.status}`:""}. Como é calculado`}>
-                            <span className="home-li-name" style={{color:TX2}}>{hi.label}</span>
-                            <span style={{display:"flex",alignItems:"center",gap:8}}>
-                              <span style={{fontSize:13,fontWeight:600,color:TX}}>{hi.value}</span>
-                              {hi.status&&<span style={{fontSize:11,fontWeight:600,background:tone[0],color:tone[1],padding:"2px 8px",borderRadius:999}}>{hi.status}</span>}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </Card>
-              </section>
+              </div>
             </div>
 
             {(investmentStats||subscriptions)&&(

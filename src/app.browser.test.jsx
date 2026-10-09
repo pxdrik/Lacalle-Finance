@@ -107,6 +107,72 @@ describe("ciclo de salvamento pela tela", () => {
   });
 });
 
+describe("contas bancárias", () => {
+  const accounts = [{ id: "principal", name: "Itaú" }, { id: "mp", name: "Mercado Pago" }];
+  beforeEach(async () => { h.storage = createFakeStorage({ tx: [tx(1, "Do Itaú")], accounts }); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("trocar de conta mostra só os lançamentos dela; o novo vai para a conta aberta e desfazer não mexe na outra", async () => {
+    await openApp();
+    fireEvent.click(navBtn("Transações"));
+    await screen.findByText("Do Itaú");
+    fireEvent.change(screen.getByRole("combobox", { name: "Conta bancária" }), { target: { value: "mp" } });
+    await waitFor(() => expect(screen.queryByText("Do Itaú")).toBeNull());
+    await addTransaction("Do Mercado Pago", "30,00");
+    await waitFor(() => expect(h.storage.peek().tx.map(t => [t.desc, t.account ?? "principal"]).sort()).toEqual([["Do Itaú", "principal"], ["Do Mercado Pago", "mp"]]), SAVE_WAIT);
+    fireEvent.change(screen.getByRole("combobox", { name: "Conta bancária" }), { target: { value: "principal" } });
+    await screen.findByText("Do Itaú");
+    expect(screen.queryByText("Do Mercado Pago")).toBeNull();
+    fireEvent.click(screen.getByTitle(/Desfazer/));
+    await waitFor(() => expect(h.storage.peek().tx.map(t => t.desc)).toEqual(["Do Itaú"]), SAVE_WAIT);
+  });
+
+  test("com uma conta só, o botão Novo banco do topo cria a segunda e já abre nela", async () => {
+    h.storage = createFakeStorage({ tx: [tx(1, "Do Itaú")] });
+    await openApp();
+    expect(screen.queryByRole("combobox", { name: "Conta bancária" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Novo banco" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Novo banco" }));
+    // banco da lista: um toque escolhe, sem campo de nome
+    expect(dialog.queryByLabelText("Nome do banco")).toBeNull();
+    fireEvent.click(dialog.getByRole("button", { name: "Mercado Pago" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Adicionar banco" }));
+    const select = await screen.findByRole("combobox", { name: "Conta bancária" });
+    expect(select.selectedOptions[0].textContent).toBe("Mercado Pago");
+    await screen.findByText("Mercado Pago está pronta");
+    // banco fora da lista: "Outro" abre o campo para digitar
+    fireEvent.click(screen.getByRole("button", { name: "Novo banco" }));
+    const again = within(await screen.findByRole("dialog", { name: "Novo banco" }));
+    expect(again.queryByRole("button", { name: "Mercado Pago" })).toBeNull(); // já existe
+    fireEvent.click(again.getByRole("button", { name: "Outro" }));
+    fireEvent.change(again.getByLabelText("Nome do banco"), { target: { value: "Sicredi" } });
+    fireEvent.click(again.getByRole("button", { name: "Adicionar banco" }));
+    await screen.findByText("Sicredi está pronta");
+    await waitFor(() => expect(h.storage.peek().accounts?.map(a => a.name)).toEqual(["Conta principal", "Mercado Pago", "Sicredi"]), SAVE_WAIT);
+  });
+
+  test("conta nova e vazia mostra a carteira no Início; com lançamento, ela some", async () => {
+    await openApp();
+    expect(screen.queryByText("Mercado Pago está pronta")).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "Conta bancária" }), { target: { value: "mp" } });
+    await screen.findByText("Mercado Pago está pronta");
+    await addTransaction("Primeira venda", "19,99");
+    fireEvent.click(navBtn("Início"));
+    await screen.findByRole("heading", { name: "Início" });
+    expect(screen.queryByText("Mercado Pago está pronta")).toBeNull();
+  });
+
+  test("celular 320px: o seletor de conta com nome longo cabe no topo", async () => {
+    h.storage = createFakeStorage({ tx: [], accounts: [{ id: "principal", name: "Conta corrente Itaú Personnalité" }, ...accounts.slice(1)] });
+    await setViewport(320, 800);
+    render(<StrictMode><Root /></StrictMode>);
+    const select = await screen.findByRole("combobox", { name: "Conta bancária" }, { timeout: 8000 });
+    const header = document.querySelector(".app-header");
+    expect(overflowX(header)).toBeLessThanOrEqual(0);
+    expect(select.getBoundingClientRect().right).toBeLessThanOrEqual(header.querySelector(".hdr-sync").getBoundingClientRect().left);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320);
+  });
+});
+
 describe("tela de erro por seção", () => {
   test("uma seção que quebra mostra o aviso e o resto continua; tentar de novo volta a desenhar", async () => {
     const { TabPanel } = await import("./components/ui.jsx");

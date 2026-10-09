@@ -4,6 +4,32 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
+## ✅ EM PRODUÇÃO: contas bancárias e categorias no Início (09/10/2026)
+
+PR #4, aprovado pelo Pedro no protótipo
+(https://claude.ai/artifact/HD1CC5oowS8JaXTgPfnftE) em vez da prévia do
+Netlify, que usa o banco de produção.
+
+- **Contas bancárias:** em "Minha Conta" dá para criar contas (ex.: Itaú e
+  Mercado Pago). Com mais de uma, um seletor no topo troca a conta aberta.
+  Lançamentos, previstos e parcelamentos são de uma conta (campo `account`;
+  sem o campo é a "principal", que é tudo o que existia antes). Metas são
+  as mesmas em todas. A conta aberta fica guardada no aparelho.
+- Só remove conta vazia. Item de conta que não existe mais aparece na
+  principal, para dinheiro nunca sumir da tela.
+- **Início:** "Principais categorias" subiu para a coluna da esquerda e
+  mostra todas as categorias; "Saúde financeira" foi para o fim da direita.
+- **Novo banco:** botão no topo (aparece já com uma conta só) abre uma
+  janela com bancos sugeridos e "Outro" (para digitar o nome); a conta
+  criada já abre.
+- **Carteira:** desenho animado (`WalletArt`) no seletor do topo, na lista
+  de contas e no Início de uma conta nova ainda vazia; a tela entra de novo
+  ao trocar de conta.
+- **Não feito:** visão "todas as contas somadas" e mover um lançamento de
+  uma conta para outra.
+
+---
+
 ## ✅ EM PRODUÇÃO: pontos do Lacalle Life no Finance (04/10/2026)
 
 Implementado a partir do protótipo

@@ -21,7 +21,7 @@ export const SCHEMA_VERSION = 2;
 
 // coleção → campo que identifica o registro
 export const COLLECTIONS = { tx: "id", wishes: "id", inst: "id", planned: "id", trash: "trashId" };
-export const FIELDS = ["name", "accentKey", "walletName", "onboardingDismissed", "customCats"];
+export const FIELDS = ["name", "accentKey", "walletName", "onboardingDismissed", "customCats", "accounts"];
 export const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 // tipo do item na lixeira → coleção onde ele vive quando restaurado
@@ -78,7 +78,7 @@ export function deepEqual(a, b) {
 export function emptyDoc() {
   return {
     tx: [], wishes: [], inst: [], planned: [], trash: [],
-    customCats: [], name: undefined, accentKey: undefined, walletName: undefined, onboardingDismissed: false,
+    customCats: [], name: undefined, accentKey: undefined, walletName: undefined, onboardingDismissed: false, accounts: undefined,
     tombstones: { tx: {}, wishes: {}, inst: {}, planned: {}, trash: {} },
     fieldsUpdatedAt: {},
     // registros que não dá para mostrar sem quebrar as contas: guardados
@@ -113,6 +113,8 @@ export function normalizeDoc(raw) {
   out.accentKey = typeof d.accentKey === "string" ? d.accentKey : undefined;
   out.walletName = typeof d.walletName === "string" ? d.walletName : undefined;
   out.onboardingDismissed = !!d.onboardingDismissed;
+  // contas bancárias: [{id, name}]; registro sem `account` é da conta "principal"
+  if (Array.isArray(d.accounts)) out.accounts = d.accounts.filter(a => isObj(a) && typeof a.id === "string" && typeof a.name === "string");
   if (isObj(d.fieldsUpdatedAt)) for (const f of FIELDS) if (typeof d.fieldsUpdatedAt[f] === "number") out.fieldsUpdatedAt[f] = d.fieldsUpdatedAt[f];
   return out;
 }
