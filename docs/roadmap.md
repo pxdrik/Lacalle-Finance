@@ -16,9 +16,11 @@ Feito em 09/10/2026 nos painéis:
   "LaCalle Finance - Signup" (o mesmo widget atende o Life). O Supabase
   exige CAPTCHA no login; o widget mostra "Success!" no endereço novo.
 - Supabase Auth: Site URL = Vercel; Redirect URLs com Vercel e Netlify.
-- `ALLOWED_ORIGINS` da `delete-account`: Vercel e Netlify (CORS testado).
-
-- Depois: desligar o Netlify do GitHub e apagar `netlify.toml`.
+- `ALLOWED_ORIGINS` da `delete-account`: só a Vercel (CORS testado).
+- Netlify apagado pelo Pedro (o endereço antigo dá 404); `netlify.toml`
+  removido; o endereço antigo saiu do Turnstile e dos Redirect URLs do
+  Supabase (subdomínio livre não pode ficar autorizado). GitHub sem webhook
+  nem chave do Netlify.
 
 ---
 
