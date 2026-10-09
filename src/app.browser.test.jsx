@@ -132,12 +132,22 @@ describe("contas bancárias", () => {
     expect(screen.queryByRole("combobox", { name: "Conta bancária" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Novo banco" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Novo banco" }));
+    // banco da lista: um toque escolhe, sem campo de nome
+    expect(dialog.queryByLabelText("Nome do banco")).toBeNull();
     fireEvent.click(dialog.getByRole("button", { name: "Mercado Pago" }));
     fireEvent.click(dialog.getByRole("button", { name: "Adicionar banco" }));
     const select = await screen.findByRole("combobox", { name: "Conta bancária" });
     expect(select.selectedOptions[0].textContent).toBe("Mercado Pago");
     await screen.findByText("Mercado Pago está pronta");
-    await waitFor(() => expect(h.storage.peek().accounts?.map(a => a.name)).toEqual(["Conta principal", "Mercado Pago"]), SAVE_WAIT);
+    // banco fora da lista: "Outro" abre o campo para digitar
+    fireEvent.click(screen.getByRole("button", { name: "Novo banco" }));
+    const again = within(await screen.findByRole("dialog", { name: "Novo banco" }));
+    expect(again.queryByRole("button", { name: "Mercado Pago" })).toBeNull(); // já existe
+    fireEvent.click(again.getByRole("button", { name: "Outro" }));
+    fireEvent.change(again.getByLabelText("Nome do banco"), { target: { value: "Sicredi" } });
+    fireEvent.click(again.getByRole("button", { name: "Adicionar banco" }));
+    await screen.findByText("Sicredi está pronta");
+    await waitFor(() => expect(h.storage.peek().accounts?.map(a => a.name)).toEqual(["Conta principal", "Mercado Pago", "Sicredi"]), SAVE_WAIT);
   });
 
   test("conta nova e vazia mostra a carteira no Início; com lançamento, ela some", async () => {

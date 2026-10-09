@@ -1422,6 +1422,7 @@ function MainApp({user,setUser}){
   };
   const [newAccountName,setNewAccountName]=useState("");
   const [showAddBank,setShowAddBank]=useState(false);
+  const [bankOther,setBankOther]=useState(false); // "Outro": o nome é digitado
   const addAccount=()=>{
     const name=newAccountName.trim();
     if(!name)return;
@@ -1897,7 +1898,7 @@ function MainApp({user,setUser}){
             </select>
           </span>
         ):<span className="hdr-sig"><Signature size={18}/></span>}
-        <button type="button" className="hdr-add-bank" onClick={()=>{setNewAccountName("");setShowAddBank(true);}} aria-label="Novo banco" title="Adicionar uma conta bancária"><Plus size={14} aria-hidden="true"/><span className="hdr-add-label">Novo banco</span></button>
+        <button type="button" className="hdr-add-bank" onClick={()=>{setNewAccountName("");setBankOther(false);setShowAddBank(true);}} aria-label="Novo banco" title="Adicionar uma conta bancária"><Plus size={14} aria-hidden="true"/><span className="hdr-add-label">Novo banco</span></button>
         <div className="hdr-sync" aria-live="polite">
           {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
           {syncStatus==="saving"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Salvando</span></>}
@@ -1955,11 +1956,17 @@ function MainApp({user,setUser}){
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
             {BANK_SUGGESTIONS.filter(b=>!accounts.some(a=>a.name.trim().toLowerCase()===b.toLowerCase())).map(b=>(
-              <button key={b} type="button" className="cat-chip" aria-pressed={newAccountName===b} onClick={()=>setNewAccountName(b)}>{b}</button>
+              <button key={b} type="button" className="cat-chip" aria-pressed={!bankOther&&newAccountName===b} onClick={()=>{setBankOther(false);setNewAccountName(b);}}>{b}</button>
             ))}
+            <button type="button" className="cat-chip" aria-pressed={bankOther} onClick={()=>{setBankOther(true);setNewAccountName("");}}><Plus size={12} aria-hidden="true"/>Outro</button>
           </div>
-          <label htmlFor="new-bank-name" style={{display:"block",fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Nome</label>
-          <input id="new-bank-name" autoFocus placeholder="Ex.: Mercado Pago" value={newAccountName} onChange={e=>setNewAccountName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAccount()} style={{...SI,marginBottom:20}}/>
+          {bankOther&&(
+            <>
+              <label htmlFor="new-bank-name" style={{display:"block",fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Nome do banco</label>
+              <input id="new-bank-name" autoFocus placeholder="Ex.: Sicredi" value={newAccountName} onChange={e=>setNewAccountName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAccount()} style={{...SI,marginBottom:6}}/>
+            </>
+          )}
+          <div style={{height:14}}/>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setShowAddBank(false)} style={{flex:1,fontSize:14}}>Cancelar</BtnGhost>
             <Btn onClick={addAccount} disabled={!newAccountName.trim()} style={{flex:2,fontSize:14,...(newAccountName.trim()?{}:{opacity:0.5,cursor:"not-allowed"})}}>Adicionar banco</Btn>
