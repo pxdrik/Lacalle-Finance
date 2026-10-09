@@ -2463,7 +2463,8 @@ function MainApp({user,setUser}){
         </Modal>
       )}
 
-      <div key={tab} className="main-content" style={{padding:"28px 32px",maxWidth:1600,margin:"0 auto",animation:`fadeIn .35s ${EASE_OUT}`}}>
+      {/* A região principal (auditoria de 09/10/2026): sem ela, quem usa leitor de tela não tinha como pular direto para o conteúdo. */}
+      <main key={tab} className="main-content" style={{padding:"28px 32px",maxWidth:1600,margin:"0 auto",animation:`fadeIn .35s ${EASE_OUT}`}}>
 
         {tab==="dashboard"&&(
         <TabPanel id="dashboard" idPrefix="app">
@@ -2765,7 +2766,7 @@ function MainApp({user,setUser}){
           />
         </TabPanel>
         )}
-      </div>
+      </main>
     </div>
     </div>
     </DensityProvider>

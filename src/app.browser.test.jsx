@@ -7,6 +7,7 @@ import { render, screen, waitFor, fireEvent, within, cleanup } from "@testing-li
 import { createFakeStorage } from "./test/fakeStorage.js";
 import { setViewport, DESKTOP_WIDTH, PHONE_WIDTHS, overflowX, hitTargetsAcross } from "./test/geometry.js";
 import { contrastRatio } from "./lib/theme.js";
+import { axeViolations } from "./test/axe.js";
 
 const h = vi.hoisted(() => ({ storage: null, invoke: null, signIn: null }));
 
@@ -542,5 +543,197 @@ describe("tela de login", () => {
     h.signIn = async () => ({ data: { user: { email: "pedro@exemplo.com", user_metadata: { name: "Pedro" } } }, error: null });
     fireEvent.submit(screen.getByLabelText("Senha").form);
     await waitFor(() => expect(onLogin).toHaveBeenCalledWith("pedro@exemplo.com", "Pedro"));
+  });
+
+  // Auditoria de 09/10/2026, F4: a tela de login não tinha região principal,
+  // e quem usa leitor de tela não tinha como pular direto para o formulário.
+  test("o formulário fica dentro da região principal, e o axe não acha nada", async () => {
+    render(<AuthScreen onLogin={vi.fn()} />);
+    const form = screen.getByLabelText("Senha").form;
+    expect(screen.getByRole("main").contains(form)).toBe(true);
+    expect(await axeViolations()).toEqual([]);
+  });
+});
+
+// ---- Auditoria de 09/10/2026 ---------------------------------------------
+// O resto da tela, além da lógica (que os testes de node já cobrem): o que
+// a pessoa faz com dinheiro, conferido pelo que fica gravado e pelo saldo do
+// Início, e o axe nas telas que estes testes abrem.
+
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const income = (id, desc, val) => ({ ...tx(id, desc, val), type: "Entrada", cat: "Salario / Entradas" });
+const balanceText = () => document.querySelector('section[aria-label="Saldo"] .home-metric')?.textContent ?? "";
+const sheetClosed = () => waitFor(() => expect(screen.queryByRole("dialog", { name: "Novo lançamento" })).toBeNull());
+// O axe mede a cor do momento: no meio de um fade, o texto ainda está meio
+// transparente e o contraste sai falso (medido: 29 avisos no Início a 0,4 s,
+// 1 depois das animações). Espera as animações que terminam; as que repetem
+// para sempre (brilho de carregamento) ficam de fora.
+const animationsDone = () => Promise.all(document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => {})));
+
+/** Novo lançamento pela folha, de Entrada ou Saída, e espera a folha fechar. */
+async function launch(desc, value, type = "Saída") {
+  const sheet = await openNewTxSheet();
+  // o formulário lembra o último tipo usado: escolhe sempre o pedido
+  fireEvent.click(within(sheet.getByRole("group", { name: "Tipo de lançamento" })).getByRole("button", { name: type }));
+  fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: desc } });
+  fireEvent.change(sheet.getByLabelText("Valor"), { target: { value } });
+  // logo depois de um lançamento o botão mostra "Adicionando..." até a trava
+  // contra toque duplo (600 ms) passar
+  fireEvent.click(await sheet.findByRole("button", { name: new RegExp(`Adicionar ${type}`) }, { timeout: 2000 }));
+  await sheetClosed();
+}
+
+async function expectBalance(pattern) {
+  fireEvent.click(navBtn("Início"));
+  await screen.findByRole("heading", { name: "Início" });
+  await waitFor(() => expect(balanceText()).toMatch(pattern), { timeout: 3000 });
+}
+
+describe("fluxos de dinheiro", () => {
+  beforeEach(async () => { h.storage = createFakeStorage(); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("entrada e saída: o saldo do Início é a diferença, e reabrir o app mostra o mesmo", async () => {
+    await openApp();
+    await launch("Salário", "1.000,00", "Entrada");
+    await launch("Mercado", "300,00");
+    await waitFor(() => expect(h.storage.peek()?.tx?.map(t => [t.desc, t.type, t.val]).sort()).toEqual([["Mercado", "Saída", 300], ["Salário", "Entrada", 1000]]), SAVE_WAIT);
+    await expectBalance(/700,00/);
+
+    cleanup();
+    localStorage.clear(); // reabre só com o que está na nuvem, sem a cópia do aparelho
+    await openApp();
+    await expectBalance(/700,00/);
+    fireEvent.click(navBtn("Transações"));
+    await screen.findByText("Salário");
+    expect(screen.getByText("Mercado")).toBeTruthy();
+  });
+
+  test("editar: o valor novo vai para o mesmo lançamento, sem criar outro, e o saldo acompanha", async () => {
+    h.storage = createFakeStorage({ tx: [income(1, "Salário", 1000), tx(2, "Mercado", 45)] });
+    await openApp();
+    await expectBalance(/955,00/);
+    fireEvent.click(navBtn("Transações"));
+    fireEvent.click(await screen.findByRole("button", { name: "Editar Mercado" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.change(dialog.getByLabelText("Valor"), { target: { value: "50,00" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() => expect(h.storage.peek()?.tx?.map(t => [t.id, t.desc, t.val]).sort()).toEqual([[1, "Salário", 1000], [2, "Mercado", 50]]), SAVE_WAIT);
+    await expectBalance(/950,00/);
+  });
+
+  test("excluir: sai da nuvem e o saldo volta", async () => {
+    h.storage = createFakeStorage({ tx: [income(1, "Salário", 1000), tx(2, "Mercado", 45)] });
+    await openApp();
+    fireEvent.click(navBtn("Transações"));
+    const btn = await screen.findByRole("button", { name: "Excluir Mercado" });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    await waitFor(() => expect(h.storage.peek()?.tx?.map(t => t.desc)).toEqual(["Salário"]), SAVE_WAIT);
+    await expectBalance(/1\.000,00/);
+  });
+
+  test("dois toques seguidos em Adicionar gravam um lançamento só", async () => {
+    await openApp();
+    const sheet = await openNewTxSheet();
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Padaria" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "12,50" } });
+    const add = sheet.getByRole("button", { name: /Adicionar Saída/ });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    await waitFor(() => expect(h.storage.peek()?.tx?.length).toBe(1), SAVE_WAIT);
+    await new Promise(r => setTimeout(r, 800)); // passa o intervalo da trava (600 ms) e confere de novo
+    expect(h.storage.peek().tx.map(t => t.desc)).toEqual(["Padaria"]);
+  });
+
+  test("o mesmo lançamento de novo no mesmo dia pede confirmação; Cancelar não grava, confirmar grava", async () => {
+    h.storage = createFakeStorage({ tx: [{ ...tx(1, "Mercado", 45), date: todayISO() }] });
+    await openApp();
+    let sheet = await openNewTxSheet();
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Mercado" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "45,00" } });
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    await screen.findByText("Parece duplicado");
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    await new Promise(r => setTimeout(r, 400));
+    expect(h.storage.sets).toBe(0);
+
+    sheet = within(screen.getByRole("dialog", { name: "Novo lançamento" }));
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Lançar mesmo assim" }));
+    await waitFor(() => expect(h.storage.peek()?.tx?.filter(t => t.desc === "Mercado").length).toBe(2), SAVE_WAIT);
+  });
+
+  test("fechar a folha preenchida e descartar não grava nada", async () => {
+    await openApp();
+    const sheet = await openNewTxSheet();
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Cinema" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "40,00" } });
+    fireEvent.click(sheet.getByRole("button", { name: "Fechar" }));
+    await screen.findByText("Descartar alterações?");
+    fireEvent.click(screen.getByRole("button", { name: "Descartar" }));
+    await sheetClosed();
+    await new Promise(r => setTimeout(r, 400));
+    expect(h.storage.sets).toBe(0);
+    expect(screen.queryByText("Cinema")).toBeNull();
+  });
+
+  test("sem valor, nada é gravado e o aviso diz o que falta", async () => {
+    await openApp();
+    const sheet = await openNewTxSheet();
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Farmácia" } });
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    await screen.findByText("Informe o valor.");
+    expect(screen.getByRole("dialog", { name: "Novo lançamento" })).toBeTruthy(); // a folha continua aberta
+    await new Promise(r => setTimeout(r, 400));
+    expect(h.storage.sets).toBe(0);
+  });
+
+  test("meta para Previstos: sai de Metas e é gravada como conta prevista", async () => {
+    h.storage = createFakeStorage({ wishes: [{ id: 1, name: "Curso de inglês", price: 600, saved: 0, priority: "Média", monthsTarget: 0, notes: "", done: false }] });
+    await openApp();
+    fireEvent.click(navBtn("Metas"));
+    fireEvent.click(await screen.findByRole("button", { name: "Opções de Curso de inglês" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Mover para Previstos/ }));
+    const dialog = await waitFor(() => { const d = [...document.querySelectorAll("dialog[open]")].find(x => x.textContent.includes("Repetição")); if (!d) throw new Error("sem a janela de mover"); return within(d); });
+    fireEvent.click(dialog.getByRole("button", { name: "Mover para Previstos" }));
+    await waitFor(() => {
+      const doc = h.storage.peek();
+      expect(doc?.wishes ?? []).toHaveLength(0);
+      expect(doc?.planned?.map(p => [p.desc, p.val])).toEqual([["Curso de inglês", 600]]);
+    }, SAVE_WAIT);
+  });
+});
+
+describe("acessibilidade medida pelo axe", () => {
+  const data = {
+    tx: [income(1, "Salário", 3000), tx(2, "Mercado", 245)],
+    wishes: [{ id: 1, name: "Viagem", price: 5000, saved: 1000, priority: "Média", monthsTarget: 0, notes: "", done: false }],
+    planned: [{ id: 1, desc: "Aluguel", val: 1500, cat: "Outros", form: "pix", recurring: true, month: null, paid: {}, ignored: {} }],
+  };
+  beforeEach(async () => { h.storage = createFakeStorage(data); await setViewport(DESKTOP_WIDTH, 900); });
+
+  for (const section of ["Início", "Transações", "Metas", "Previstos", "Parcelas"]) {
+    test(`computador: ${section}`, async () => {
+      await openApp();
+      fireEvent.click(navBtn(section));
+      await waitFor(() => expect(navBtn(section).getAttribute("aria-current")).toBe("page"));
+      await animationsDone();
+      expect(await axeViolations()).toEqual([]);
+    });
+  }
+
+  test("folha de novo lançamento aberta", async () => {
+    await openApp();
+    await openNewTxSheet();
+    await animationsDone();
+    expect(await axeViolations()).toEqual([]);
+  });
+
+  test("celular 390px: Início com a barra de baixo", async () => {
+    await setViewport(390, 800);
+    render(<StrictMode><Root /></StrictMode>);
+    await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
+    await animationsDone();
+    expect(await axeViolations()).toEqual([]);
   });
 });

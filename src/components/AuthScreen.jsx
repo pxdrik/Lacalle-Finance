@@ -160,7 +160,7 @@ export default function AuthScreen({ onLogin }) {
   const onSubmit = e => { e.preventDefault(); submit(); };
 
   return (
-    <AuthShell>
+    <AuthShell brandIsHeading={mode !== "forgot"}>
       <form onSubmit={onSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {mode === "forgot" ? (
           <div>
@@ -219,9 +219,14 @@ function Notice({ tone, children }) {
 }
 
 /** Moldura das telas sem login: assinatura no alto, cartão sem sombra e a nota do cadeado embaixo. */
-function AuthShell({ children }) {
+function AuthShell({ children, brandIsHeading = false }) {
+  // Entrar e Criar conta não têm título próprio: a marca vira o <h1> da página.
+  // As telas de senha já têm o delas, e aí a marca continua um texto.
+  const Brand = brandIsHeading ? "h1" : "div";
   return (
-    <div style={{ background: BG, minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif", padding: "32px 16px" }}>
+    // A região principal (auditoria de 09/10/2026): sem ela, quem usa leitor
+    // de tela não tinha como pular direto para o formulário.
+    <main style={{ background: BG, minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif", padding: "32px 16px" }}>
       <style>{`
         .wl-input:focus{outline:none;border-color:${GOLD}80 !important;box-shadow:0 0 0 3px ${GOLD}22;}
         .wl-btn{transition:filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT};}
@@ -244,7 +249,7 @@ function AuthShell({ children }) {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
           <FinanceMark size={44} />
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontWeight: 700, fontSize: 24, color: TX, letterSpacing: "-0.03em" }}>LaCalle <span style={{ color: GOLD }}>Finance</span></div>
+            <Brand style={{ margin: 0, fontWeight: 700, fontSize: 24, color: TX, letterSpacing: "-0.03em" }}>LaCalle <span style={{ color: GOLD }}>Finance</span></Brand>
             <div style={{ fontSize: 13, color: TX2, marginTop: 6 }}>Seu dinheiro, em todos os seus aparelhos</div>
           </div>
         </div>
@@ -253,7 +258,7 @@ function AuthShell({ children }) {
           <Lock size={13} aria-hidden="true" />Conta protegida por senha. Seus dados são só seus.
         </p>
       </div>
-    </div>
+    </main>
   );
 }
 
