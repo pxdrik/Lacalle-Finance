@@ -4,6 +4,24 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
+## 🔶 EM PRÉVIA: contas bancárias e categorias no Início (09/10/2026)
+
+Branch `contas-bancarias`, esperando o teste do Pedro na prévia do PR.
+
+- **Contas bancárias:** em "Minha Conta" dá para criar contas (ex.: Itaú e
+  Mercado Pago). Com mais de uma, um seletor no topo troca a conta aberta.
+  Lançamentos, previstos e parcelamentos são de uma conta (campo `account`;
+  sem o campo é a "principal", que é tudo o que existia antes). Metas são
+  as mesmas em todas. A conta aberta fica guardada no aparelho.
+- Só remove conta vazia. Item de conta que não existe mais aparece na
+  principal, para dinheiro nunca sumir da tela.
+- **Início:** "Principais categorias" subiu para a coluna da esquerda e
+  mostra todas as categorias; "Saúde financeira" foi para o fim da direita.
+- **Não feito:** visão "todas as contas somadas" e mover um lançamento de
+  uma conta para outra.
+
+---
+
 ## ✅ EM PRODUÇÃO: pontos do Lacalle Life no Finance (04/10/2026)
 
 Implementado a partir do protótipo

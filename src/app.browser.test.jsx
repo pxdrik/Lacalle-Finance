@@ -107,6 +107,37 @@ describe("ciclo de salvamento pela tela", () => {
   });
 });
 
+describe("contas bancárias", () => {
+  const accounts = [{ id: "principal", name: "Itaú" }, { id: "mp", name: "Mercado Pago" }];
+  beforeEach(async () => { h.storage = createFakeStorage({ tx: [tx(1, "Do Itaú")], accounts }); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("trocar de conta mostra só os lançamentos dela; o novo vai para a conta aberta e desfazer não mexe na outra", async () => {
+    await openApp();
+    fireEvent.click(navBtn("Transações"));
+    await screen.findByText("Do Itaú");
+    fireEvent.change(screen.getByRole("combobox", { name: "Conta bancária" }), { target: { value: "mp" } });
+    await waitFor(() => expect(screen.queryByText("Do Itaú")).toBeNull());
+    await addTransaction("Do Mercado Pago", "30,00");
+    await waitFor(() => expect(h.storage.peek().tx.map(t => [t.desc, t.account ?? "principal"]).sort()).toEqual([["Do Itaú", "principal"], ["Do Mercado Pago", "mp"]]), SAVE_WAIT);
+    fireEvent.change(screen.getByRole("combobox", { name: "Conta bancária" }), { target: { value: "principal" } });
+    await screen.findByText("Do Itaú");
+    expect(screen.queryByText("Do Mercado Pago")).toBeNull();
+    fireEvent.click(screen.getByTitle(/Desfazer/));
+    await waitFor(() => expect(h.storage.peek().tx.map(t => t.desc)).toEqual(["Do Itaú"]), SAVE_WAIT);
+  });
+
+  test("celular 320px: o seletor de conta com nome longo cabe no topo", async () => {
+    h.storage = createFakeStorage({ tx: [], accounts: [{ id: "principal", name: "Conta corrente Itaú Personnalité" }, ...accounts.slice(1)] });
+    await setViewport(320, 800);
+    render(<StrictMode><Root /></StrictMode>);
+    const select = await screen.findByRole("combobox", { name: "Conta bancária" }, { timeout: 8000 });
+    const header = document.querySelector(".app-header");
+    expect(overflowX(header)).toBeLessThanOrEqual(0);
+    expect(select.getBoundingClientRect().right).toBeLessThanOrEqual(header.querySelector(".hdr-sync").getBoundingClientRect().left);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(320);
+  });
+});
+
 describe("tela de erro por seção", () => {
   test("uma seção que quebra mostra o aviso e o resto continua; tentar de novo volta a desenhar", async () => {
     const { TabPanel } = await import("./components/ui.jsx");

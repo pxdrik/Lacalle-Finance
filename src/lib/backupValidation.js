@@ -144,8 +144,8 @@ function checkWish(w, i) {
  * validação, para o teste de ida e volta usar exatamente o mesmo formato que
  * o botão "Exportar backup" grava.
  */
-export function buildBackup({ tx, wishes, inst, planned, customCats, name, accentKey, walletName, trash, onboardingDismissed }, exportedAt = new Date().toISOString()) {
-  return { tx, wishes, inst, planned, customCats, name, accentKey, walletName, trash, onboardingDismissed, exportedAt };
+export function buildBackup({ tx, wishes, inst, planned, customCats, name, accentKey, walletName, accounts, trash, onboardingDismissed }, exportedAt = new Date().toISOString()) {
+  return { tx, wishes, inst, planned, customCats, name, accentKey, walletName, accounts, trash, onboardingDismissed, exportedAt };
 }
 
 /**
