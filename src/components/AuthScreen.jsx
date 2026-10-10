@@ -3,7 +3,7 @@ import { Lock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_INPUT, EASE_OUT, SUCCESS, ERROR, PRESS_SCALE, SUCCESS_SURFACE, DANGER_SURFACE } from "../lib/theme";
 import { FinanceMark } from "./Brand";
-import { Segmented } from "./ui";
+import { Segmented, VISUALLY_HIDDEN } from "./ui";
 import { checkNewPassword } from "../lib/authRecovery";
 
 // CAPTCHA (Cloudflare Turnstile) é OPCIONAL e fica totalmente desligado até
@@ -160,7 +160,7 @@ export default function AuthScreen({ onLogin }) {
   const onSubmit = e => { e.preventDefault(); submit(); };
 
   return (
-    <AuthShell brandIsHeading={mode !== "forgot"}>
+    <AuthShell>
       <form onSubmit={onSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {mode === "forgot" ? (
           <div>
@@ -168,8 +168,14 @@ export default function AuthScreen({ onLogin }) {
             <p style={{ margin: "6px 0 0", fontSize: 13, color: TX2, lineHeight: 1.5 }}>Mandamos um link para o seu e-mail. Ele traz você de volta aqui para criar uma senha nova.</p>
           </div>
         ) : (
-          <Segmented ariaLabel="Entrar ou criar conta" value={mode} onChange={switchMode}
-            options={[{ value: "login", label: "Entrar", tone: "neutral" }, { value: "signup", label: "Criar conta", tone: "neutral" }]} />
+          <>
+            {/* O título da página é o que ela faz (revisão do Pedro no PR #5):
+                só para leitor de tela, porque a troca Entrar/Criar conta logo
+                abaixo já diz isso na tela. */}
+            <h1 style={VISUALLY_HIDDEN}>{mode === "signup" ? "Criar conta" : "Entrar"}</h1>
+            <Segmented ariaLabel="Entrar ou criar conta" value={mode} onChange={switchMode}
+              options={[{ value: "login", label: "Entrar", tone: "neutral" }, { value: "signup", label: "Criar conta", tone: "neutral" }]} />
+          </>
         )}
         {mode === "signup" && (
           <div>
@@ -219,10 +225,7 @@ function Notice({ tone, children }) {
 }
 
 /** Moldura das telas sem login: assinatura no alto, cartão sem sombra e a nota do cadeado embaixo. */
-function AuthShell({ children, brandIsHeading = false }) {
-  // Entrar e Criar conta não têm título próprio: a marca vira o <h1> da página.
-  // As telas de senha já têm o delas, e aí a marca continua um texto.
-  const Brand = brandIsHeading ? "h1" : "div";
+function AuthShell({ children }) {
   return (
     // A região principal (auditoria de 09/10/2026): sem ela, quem usa leitor
     // de tela não tinha como pular direto para o formulário.
@@ -249,7 +252,7 @@ function AuthShell({ children, brandIsHeading = false }) {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
           <FinanceMark size={44} />
           <div style={{ textAlign: "center" }}>
-            <Brand style={{ margin: 0, fontWeight: 700, fontSize: 24, color: TX, letterSpacing: "-0.03em" }}>LaCalle <span style={{ color: GOLD }}>Finance</span></Brand>
+            <div style={{ fontWeight: 700, fontSize: 24, color: TX, letterSpacing: "-0.03em" }}>LaCalle <span style={{ color: GOLD }}>Finance</span></div>
             <div style={{ fontSize: 13, color: TX2, marginTop: 6 }}>Seu dinheiro, em todos os seus aparelhos</div>
           </div>
         </div>

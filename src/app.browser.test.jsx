@@ -553,6 +553,16 @@ describe("tela de login", () => {
     expect(screen.getByRole("main").contains(form)).toBe(true);
     expect(await axeViolations()).toEqual([]);
   });
+
+  // Revisão do Pedro no PR #5: o título da página diz o que ela faz
+  // ("Entrar", "Criar conta"), não a marca. A marca continua igual na tela.
+  test("o título principal é o que a tela faz, e muda com Entrar e Criar conta", async () => {
+    render(<AuthScreen onLogin={vi.fn()} />);
+    expect(screen.getAllByRole("heading", { level: 1 }).map(h => h.textContent)).toEqual(["Entrar"]);
+    fireEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 1 }).map(h => h.textContent)).toEqual(["Criar conta"]));
+    expect(screen.getByText("Finance", { selector: "span" }).closest("h1")).toBeNull(); // a marca não é mais título
+  });
 });
 
 // ---- Auditoria de 09/10/2026 ---------------------------------------------
