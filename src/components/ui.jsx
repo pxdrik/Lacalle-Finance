@@ -29,7 +29,7 @@ const COMPARISON_TONE={neutral:TX2,positive:SUCCESS,negative:ERROR};
 // Nenhum utilitário sr-only existia neste projeto antes deste componente —
 // o ícone de direção é aria-hidden, então sem isto a seta vira ruído puro
 // pra leitor de tela (nenhuma informação, só um glifo sem nome).
-const VISUALLY_HIDDEN={position:"absolute",width:1,height:1,padding:0,margin:-1,overflow:"hidden",clip:"rect(0,0,0,0)",whiteSpace:"nowrap",border:0};
+export const VISUALLY_HIDDEN={position:"absolute",width:1,height:1,padding:0,margin:-1,overflow:"hidden",clip:"rect(0,0,0,0)",whiteSpace:"nowrap",border:0};
 export function Comparison({delta,formatMagnitude,label,whenZero="sem mudança",tone="neutral",style}){
   const color=COMPARISON_TONE[tone];
   if(delta===0){

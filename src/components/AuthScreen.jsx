@@ -3,7 +3,7 @@ import { Lock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_INPUT, EASE_OUT, SUCCESS, ERROR, PRESS_SCALE, SUCCESS_SURFACE, DANGER_SURFACE } from "../lib/theme";
 import { FinanceMark } from "./Brand";
-import { Segmented } from "./ui";
+import { Segmented, VISUALLY_HIDDEN } from "./ui";
 import { checkNewPassword } from "../lib/authRecovery";
 
 // CAPTCHA (Cloudflare Turnstile) é OPCIONAL e fica totalmente desligado até
@@ -168,8 +168,14 @@ export default function AuthScreen({ onLogin }) {
             <p style={{ margin: "6px 0 0", fontSize: 13, color: TX2, lineHeight: 1.5 }}>Mandamos um link para o seu e-mail. Ele traz você de volta aqui para criar uma senha nova.</p>
           </div>
         ) : (
-          <Segmented ariaLabel="Entrar ou criar conta" value={mode} onChange={switchMode}
-            options={[{ value: "login", label: "Entrar", tone: "neutral" }, { value: "signup", label: "Criar conta", tone: "neutral" }]} />
+          <>
+            {/* O título da página é o que ela faz (revisão do Pedro no PR #5):
+                só para leitor de tela, porque a troca Entrar/Criar conta logo
+                abaixo já diz isso na tela. */}
+            <h1 style={VISUALLY_HIDDEN}>{mode === "signup" ? "Criar conta" : "Entrar"}</h1>
+            <Segmented ariaLabel="Entrar ou criar conta" value={mode} onChange={switchMode}
+              options={[{ value: "login", label: "Entrar", tone: "neutral" }, { value: "signup", label: "Criar conta", tone: "neutral" }]} />
+          </>
         )}
         {mode === "signup" && (
           <div>
@@ -221,7 +227,9 @@ function Notice({ tone, children }) {
 /** Moldura das telas sem login: assinatura no alto, cartão sem sombra e a nota do cadeado embaixo. */
 function AuthShell({ children }) {
   return (
-    <div style={{ background: BG, minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif", padding: "32px 16px" }}>
+    // A região principal (auditoria de 09/10/2026): sem ela, quem usa leitor
+    // de tela não tinha como pular direto para o formulário.
+    <main style={{ background: BG, minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'IBM Plex Sans Variable','IBM Plex Sans',system-ui,sans-serif", padding: "32px 16px" }}>
       <style>{`
         .wl-input:focus{outline:none;border-color:${GOLD}80 !important;box-shadow:0 0 0 3px ${GOLD}22;}
         .wl-btn{transition:filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT};}
@@ -253,7 +261,7 @@ function AuthShell({ children }) {
           <Lock size={13} aria-hidden="true" />Conta protegida por senha. Seus dados são só seus.
         </p>
       </div>
-    </div>
+    </main>
   );
 }
 
