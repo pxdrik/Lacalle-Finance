@@ -4,11 +4,12 @@ O que vem a seguir, registrado para não depender da memória de nenhuma convers
 
 ---
 
-## ⏳ PR: correções da auditoria de melhorias (09/10/2026)
+## ✅ EM PRODUÇÃO: correções da auditoria de melhorias (09/10/2026)
 
 Auditoria só de leitura (https://claude.ai/artifact/VHiHfP3jxqAJq6twtHEk31);
-o Pedro escolheu F1, F3, F4, F5, F7 e F8. Branch `auditoria-2026-10-09`,
-esperando o teste na prévia.
+o Pedro escolheu F1, F3, F4, F5, F7 e F8. PR #5, aprovado por ele com três
+pontos conferidos antes do merge: o `noindex` no ar em produção, o título do
+login e a instalação limpa (`npm ci`, `npm audit` zerado, testes e build).
 
 - F1: oito testes de navegador do dinheiro (lançar, editar, excluir, saldo
   do Início, reabrir, toque duplo, duplicado, descartar, valor vazio, meta
@@ -18,7 +19,15 @@ esperando o teste na prévia.
 - F4: `<main>` no login e no app logado; a marca é o `<h1>` de Entrar e
   Criar conta.
 - F5: `noindex` no cabeçalho (vercel.json) e na página; robots.txt válido
-  que libera o buscador para ele ler o `noindex`.
+  que libera o buscador para ele ler o `noindex`. **Vale para o domínio
+  inteiro**, o que está certo enquanto ele for só o app privado. Se um dia
+  uma página de venda morar neste domínio, o cabeçalho tem que deixar de
+  valer para ela (trocar o `source` `/(.*)` do vercel.json por um que não a
+  pegue, e tirar a meta do HTML dela), senão ela some do Google junto. E
+  `noindex` não protege dado nenhum: quem protege é o login e as regras de
+  acesso do banco (RLS).
+- F4, revisão do Pedro: o `<h1>` de Entrar e Criar conta passou de marca
+  para o que a tela faz ("Entrar", "Criar conta"), só para leitor de tela.
 - F7: proteção contra senha vazada só existe no plano Pro do Supabase; o
   Pedro decidiu não pagar por enquanto.
 - F8: `npm audit` zerado, só versões de correção.
