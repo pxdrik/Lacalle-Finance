@@ -57,21 +57,29 @@ Envie cada lançamento uma vez só: se a resposta não chegar, consulte `GET /tr
 
 Resposta: `{"transactions": [{"id", "date", "type", "cat", "desc", "val", "form", "account", ...}]}`
 
-`GET /summary?month=2026-10` (mês opcional, padrão o atual; `account` também é aceito) devolve os totais:
+`GET /summary` devolve o saldo atual e os totais do mês, por conta. Parâmetros opcionais: `month=2026-10` (padrão o mês atual) e `account=Lacalle Life` (padrão a Conta principal, como no app).
 
 ```json
 {
+  "account": {"id": "principal", "name": "Conta principal"},
+  "currentBalance": 342.97,
   "month": "2026-10",
-  "income": 3000, "expense": 350.5, "balance": 2649.5,
-  "invested": 500,
-  "upcoming": {"income": 0, "expense": 40},
-  "expenseByCategory": {"Alimentação": 250.5, "Outros": 100}
+  "income": 1166.47, "expense": 686.87, "balance": 479.6,
+  "invested": 300,
+  "upcoming": {"income": 0, "expense": 0},
+  "expenseByCategory": {"Alimentação": 80.01, "Lazer": 111},
+  "accounts": [
+    {"id": "principal", "name": "Conta principal", "currentBalance": 342.97},
+    {"id": "c1791586041879001", "name": "Lacalle Life", "currentBalance": 138.87}
+  ]
 }
 ```
 
-- `income`, `expense` e `balance` contam só o que já aconteceu (data até hoje), como no app.
+- **Saldo: use sempre `currentBalance`, nunca recalcule pela lista de lançamentos.** É o mesmo "Saldo atual" do app, com a mesma regra.
+- O app mostra uma conta por vez. Não some o saldo das contas, a não ser que o Pedro peça o total; `accounts` traz o saldo de cada uma.
+- `income`, `expense` e `balance` são só do mês e só do que já aconteceu (data até hoje). `balance` aqui é entradas menos saídas do mês, não o saldo da conta.
 - `upcoming` são lançamentos com data futura dentro do mês.
-- Investimento não conta como gasto nem entrada; aparece em `invested` (aportes menos resgates).
+- Investimento não conta como gasto nem entrada. `invested` é aportes menos resgates do mês. Rendimento (`invTipo: "Rendimento"`) não entra em saldo nenhum: o dinheiro fica no investimento.
 
 ## Apagar um lançamento
 

@@ -75,8 +75,12 @@ test("leitura: lista, resumo e opções", () => {
   assert.deepEqual(listTransactions(appDoc(), { month: "2026-10", limit: 2 }).map(t => t.id), [3, 5]);
   assert.ok(!("updatedAt" in listTransactions(appDoc())[0]));
   const s = summary(appDoc(), { month: "2026-10" }, "2026-10-23");
-  assert.deepEqual([s.income, s.expense, s.balance, s.invested, s.upcoming.expense], [3000, 350.5, 2649.5, 500, 40]);
-  assert.deepEqual(s.expenseByCategory, { "Alimentação": 250.5, Outros: 100 });
+  // conta principal: o Mercado Pago (id 2) fica de fora
+  assert.equal(s.account.id, "principal");
+  assert.deepEqual([s.income, s.expense, s.balance, s.invested, s.upcoming.expense], [3000, 100, 2900, 500, 40]);
+  assert.deepEqual(s.expenseByCategory, { Outros: 100 });
+  const mp = summary(appDoc(), { month: "2026-10", account: "mercado pago" }, "2026-10-23");
+  assert.deepEqual([mp.account.id, mp.expense, mp.currentBalance], ["mp", 250.5, -250.5]);
   assert.ok(options(appDoc()).categories.includes("Pets"));
   assert.throws(() => summary(appDoc(), { month: "10/2026" }), ApiError);
 });
@@ -94,4 +98,18 @@ test("acento funciona mesmo onde normalize não separa o acento", () => {
   } finally {
     String.prototype.normalize = original;
   }
+});
+
+test("saldo atual igual ao do app: por conta, sem rendimento e sem data futura", () => {
+  const doc = appDoc();
+  doc.tx.push(
+    { id: 10, date: "2026-10-08", type: "Entrada", cat: "Investimento", invTipo: "Rendimento", desc: "Rendeu", val: 900, updatedAt: T0 },
+    { id: 11, date: "2026-10-09", type: "Entrada", cat: "Investimento", invTipo: "Resgate", desc: "Resgate", val: 200, updatedAt: T0 },
+  );
+  const s = summary(doc, { month: "2026-10" }, "2026-10-23");
+  // 3000 de entrada - 100 de saída - 500 de aporte + 200 de resgate; o rendimento e o streaming do dia 30 não entram
+  assert.equal(s.currentBalance, 2600);
+  assert.equal(s.invested, 300);
+  assert.deepEqual(s.accounts.map(a => [a.id, a.currentBalance]), [["principal", 2600], ["mp", -250.5]]);
+  assert.throws(() => summary(doc, { account: "Banco X" }), ApiError);
 });

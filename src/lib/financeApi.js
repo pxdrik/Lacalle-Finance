@@ -11,7 +11,7 @@
 // por normalizeDoc: registros que o app guarda em quarentena e campos que esta
 // API não conhece continuam lá como estavam.
 import { normalizeDoc } from "./sync.js";
-import { flowOf, FLOW } from "./financialEngine.js";
+import { flowOf, FLOW, FinancialEngine } from "./financialEngine.js";
 import { CATS, INV_TIPOS, MIN_TX_VAL, MAX_TX_VAL, roundMoney, validateAmount, validateDate, validateText } from "./validation.js";
 
 export class ApiError extends Error {
@@ -67,15 +67,25 @@ export function listTransactions(raw, { month, account, type, limit } = {}) {
     .map(t => ({ ...strip(t), account: accountOfTx(t) }));
 }
 
-/** Totais do mês. Lançamento com data futura fica em `upcoming`, como no app (só o realizado conta). */
+/**
+ * Saldo atual de cada conta e totais do mês de uma conta (sem `account`, a
+ * principal), com as contas do app: o Início mostra uma conta por vez, e o
+ * saldo atual é CashFlowAnalyzer.totals do realizado (data até hoje), em que
+ * rendimento não entra. Lançamento com data futura no mês fica em `upcoming`.
+ */
 export function summary(raw, { month, account } = {}, today = todaySP()) {
   const m = month || today.slice(0, 7);
   checkMonth(m);
   const doc = normalizeDoc(raw);
-  const { match } = accountFilter(doc, account);
-  const out = { month: m, income: 0, expense: 0, balance: 0, invested: 0, upcoming: { income: 0, expense: 0 }, expenseByCategory: {} };
-  for (const t of doc.tx) {
-    if (!match(t) || !t.date.startsWith(m)) continue;
+  const { accountOfTx } = accountFilter(doc, null);
+  const acc = account ? findAccount(accountsOf(doc), account) : accountsOf(doc).find(a => a.id === DEFAULT_ACCOUNT) || accountsOf(doc)[0];
+  if (!acc) accountFilter(doc, account); // lança o erro com a lista de contas
+  const realized = id => doc.tx.filter(t => accountOfTx(t) === id && t.date <= today);
+  const balanceOf = id => roundMoney(FinancialEngine.CashFlowAnalyzer.totals(realized(id)).balance);
+
+  const out = { account: { id: acc.id, name: acc.name }, currentBalance: balanceOf(acc.id), month: m, income: 0, expense: 0, balance: 0, invested: 0, upcoming: { income: 0, expense: 0 }, expenseByCategory: {}, accounts: accountsOf(doc).map(a => ({ id: a.id, name: a.name, currentBalance: balanceOf(a.id) })) };
+  const inMonth = doc.tx.filter(t => accountOfTx(t) === acc.id && t.date.startsWith(m));
+  for (const t of inMonth) {
     const flow = flowOf(t);
     if (t.date > today) {
       if (flow === FLOW.RECEITA) out.upcoming.income += t.val;
@@ -84,12 +94,13 @@ export function summary(raw, { month, account } = {}, today = todaySP()) {
     else if (flow === FLOW.DESPESA) {
       out.expense += t.val;
       out.expenseByCategory[t.cat] = (out.expenseByCategory[t.cat] || 0) + t.val;
-    } else out.invested += t.type === "Saída" ? t.val : -t.val; // Investimento: aporte sai da conta, resgate volta
+    }
   }
+  // Só investimentos na lista: a saída de totals é aportes menos resgates (rendimento fica de fora).
+  out.invested = roundMoney(FinancialEngine.CashFlowAnalyzer.totals(inMonth.filter(t => t.cat === "Investimento" && t.date <= today)).totalOut);
   out.income = roundMoney(out.income);
   out.expense = roundMoney(out.expense);
   out.balance = roundMoney(out.income - out.expense);
-  out.invested = roundMoney(out.invested);
   out.upcoming = { income: roundMoney(out.upcoming.income), expense: roundMoney(out.upcoming.expense) };
   for (const k of Object.keys(out.expenseByCategory)) out.expenseByCategory[k] = roundMoney(out.expenseByCategory[k]);
   return out;
