@@ -81,7 +81,7 @@ test("leitura: lista, resumo e opções", () => {
   assert.throws(() => summary(appDoc(), { month: "10/2026" }), ApiError);
 });
 
-test("acento funciona mesmo onde normalize não separa o acento (servidor do Supabase)", () => {
+test("acento funciona mesmo onde normalize não separa o acento", () => {
   const original = String.prototype.normalize;
   String.prototype.normalize = function () { return String(this); };
   try {
