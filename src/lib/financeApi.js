@@ -131,6 +131,10 @@ export function createTransaction(raw, body, now = Date.now(), today = todaySP()
   const form = body.form === undefined ? "pix" : FORMS.find(f => fold(f) === fold(body.form));
   if (!form) throw new ApiError(400, `Forma é uma destas: ${FORMS.join(", ")}.`);
 
+  // Mesmos valores do campo "Tipo de gasto" do app (o backup recusa outros).
+  const fixed = body.fixed === undefined ? "Variavel" : fold(body.fixed).startsWith("fix") ? "Fixa" : fold(body.fixed).startsWith("variav") ? "Variavel" : null;
+  if (!fixed) throw new ApiError(400, 'fixed é "Fixa" ou "Variavel".');
+
   let account = DEFAULT_ACCOUNT;
   if (body.account !== undefined) {
     const acc = findAccount(accountsOf(doc), body.account);
@@ -138,7 +142,7 @@ export function createTransaction(raw, body, now = Date.now(), today = todaySP()
     account = acc.id;
   }
 
-  const tx = { id: genId(), date: date.value, type, fixed: false, cat, desc: desc.value, val: parseVal(body.val), form, invTipo, account, source: "api", updatedAt: now };
+  const tx = { id: genId(), date: date.value, type, fixed, cat, desc: desc.value, val: parseVal(body.val), form, invTipo, account, source: "api", updatedAt: now };
   const base = raw && typeof raw === "object" ? raw : {};
   return { doc: { ...base, tx: [...(Array.isArray(base.tx) ? base.tx : []), tx] }, tx: strip(tx) };
 }

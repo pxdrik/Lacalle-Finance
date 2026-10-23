@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createTransaction, deleteTransaction, listTransactions, summary, options, ApiError } from "./financeApi.js";
 import { normalizeDoc, stampChanges, mergeDocs } from "./sync.js";
+import { buildBackup, validateBackup } from "./backupValidation.js";
 
 const T0 = 1_760_000_000_000;
 const appDoc = () => ({
@@ -22,6 +23,10 @@ test("lançamento criado pela API sobrevive ao próximo salvamento do app", () =
   const cloudBefore = normalizeDoc(appDoc());
   const { doc, tx } = createTransaction(appDoc(), { type: "saida", val: "45,90", desc: "Almoço", cat: "alimentacao", account: "mercado pago" }, T0 + 10, "2026-10-23");
   assert.deepEqual([tx.type, tx.val, tx.cat, tx.account, tx.date, tx.form], ["Saída", 45.9, "Alimentação", "mp", "2026-10-23", "pix"]);
+  assert.equal(tx.fixed, "Variavel");
+  // O lançamento da API não pode quebrar o backup do app.
+  assert.ok(validateBackup(buildBackup(normalizeDoc(doc))).ok);
+  assert.equal(createTransaction(appDoc(), { type: "Saída", val: 1, desc: "Aluguel", cat: "Outros", fixed: "fixo" }).tx.fixed, "Fixa");
   assert.equal(doc.algoQueAApiNaoConhece, true);
   assert.equal(doc.quarantine.length, 1);
   // O app, que não viu o lançamento novo, edita outra coisa e salva: a junção mantém os dois.
@@ -56,6 +61,7 @@ test("valida o que o agente manda", () => {
   bad({ date: "2026-02-30" });
   bad({ account: "Banco X" });
   bad({ form: "boleto" });
+  bad({ fixed: "sim" });
   bad({ cat: "Investimento" }); // sem invTipo
   // número em JSON não passa pela leitura de texto: 1.234 é R$ 1,23, não mil
   assert.equal(createTransaction(appDoc(), { type: "Saída", val: 1.234, desc: "x", cat: "Pets" }).tx.val, 1.23);

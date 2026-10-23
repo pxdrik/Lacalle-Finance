@@ -40,6 +40,7 @@ Escolha sempre uma categoria desta lista. Se nenhuma servir, use "Outros". Se n�
 | `date` | não | `AAAA-MM-DD`. Sem ela, vale hoje (horário de Brasília). Use a data que o Pedro disser ("ontem", "dia 5") |
 | `account` | não | id ou nome da conta (`"Mercado Pago"`). Sem ela, vai para a conta principal |
 | `form` | não | `pix`, `debito`, `credito`, `dinheiro` ou `deposito`. Padrão: `pix` |
+| `fixed` | não | `"Fixa"` (gasto fixo, como aluguel) ou `"Variavel"`. Padrão: `"Variavel"` |
 | `invTipo` | só em Investimento | com `cat: "Investimento"`, informe `"Aporte"`, `"Resgate"` ou `"Rendimento"`; o `type` é calculado sozinho |
 
 Resposta `201`: `{"transaction": {"id": 1761234567890123, ...}}`. Guarde o `id` para poder apagar se o Pedro disser que errou. Confirme ao Pedro o que foi lançado (valor, descrição, categoria, data e conta).
