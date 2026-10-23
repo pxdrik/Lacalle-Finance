@@ -24,7 +24,10 @@ const DEFAULT_ACCOUNT = "principal";
 const MONTH = /^\d{4}-\d{2}$/;
 
 // "alimentacao" acha "Alimentação"; "mercado pago" acha "Mercado Pago".
-const fold = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+// Sem normalize("NFD"): o servidor do Supabase devolveu "Saída" sem separar o
+// acento (o tipo com acento era recusado). Por isso a troca é explícita.
+const ACCENTS = { a: /[à-ä]/g, e: /[è-ë]/g, i: /[ì-ï]/g, o: /[ò-ö]/g, u: /[ù-ü]/g, c: /ç/g };
+const fold = s => Object.entries(ACCENTS).reduce((t, [plain, re]) => t.replace(re, plain), String(s ?? "").toLowerCase().replace(/[̀-ͯ]/g, "")).trim();
 const accountsOf = doc => (doc.accounts?.length ? doc.accounts : [{ id: DEFAULT_ACCOUNT, name: "Conta principal" }]);
 const findAccount = (accounts, raw) => accounts.find(a => fold(a.id) === fold(raw) || fold(a.name) === fold(raw));
 const strip = ({ updatedAt: _u, ...t }) => t;

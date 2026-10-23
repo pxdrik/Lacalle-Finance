@@ -80,3 +80,18 @@ test("leitura: lista, resumo e opções", () => {
   assert.ok(options(appDoc()).categories.includes("Pets"));
   assert.throws(() => summary(appDoc(), { month: "10/2026" }), ApiError);
 });
+
+test("acento funciona mesmo onde normalize não separa o acento (servidor do Supabase)", () => {
+  const original = String.prototype.normalize;
+  String.prototype.normalize = function () { return String(this); };
+  try {
+    const ok = body => createTransaction(appDoc(), { val: 1, desc: "x", cat: "Outros", type: "Saída", ...body }).tx;
+    assert.equal(ok({}).type, "Saída");
+    assert.equal(ok({ type: "SAÍDA" }).type, "Saída");
+    assert.equal(ok({ cat: "alimentacao" }).cat, "Alimentação");
+    assert.equal(ok({ cat: "SAUDE / CUIDADOS PESSOAIS" }).cat, "Saude / Cuidados Pessoais");
+    assert.equal(ok({ type: "Sáida" }).type, "Saída"); // acento já separado
+  } finally {
+    String.prototype.normalize = original;
+  }
+});
