@@ -506,25 +506,32 @@ describe("sem rede", () => {
 describe("relatório do mês em PDF", () => {
   beforeEach(async () => { h.storage = createFakeStorage({ tx: [tx(1, "Mercado", 80), { ...tx(2, "Cinema", 40), date: "2026-09-12" }] }); await setViewport(DESKTOP_WIDTH, 900); });
 
-  test("escolher o mês abre a impressão só com os lançamentos dele; fechar a impressão some com o relatório", async () => {
+  test("escolher o mês baixa um PDF só com os lançamentos dele, sem janela de impressão", async () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    const blobs = [];
+    const create = URL.createObjectURL.bind(URL);
+    const url = vi.spyOn(URL, "createObjectURL").mockImplementation(b => { blobs.push(b); return create(b); });
+    // o jsPDF baixa com dispatchEvent num link solto: guarda o nome e não baixa de verdade
+    const downloads = [];
+    const realDispatch = EventTarget.prototype.dispatchEvent;
+    const click = vi.spyOn(EventTarget.prototype, "dispatchEvent").mockImplementation(function (e) {
+      if (this instanceof HTMLAnchorElement && this.download) { downloads.push(this.download); return true; }
+      return realDispatch.call(this, e);
+    });
     await openApp();
     fireEvent.click(navBtn("Transações"));
     fireEvent.click(await screen.findByRole("button", { name: "Relatório do mês em PDF" }));
     const picker = within(await screen.findByRole("dialog", { name: "Relatório do mês" }));
     fireEvent.change(picker.getByLabelText("Mês"), { target: { value: "set/26" } });
-    fireEvent.click(picker.getByRole("button", { name: "Gerar PDF" }));
-    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
-    // fora da tela (só aparece na impressão), então buscado pelo elemento
-    const el = document.querySelector(".print-report");
-    expect(el.getAttribute("aria-label")).toBe("Relatório de setembro de 2026");
-    const report = within(el);
-    expect(report.getByText("Cinema")).toBeTruthy();
-    expect(el.parentElement).toBe(document.body); // fora do #root, que a impressão esconde
-    expect(report.queryByText("Mercado")).toBeNull();
-    window.dispatchEvent(new Event("afterprint"));
-    await waitFor(() => expect(document.querySelector(".print-report")).toBeNull());
-    print.mockRestore();
+    fireEvent.click(picker.getByRole("button", { name: "Baixar PDF" }));
+    await waitFor(() => expect(blobs.filter(b => b.type === "application/pdf")).toHaveLength(1), { timeout: 8000 });
+    const pdf = await blobs.find(b => b.type === "application/pdf").text();
+    expect(pdf).toContain("(Cinema)");
+    expect(pdf).not.toContain("Mercado");
+    expect(downloads).toEqual(["relatorio-setembro-de-2026.pdf"]);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Relatório do mês" })).toBeNull());
+    expect(print).not.toHaveBeenCalled();
+    [print, url, click].forEach(m => m.mockRestore());
   });
 });
 

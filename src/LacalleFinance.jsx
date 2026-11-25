@@ -96,7 +96,7 @@
  *   HOOKS (useMemo abaixo) -> src/hooks/use{Transactions,Goals,Insights,...}.js
  *   COMPONENTES DE UI      -> src/components/{Dashboard,Calendar,Timeline,...}.jsx
  */
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase, openedFromRecoveryLink } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
 import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
@@ -115,9 +115,9 @@ import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
-import MonthlyReport from "./components/MonthlyReport";
 import WalletArt from "./components/WalletArt";
 import { buildMonthlyReport } from "./lib/report";
+import { downloadReportPdf } from "./lib/reportPdf";
 import { createSyncEngine, localCopy, hasPendingLocalCopy, clearLocalCopies } from "./lib/syncEngine";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
 import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
@@ -259,10 +259,19 @@ function MainApp({user,setUser}){
   const [qaFixed,setQaFixed]=useState("Variavel");const [qaExpanded,setQaExpanded]=useState(false);const [qaRepeat,setQaRepeat]=useState("none");const [qaRepeatN,setQaRepeatN]=useState("");
   const [showClearConfirm,setShowClearConfirm]=useState(false);const [clearPhrase,setClearPhrase]=useState("");
   // Relatório mensal: `reportPick` é o mês escolhido na janelinha (null = fechada);
-  // `printingReport` monta o relatório e abre a impressão (MonthlyReport.jsx).
+  // `reportBusy` cobre o carregamento do jsPDF e a geração (lib/reportPdf.js).
   const [reportPick,setReportPick]=useState(null);
-  const [printingReport,setPrintingReport]=useState(null);
-  const closeReport=useCallback(()=>setPrintingReport(null),[]);
+  const [reportBusy,setReportBusy]=useState(false);
+  const generateReport=async()=>{
+    setReportBusy(true);
+    try{
+      await downloadReportPdf(buildMonthlyReport({transactions,plannedExpenses,wishes,month:reportPick,todayISO}),{owner:user.name,todayISO});
+      setReportPick(null);
+    }catch(e){
+      console.error("relatório:",e);
+      showToast("Não deu para gerar o PDF. Confira a conexão e tente de novo.","error");
+    }finally{setReportBusy(false);}
+  };
   const [showWishForm,setShowWishForm]=useState(false);const [editingWish,setEditingWish]=useState(null);
   const [wishForm,setWishForm]=useState({name:"",price:"",saved:"",priority:"Média",monthsTarget:"",notes:""});
   const wishFormSnapshotRef=useRef(null);
@@ -2000,18 +2009,17 @@ function MainApp({user,setUser}){
       {reportPick!==null&&(
         <Modal onClose={()=>setReportPick(null)} maxWidth={380} padding={24} label="Relatório do mês">
           <h2 style={{margin:"0 0 6px",fontSize:17,fontWeight:600,color:TX}}>Relatório do mês</h2>
-          <p style={{margin:"0 0 16px",fontSize:13,color:TX2,lineHeight:1.5}}>Resumo, categorias, previstos, metas e todos os lançamentos do mês. Na janela de impressão, escolha <b style={{color:TX}}>Salvar como PDF</b> para guardar o arquivo.</p>
+          <p style={{margin:"0 0 16px",fontSize:13,color:TX2,lineHeight:1.5}}>Resumo, categorias, previstos, metas e todos os lançamentos do mês, num arquivo PDF.</p>
           <label htmlFor="report-month" style={{display:"block",fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Mês</label>
           <select id="report-month" value={reportPick} onChange={e=>setReportPick(e.target.value)} style={{...SI,marginBottom:20}}>
             {[...new Set([currentMonthKeyReal,...months])].sort((a,b)=>monthIndex(b)-monthIndex(a)).map(m=><option key={m} value={m}>{m}</option>)}
           </select>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setReportPick(null)} style={{flex:1,fontSize:14}}>Cancelar</BtnGhost>
-            <Btn onClick={()=>{setPrintingReport(buildMonthlyReport({transactions,plannedExpenses,wishes,month:reportPick,todayISO}));setReportPick(null);}} style={{flex:2,fontSize:14}}>Gerar PDF</Btn>
+            <Btn onClick={generateReport} disabled={reportBusy} aria-busy={reportBusy} style={{flex:2,fontSize:14,opacity:reportBusy?0.7:1}}>{reportBusy?"Gerando...":"Baixar PDF"}</Btn>
           </div>
         </Modal>
       )}
-      {printingReport&&<MonthlyReport report={printingReport} owner={user.name} todayISO={todayISO} onDone={closeReport}/>}
       {showClearConfirm&&(
         <Modal onClose={()=>setShowClearConfirm(false)} maxWidth={360} padding={32} contentStyle={{textAlign:"center"}} label="Apagar todas as transações">
           <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#F87171"/></div>
