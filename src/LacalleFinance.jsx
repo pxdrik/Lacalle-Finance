@@ -154,6 +154,10 @@ const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounte
 
 const DEFAULT_ACCOUNT="principal";
 const DEFAULT_ACCOUNTS=[{id:DEFAULT_ACCOUNT,name:"Conta principal"}];
+// A forma do último lançamento criado vira a padrão do próximo (teste de 24/11/2026:
+// quem paga no débito trocava o Pix toda vez). Fica no aparelho, como a conta escolhida.
+const FORM_VALUES=["pix","debito","credito","dinheiro","deposito"];
+const lastForm=()=>{try{const v=localStorage.getItem("lf.lastForm");return FORM_VALUES.includes(v)?v:"pix";}catch{return"pix";}};
 const accountOf=r=>r.account||DEFAULT_ACCOUNT;
 const BANK_SUGGESTIONS=["Itaú","Nubank","Mercado Pago","Inter","Bradesco","Banco do Brasil","Santander","C6 Bank","PicPay"];
 
@@ -251,8 +255,8 @@ function MainApp({user,setUser}){
   const [editingTx,setEditingTx]=useState(null);
   const [qaType,setQaType]=useState("Saída");const [qaDesc,setQaDesc]=useState("");const [qaVal,setQaVal]=useState("");
   const [qaCat,setQaCat]=useState("Alimentação");const [qaInvTipo,setQaInvTipo]=useState("Aporte");
-  const [qaDate,setQaDate]=useState(todayFn);const [qaForm,setQaForm]=useState("pix");
-  const [qaFixed,setQaFixed]=useState("Variavel");const [qaExpanded,setQaExpanded]=useState(false);const [qaRepeat,setQaRepeat]=useState("none");
+  const [qaDate,setQaDate]=useState(todayFn);const [qaForm,setQaForm]=useState(lastForm);
+  const [qaFixed,setQaFixed]=useState("Variavel");const [qaExpanded,setQaExpanded]=useState(false);const [qaRepeat,setQaRepeat]=useState("none");const [qaRepeatN,setQaRepeatN]=useState("");
   const [showClearConfirm,setShowClearConfirm]=useState(false);
   // Relatório mensal: `reportPick` é o mês escolhido na janelinha (null = fechada);
   // `printingReport` monta o relatório e abre a impressão (MonthlyReport.jsx).
@@ -738,8 +742,8 @@ function MainApp({user,setUser}){
     let x=(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
     x=x.replace(/\d+/g," ");
     x=x.replace(/[^a-z\s]/g," ");
-    x=x.replace(/\s+/g," ").trim();
-    return x;
+    // Sem espaço: "Game pass" e "GamePass" são o mesmo frequente (teste de 24/11/2026).
+    return x.replace(/\s+/g,"");
   };
   const frequentTx=useMemo(()=>{
     const rawGroups={};
@@ -893,9 +897,9 @@ function MainApp({user,setUser}){
   const resetQuickAddForm=()=>{
     setQaDesc("");setQaVal("");
     setQaDate(todayFn());
-    setQaForm("pix");
+    setQaForm(lastForm());
     setQaFixed("Variavel");
-    setQaRepeat("none");
+    setQaRepeat("none");setQaRepeatN("");
     setQaExpanded(false);
   };
 
@@ -986,7 +990,8 @@ function MainApp({user,setUser}){
       if(editingTx!==null){setTransactions(p=>p.map(t=>t.id===editingTx?{...t,...base}:t));setEditingTx(null);}
       else{
         const id=genId();const newTxs=[{id,...base}];
-        if(qaRepeat!=="none"){const cnt=qaRepeat==="3m"?2:qaRepeat==="6m"?5:11;for(let i=1;i<=cnt;i++){newTxs.push({id:id+i,...base,date:addMonthsStr(qaDate,i)});}}
+        for(let i=1;i<repeatMonths();i++)newTxs.push({id:id+i,...base,date:addMonthsStr(qaDate,i)});
+        try{localStorage.setItem("lf.lastForm",qaForm);}catch{/* sem armazenamento local */}
         setTransactions(p=>[...newTxs,...p]);
       }
       resetQuickAddForm();
@@ -1005,11 +1010,17 @@ function MainApp({user,setUser}){
     }
     setTimeout(()=>setIsSubmittingTx(false),600);
   };
+  // Quantos lançamentos no total (1 = não repetir); "custom" é o número digitado.
+  const repeatMonths=()=>qaRepeat==="custom"?parseInt(qaRepeatN,10):{none:1,"3m":3,"6m":6,"12m":12}[qaRepeat];
   const quickAdd=()=>{
+    const custom=qaRepeat==="custom"&&editingTx===null;
     const err=firstError([
       validateText(qaDesc,{label:"descrição"}),
       validateAmount(qaVal,{label:"valor"}),
       validateDate(qaDate,{label:"data"}),
+      custom?validateInt(qaRepeatN,{label:"meses",min:2}):{ok:true},
+      // A última repetição também precisa caber na janela de datas do app.
+      custom&&validateInt(qaRepeatN,{min:2}).ok?validateDate(addMonthsStr(qaDate,parseInt(qaRepeatN,10)-1),{label:"última repetição"}):{ok:true},
     ]);
     if(err){showToast(err,"error");return;}
     // Aviso suave de possível duplicidade: só ao CRIAR (não ao editar), e só
@@ -1619,7 +1630,8 @@ function MainApp({user,setUser}){
           <Field id="qa-date" label="Data">{p=><input {...p} type="date" value={qaDate} min={DATE_MIN} max={DATE_MAX} onChange={e=>setQaDate(e.target.value)} style={SI}/>}</Field>
           <Field id="qa-form" label="Forma">{p=><select {...p} value={qaForm} onChange={e=>setQaForm(e.target.value)} style={SI}>{[["pix","Pix"],["debito","Débito"],["credito","Crédito"],["dinheiro","Dinheiro"],["deposito","Depósito"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>}</Field>
           <Field id="qa-fixed" label="Tipo de gasto">{p=><select {...p} value={qaFixed} onChange={e=>setQaFixed(e.target.value)} style={SI}><option value="Variavel">Variável</option><option value="Fixa">Fixo</option></select>}</Field>
-          {!isEditing&&<Field id="qa-repeat" label="Repetir">{p=><select {...p} value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option></select>}</Field>}
+          {!isEditing&&<Field id="qa-repeat" label="Repetir">{p=><select {...p} value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option><option value="custom">Outro número</option></select>}</Field>}
+          {!isEditing&&qaRepeat==="custom"&&<Field id="qa-repeat-n" label="Quantos meses">{p=><input {...p} type="text" inputMode="numeric" placeholder="Ex.: 10" value={qaRepeatN} onChange={e=>setQaRepeatN(e.target.value.replace(/\D/g,"").slice(0,3))} style={SI}/>}</Field>}
         </div>
       </details>
       {/* O botão parece inativo quando falta algo, mas não usa `disabled`: o

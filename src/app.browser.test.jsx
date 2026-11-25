@@ -747,3 +747,47 @@ describe("acessibilidade medida pelo axe", () => {
     expect(await axeViolations()).toEqual([]);
   });
 });
+
+describe("teste de uso de 24/11/2026", () => {
+  beforeEach(async () => { localStorage.clear(); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("a forma do último lançamento vira a padrão, e repetir aceita número livre", async () => {
+    h.storage = createFakeStorage();
+    await openApp();
+    let sheet = await openNewTxSheet();
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Academia" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "99,90" } });
+    fireEvent.change(sheet.getByLabelText("Forma"), { target: { value: "debito" } });
+    fireEvent.change(sheet.getByLabelText("Repetir"), { target: { value: "custom" } });
+    fireEvent.change(sheet.getByLabelText("Quantos meses"), { target: { value: "10" } });
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    await sheetClosed();
+    await waitFor(() => expect(h.storage.peek()?.tx?.length).toBe(10), SAVE_WAIT);
+    expect(new Set(h.storage.peek().tx.map(t => t.form))).toEqual(new Set(["debito"]));
+    sheet = await openNewTxSheet();
+    expect(sheet.getByLabelText("Forma").value).toBe("debito");
+  });
+
+  test("repetir com número inválido avisa e não lança", async () => {
+    h.storage = createFakeStorage();
+    await openApp();
+    const sheet = await openNewTxSheet();
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Curso" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "50" } });
+    fireEvent.change(sheet.getByLabelText("Repetir"), { target: { value: "custom" } });
+    fireEvent.change(sheet.getByLabelText("Quantos meses"), { target: { value: "1" } });
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    await screen.findByText(/meses precisa estar entre 2 e/);
+    expect(h.storage.peek()?.tx?.length ?? 0).toBe(0);
+  });
+
+  test("\"Game pass\" e \"GamePass\" são um frequente só", async () => {
+    const fixa = (id, desc) => ({ ...tx(id, desc, 76.9), fixed: "Fixa" });
+    // cada grafia sozinha já vira atalho (2 fixos): sem juntar, seriam dois
+    h.storage = createFakeStorage({ tx: [fixa(1, "Game pass"), fixa(2, "Game pass"), fixa(3, "GamePass"), fixa(4, "GamePass")] });
+    await openApp();
+    const sheet = await openNewTxSheet();
+    const picks = within(sheet.getByRole("group", { name: "Frequentes" })).getAllByRole("button");
+    expect(picks.map(b => b.textContent).filter(t => /game ?pass/i.test(t))).toHaveLength(1);
+  });
+});
