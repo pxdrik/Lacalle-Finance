@@ -1851,6 +1851,11 @@ function MainApp({user,setUser}){
           .app-header{padding:0 12px 0 16px;padding-top:env(safe-area-inset-top);min-height:56px;}
           .hdr-sig{display:inline-flex;}
           .sync-label{display:none;}
+          /* Topo do celular enxuto (teste de 24/11/2026: eram 8 itens em 390px):
+             Desfazer e Salvar agora moram no Mais; o estado da nuvem só aparece
+             quando precisa de atenção. O bloco fica, vazio, empurrando as ações. */
+          .hdr-undo{display:none;}
+          .hdr-sync:is([data-state="saved"],[data-state="saving"],[data-state="loading"])>*{display:none !important;} /* !important: o botão tem display inline */
           .hdr-avatar{display:flex;}
           .hdr-add-label{display:none;}
           .hdr-add-bank{padding:0 10px;}
@@ -1918,7 +1923,7 @@ function MainApp({user,setUser}){
           </span>
         ):<span className="hdr-sig"><Signature size={18}/></span>}
         <button type="button" className="hdr-add-bank" onClick={()=>{setNewAccountName("");setBankOther(false);setShowAddBank(true);}} aria-label="Novo banco" title="Adicionar uma conta bancária"><Plus size={14} aria-hidden="true"/><span className="hdr-add-label">Novo banco</span></button>
-        <div className="hdr-sync" aria-live="polite">
+        <div className="hdr-sync" data-state={syncStatus} aria-live="polite">
           {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
           {syncStatus==="saving"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Salvando</span></>}
           {syncStatus==="saved"&&<><Cloud size={12} color={TX3}/><span className="sync-label">Sincronizado</span><IconButton icon={RefreshCw} size={12} label="Salvar agora" onClick={retrySave}/></>}
@@ -1926,7 +1931,7 @@ function MainApp({user,setUser}){
           {syncStatus==="error"&&<><AlertTriangle size={12} color={WARNING}/><span className="sync-label" style={{color:WARNING}}>Erro ao salvar</span><IconButton icon={RefreshCw} size={12} color={WARNING} label="Tentar salvar de novo" onClick={retrySave}/></>}
         </div>
         <div className="hdr-actions">
-          <button type="button" onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} aria-label={historyLen?`Desfazer (${historyLen} passos)`:"Desfazer"} className="touch-44 hdr-btn" style={{color:historyLen?TX2:TX3,cursor:historyLen?"pointer":"not-allowed"}}>
+          <button type="button" onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} aria-label={historyLen?`Desfazer (${historyLen} passos)`:"Desfazer"} className="touch-44 hdr-btn hdr-undo" style={{color:historyLen?TX2:TX3,cursor:historyLen?"pointer":"not-allowed"}}>
             <Undo2 size={16}/>{historyLen>0&&<span className="undo-count">{historyLen}</span>}
           </button>
           <IconButton icon={Search} size={16} color={TX2} label="Pesquisar (Ctrl+K)" onClick={()=>setShowSearch(true)}/>
@@ -2474,6 +2479,12 @@ function MainApp({user,setUser}){
               <Ic size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">{t.label}</span><span className="more-h">{t.hint}</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
             </button>
           );})}
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);undo();}} disabled={historyLen===0} style={{opacity:historyLen?1:0.5,cursor:historyLen?"pointer":"not-allowed"}}>
+            <Undo2 size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Desfazer</span><span className="more-h">{historyLen?`${historyLen} ${historyLen===1?"passo":"passos"} para voltar`:"Nada para desfazer"}</span></span>
+          </button>
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);retrySave();}}>
+            <RefreshCw size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Salvar agora</span><span className="more-h">{{saved:"Tudo sincronizado",saving:"Salvando…",loading:"Carregando…",offline:"Salvo neste aparelho, falta a nuvem",error:"Erro ao salvar: tentar de novo"}[syncStatus]||""}</span></span>
+          </button>
           <button type="button" className="more-row" onClick={()=>{setShowMore(false);setShowProfile(true);}}>
             <Settings size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Perfil</span><span className="more-h">Nome, cor, densidade, backup e conta</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
           </button>

@@ -799,6 +799,40 @@ describe("teste de uso de 24/11/2026", () => {
     await waitFor(() => expect(h.storage.peek()?.tx?.length).toBe(0), SAVE_WAIT);
   });
 
+  test("celular: o topo fica com logo, +, busca e avatar; desfazer e salvar estão no Mais", async () => {
+    h.storage = createFakeStorage({ tx: [tx(1, "Mercado")] });
+    await setViewport(390, 800);
+    render(<StrictMode><Root /></StrictMode>);
+    const nav = await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
+    const header = document.querySelector(".app-header");
+    // espera o estado "Sincronizado" com o botão no DOM: no "Salvando" ele nem existe
+    await waitFor(() => { const b = header.querySelector('[aria-label="Salvar agora"]'); expect(b).toBeTruthy(); expect(getComputedStyle(b).display).toBe("none"); }, SAVE_WAIT);
+    const visible = [...header.querySelectorAll("button, select")].filter(b => b.getClientRects().length > 0);
+    expect(visible.map(b => b.getAttribute("aria-label"))).toEqual(["Novo banco", "Pesquisar (Ctrl+K)", "Minha conta"]);
+    expect(overflowX(header)).toBeLessThanOrEqual(0);
+    fireEvent.click(within(nav).getByRole("button", { name: "Mais" }));
+    const more = within(await screen.findByRole("dialog", { name: "Mais" }));
+    expect(more.getByRole("button", { name: /Desfazer/ }).disabled).toBe(true);
+    expect(more.getByRole("button", { name: /Salvar agora/ })).toBeTruthy();
+  });
+
+  test("celular: sem rede, o aviso e o reenviar continuam no topo", async () => {
+    h.storage = createFakeStorage();
+    await setViewport(390, 800);
+    render(<StrictMode><Root /></StrictMode>);
+    const nav = await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
+    h.storage.offline = true;
+    fireEvent.click(within(nav).getByRole("button", { name: "Transações" }));
+    fireEvent.click(await within(document.querySelector(".main-content")).findByRole("button", { name: "Novo lançamento" }));
+    const sheet = within(await screen.findByRole("dialog", { name: "Novo lançamento" }));
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Padaria" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "12,50" } });
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    // dentro do topo: o Início tem outro botão com o mesmo nome
+    const retry = await within(document.querySelector(".app-header")).findByRole("button", { name: "Tentar enviar para a nuvem" }, SAVE_WAIT);
+    expect(retry.getClientRects().length).toBeGreaterThan(0);
+  });
+
   test("\"Game pass\" e \"GamePass\" são um frequente só", async () => {
     const fixa = (id, desc) => ({ ...tx(id, desc, 76.9), fixed: "Fixa" });
     // cada grafia sozinha já vira atalho (2 fixos): sem juntar, seriam dois
