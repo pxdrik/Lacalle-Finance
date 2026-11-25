@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_INPUT, EASE_OUT, SUCCESS, ERROR, PRESS_SCALE, SUCCESS_SURFACE, DANGER_SURFACE } from "../lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_INPUT, EASE_OUT, SUCCESS, ERROR, PRESS_SCALE, SUCCESS_SURFACE, DANGER_SURFACE, tint, ON_ACCENT, PALETTES } from "../lib/theme";
 import { FinanceMark } from "./Brand";
 import { Segmented, VISUALLY_HIDDEN } from "./ui";
 import { checkNewPassword } from "../lib/authRecovery";
@@ -60,7 +60,7 @@ function useTurnstile(onToken) {
 }
 
 const inputStyle = {
-  background: "rgba(255,255,255,0.03)",
+  background: tint(0.03),
   border: `1px solid ${BD2}`,
   borderRadius: R_INPUT,
   padding: "13px 16px",
@@ -211,7 +211,7 @@ export default function AuthScreen({ onLogin }) {
 }
 
 const labelStyle = { display: "block", fontSize: 12, color: TX2, marginBottom: 6, fontWeight: 500 };
-const primaryStyle = { width: "100%", height: 48, borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: GOLD, color: BG };
+const primaryStyle = { width: "100%", height: 48, borderRadius: R_BTN, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, marginTop: 4, background: PALETTES.gold.base, color: ON_ACCENT };
 const linkStyle = { background: "none", border: "none", color: TX2, fontSize: 13, cursor: "pointer", textAlign: "center", minHeight: 44, textDecoration: "underline", textUnderlineOffset: 3 };
 
 /** Aviso de erro ou de informação: superfície do estado e texto na cor dele (padrão do Life). */

@@ -13,6 +13,15 @@ import "@fontsource/ibm-plex-mono/600.css";
 import "@fontsource/ibm-plex-mono/700.css";
 import "./index.css";
 import LacalleFinance from "./LacalleFinance.jsx";
+import { P, IS_LIGHT } from "./lib/palette.js";
+
+// O tema é escolhido uma vez, ao abrir (lib/palette.js): página e campos nativos seguem o mesmo.
+document.documentElement.style.setProperty("--lf-page", P.bg);
+document.documentElement.style.colorScheme = IS_LIGHT ? "light" : "dark";
+// No iPhone instalado, "black-translucent" escreve a hora e a bateria em branco, que somem no
+// claro. ponytail: não validado no aparelho; se o iOS ignorar a troca feita depois do carregamento,
+// o caminho é servir o index.html com o valor certo.
+if (IS_LIGHT) document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.setAttribute("content", "default");
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

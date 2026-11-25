@@ -2,10 +2,17 @@
   box-sizing: border-box;
 }
 
+/* Fundo e esquema de cor (campos nativos, barras de rolagem) do tema do
+   sistema, para a página não piscar escura antes do app abrir. Depois o
+   main.jsx fixa os dois com o tema que o app escolheu (lib/palette.js, de
+   onde vêm estes dois tons). */
+:root { color-scheme: dark; --lf-page: #0B0D0F; }
+@media (prefers-color-scheme: light) { :root { color-scheme: light; --lf-page: #E2E7ED; } }
+
 html, body {
   margin: 0;
   padding: 0;
-  background: #0B0D0F;
+  background: var(--lf-page);
   min-height: 100%;
 }
 

@@ -11,6 +11,8 @@
 // quebrar nada da interface visual.
 // ============================================================================
 
+import { P } from "./palette.js"; // cores de estado das linhas de cálculo, no tema do app
+
 const MONTHS_ARR=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 // Posição absoluta de um mês ("out/26" → 2026*12+9), para ordenar e andar
 // mês a mês sem limite. Antes tudo usava MONTH_ORDER.indexOf, uma janela de
@@ -596,15 +598,15 @@ export const FinancialEngine=(()=>{
 
   const ForecastEngine={
     eventMeta(t,plannedById){
-      if(t.cat==="Investimento")return{color:"#3B82F6",label:"Investimento"};
-      if(t.installmentId)return{color:"#F0A857",label:"Parcela"};
+      if(t.cat==="Investimento")return{color:P.blue,label:"Investimento"};
+      if(t.installmentId)return{color:P.warning,label:"Parcela"};
       if(t.plannedId){
         const pl=plannedById.get(t.plannedId);
-        if(pl?.recurring)return{color:"#A78BFA",label:"Assinatura"};
-        return{color:"#EF4444",label:"Despesa"};
+        if(pl?.recurring)return{color:P.violet,label:"Assinatura"};
+        return{color:P.error,label:"Despesa"};
       }
-      if(t.type==="Entrada")return{color:"#22C55E",label:"Receita"};
-      return{color:"#EF4444",label:"Despesa"};
+      if(t.type==="Entrada")return{color:P.success,label:"Receita"};
+      return{color:P.error,label:"Despesa"};
     },
     groupByDate(tx){
       const m={};tx.forEach(t=>{if(!m[t.date])m[t.date]=[];m[t.date].push(t);});return m;
@@ -644,7 +646,7 @@ export const FinancialEngine=(()=>{
         relevantMonths.forEach(mk=>{
           if(!mk||!PlannedStatus.appliesTo(p,mk)||!PlannedStatus.isPending(p,mk))return;
           const bk=mk===currentMonthKey?"mes":mk===nextMonthKey?"prox_mes":null;
-          if(bk)b[bk].push({kind:"planned",data:p,color:p.recurring?"#A78BFA":"#EF4444",label:p.recurring?"Assinatura":"Conta",month:mk});
+          if(bk)b[bk].push({kind:"planned",data:p,color:p.recurring?P.violet:P.error,label:p.recurring?"Assinatura":"Conta",month:mk});
         });
       });
       return b;
@@ -773,9 +775,9 @@ export const FinancialEngine=(()=>{
         breakdown:{
           calcRows:[
             {label:"Total previsto no mês",value:fmt(plannedStats.total)},
-            {label:"Já pago",value:fmt(plannedStats.paid),color:"#22C55E"},
-            {label:"Ainda pendente",value:fmt(plannedStats.pending),color:plannedStats.pending>=0?undefined:"#EF4444"},
-            {label:"Percentual já utilizado",value:`${usedPct}%`,highlight:true,color:usedPct>=100?"#EF4444":usedPct>=90?"#F0A857":"#22C55E"},
+            {label:"Já pago",value:fmt(plannedStats.paid),color:P.success},
+            {label:"Ainda pendente",value:fmt(plannedStats.pending),color:plannedStats.pending>=0?undefined:P.error},
+            {label:"Percentual já utilizado",value:`${usedPct}%`,highlight:true,color:usedPct>=100?P.error:usedPct>=90?P.warning:P.success},
           ],
           commitItems:pendingItems,
           paidItems,
@@ -802,7 +804,7 @@ export const FinancialEngine=(()=>{
             {label:"Guardado em metas",value:fmt(reservaFinanceira-invNet)},
             {label:"Investido",value:fmt(invNet)},
             {label:"Seu gasto médio mensal",value:fmt(avgMonthlyOut||0)},
-            {label:"Meses de cobertura",value:`${reservaMeses}x`,highlight:true,color:reservaMeses>=6?"#22C55E":reservaMeses>=3?"#F0A857":"#EF4444"},
+            {label:"Meses de cobertura",value:`${reservaMeses}x`,highlight:true,color:reservaMeses>=6?P.success:reservaMeses>=3?P.warning:P.error},
           ],
           commitItems:goalItems,
         },
@@ -829,9 +831,9 @@ export const FinancialEngine=(()=>{
         breakdown:{
           calcRows:[
             {label:"Saldo atual",value:fmt(balance)},
-            {label:"Receitas previstas no período",value:`+ ${fmt(detailed.totals.inc)}`,color:"#22C55E"},
-            {label:"Compromissos previstos no período",value:`- ${fmt(detailed.totals.outReal+detailed.totals.plannedOut)}`,color:"#EF4444"},
-            {label:`Projeção em ${neg.days} dias`,value:fmt(neg.value),highlight:true,color:"#EF4444"},
+            {label:"Receitas previstas no período",value:`+ ${fmt(detailed.totals.inc)}`,color:P.success},
+            {label:"Compromissos previstos no período",value:`- ${fmt(detailed.totals.outReal+detailed.totals.plannedOut)}`,color:P.error},
+            {label:`Projeção em ${neg.days} dias`,value:fmt(neg.value),highlight:true,color:P.error},
           ],
           commitItems,
         },
@@ -862,10 +864,10 @@ export const FinancialEngine=(()=>{
         breakdown:{
           calcRows:[
             {label:"Saldo atual",value:fmt(balance)},
-            {label:"Receitas previstas (30 dias)",value:`+ ${fmt(detailed.totals.inc)}`,color:"#22C55E"},
-            {label:"Compromissos futuros (30 dias)",value:`- ${fmt(detailed.totals.outReal+detailed.totals.plannedOut)}`,color:"#EF4444"},
+            {label:"Receitas previstas (30 dias)",value:`+ ${fmt(detailed.totals.inc)}`,color:P.success},
+            {label:"Compromissos futuros (30 dias)",value:`- ${fmt(detailed.totals.outReal+detailed.totals.plannedOut)}`,color:P.error},
             {label:"Projeção em 30 dias (sem esse gasto)",value:fmt(detailed.value)},
-            {label:`Se gastar ${fmt(amount)} agora`,value:fmt(after),highlight:true,color:ok?"#22C55E":"#EF4444"},
+            {label:`Se gastar ${fmt(amount)} agora`,value:fmt(after),highlight:true,color:ok?P.success:P.error},
           ],
           commitItems,
           incomeItems,
@@ -1096,10 +1098,10 @@ export const InsightEngine=(()=>{
 
   // Categoria de exibição (não muda pontuação/relevância — só como o cartão é rotulado)
   const CAT_META={
-    atencao:{emoji:"🔴",label:"Atenção",color:"#EF4444"},
-    mudanca:{emoji:"🟡",label:"Mudança",color:"#F0A857"},
-    oportunidade:{emoji:"🟢",label:"Oportunidade",color:"#22C55E"},
-    conquista:{emoji:"🔵",label:"Conquista",color:"#3B82F6"},
+    atencao:{emoji:"🔴",label:"Atenção",color:P.error},
+    mudanca:{emoji:"🟡",label:"Mudança",color:P.warning},
+    oportunidade:{emoji:"🟢",label:"Oportunidade",color:P.success},
+    conquista:{emoji:"🔵",label:"Conquista",color:P.blue},
   };
   const PRIORITY_RANK={alta:3,media:2,baixa:1};
 
@@ -1152,7 +1154,7 @@ export const InsightEngine=(()=>{
             calcRows:[
               {label:done?"Sua média recente":`Sua média até o dia ${dayN}`,value:fmt(a.avg)},
               {label:done?`Gasto em ${monthLabel}`:`Gasto até o dia ${dayN}`,value:fmt(a.curVal)},
-              {label:"Diferença",value:`+${fmt(a.delta)} (${a.pct}%)`,highlight:true,color:"#EF4444"},
+              {label:"Diferença",value:`+${fmt(a.delta)} (${a.pct}%)`,highlight:true,color:P.error},
             ],
           },
           evidence:{period:`${periodLabel}${sameWindow}`,categories:[a.cat],dataUsed:["categorias","media","transacoes","periodo"]},
@@ -1186,7 +1188,7 @@ export const InsightEngine=(()=>{
             calcRows:[
               {label:done?"Sua média recente":`Sua média até o dia ${dayN}`,value:fmt(a.avg)},
               {label:done?`Gasto em ${monthLabel}`:`Gasto até o dia ${dayN}`,value:fmt(a.curVal)},
-              {label:done?"Economizado":"Diferença até agora",value:`-${fmt(a.delta)} (${a.pct}%)`,highlight:true,color:"#22C55E"},
+              {label:done?"Economizado":"Diferença até agora",value:`-${fmt(a.delta)} (${a.pct}%)`,highlight:true,color:P.success},
             ],
           },
           evidence:{period:`${periodLabel}${sameWindow}`,categories:[a.cat],dataUsed:["categorias","media","periodo"]},
@@ -1334,7 +1336,7 @@ export const InsightEngine=(()=>{
             calcRows:[
               {label:"Total previsto",value:fmt(plannedStats.total)},
               {label:"Já utilizado",value:fmt(plannedStats.paid)},
-              {label:"Percentual usado",value:`${usedPct}%`,highlight:true,color:"#EF4444"},
+              {label:"Percentual usado",value:`${usedPct}%`,highlight:true,color:P.error},
             ],
           },
           evidence:{period:plannedMonth||monthLabel,categories:[],dataUsed:["previstos","assinaturas","contas"]},
@@ -1361,9 +1363,9 @@ export const InsightEngine=(()=>{
           lineItems:commitItems,
           calcRows:[
             {label:"Saldo atual",value:fmt(balance)},
-            {label:"Receitas previstas no período",value:`+ ${fmt(detailed.totals.inc)}`,color:"#22C55E"},
-            {label:"Compromissos previstos no período",value:`- ${fmt(detailed.totals.outReal+detailed.totals.plannedOut)}`,color:"#EF4444"},
-            {label:`Projeção em ${neg.days} dias`,value:fmt(neg.value),highlight:true,color:"#EF4444"},
+            {label:"Receitas previstas no período",value:`+ ${fmt(detailed.totals.inc)}`,color:P.success},
+            {label:"Compromissos previstos no período",value:`- ${fmt(detailed.totals.outReal+detailed.totals.plannedOut)}`,color:P.error},
+            {label:`Projeção em ${neg.days} dias`,value:fmt(neg.value),highlight:true,color:P.error},
           ],
         },
         evidence:{period:`próximos ${neg.days} dias`,categories:[],dataUsed:["saldo","receitas","contas","parcelas","assinaturas"]},
@@ -1384,7 +1386,7 @@ export const InsightEngine=(()=>{
           calcRows:[
             {label:"Receitas do período",value:fmt(totalIn)},
             {label:"Despesas do período",value:fmt(totalOut)},
-            {label:"Percentual comprometido",value:`${committedIncome}%`,highlight:true,color:"#EF4444"},
+            {label:"Percentual comprometido",value:`${committedIncome}%`,highlight:true,color:P.error},
           ],
         },
         evidence:{period:monthLabel,categories:[],dataUsed:["receitas","previstos"]},
@@ -1404,7 +1406,7 @@ export const InsightEngine=(()=>{
           calcRows:[
             {label:"Receitas do período",value:fmt(totalIn)},
             {label:"Despesas do período",value:fmt(totalOut)},
-            {label:"Percentual comprometido",value:`${committedIncome}%`,highlight:true,color:"#F0A857"},
+            {label:"Percentual comprometido",value:`${committedIncome}%`,highlight:true,color:P.warning},
           ],
         },
         evidence:{period:monthLabel,categories:[],dataUsed:["receitas","previstos"]},
@@ -1434,7 +1436,7 @@ export const InsightEngine=(()=>{
               lineItems:topTx,
               calcRows:[
                 {label:"Mês passado (fechado)",value:fmt(prev)},
-                {label:"Este mês (em andamento)",value:fmt(cur),highlight:true,color:"#EF4444"},
+                {label:"Este mês (em andamento)",value:fmt(cur),highlight:true,color:P.error},
               ],
             },
             evidence:{period:monthLabel,categories:[cat],dataUsed:["categorias","transacoes","periodo"]},
@@ -1471,7 +1473,7 @@ export const InsightEngine=(()=>{
           lineItems:commitItems,
           calcRows:[
             {label:"Saldo atual",value:fmt(balance)},
-            {label:"Projeção em 30 dias",value:fmt(proj30.value),highlight:true,color:"#22C55E"},
+            {label:"Projeção em 30 dias",value:fmt(proj30.value),highlight:true,color:P.success},
           ],
         },
         evidence:{period:"próximos 30 dias",categories:["Investimento"],dataUsed:["saldo","receitas","contas","parcelas","assinaturas","investimentos"]},
@@ -1494,7 +1496,7 @@ export const InsightEngine=(()=>{
           calcRows:[
             {label:"Guardado em metas e investido",value:fmt(reservaFinanceira)},
             {label:"Gasto médio mensal",value:fmt(avgMonthlyOut||0)},
-            {label:"Meses de cobertura",value:`${reservaMeses}x`,highlight:true,color:"#22C55E"},
+            {label:"Meses de cobertura",value:`${reservaMeses}x`,highlight:true,color:P.success},
           ],
         },
         evidence:{period:"histórico de metas",categories:[],dataUsed:["metas","media"]},
@@ -1521,7 +1523,7 @@ export const InsightEngine=(()=>{
               calcRows:[
                 {label:"Sua economia média mensal",value:fmt(avgMonthlySavings)},
                 {label:"Valor extra sugerido",value:fmt(suggestedExtra)},
-                {label:"Meses ganhos",value:`${sim.monthsSaved}`,highlight:true,color:"#22C55E"},
+                {label:"Meses ganhos",value:`${sim.monthsSaved}`,highlight:true,color:P.success},
               ],
             },
             evidence:{period:"projeção baseada nos últimos meses",categories:[],dataUsed:["metas","media"]},
@@ -1551,7 +1553,7 @@ export const InsightEngine=(()=>{
             lineItems:closed.map(m=>({label:m.month,value:m.in,tag:"receita"})),
             calcRows:[
               {label:`Receita em ${closed[0].month}`,value:fmt(incomes[0])},
-              {label:`Receita em ${closed[closed.length-1].month}`,value:fmt(incomes[incomes.length-1]),highlight:true,color:"#22C55E"},
+              {label:`Receita em ${closed[closed.length-1].month}`,value:fmt(incomes[incomes.length-1]),highlight:true,color:P.success},
             ],
           },
           evidence:{period:`últimos ${closed.length} meses`,categories:[],dataUsed:["receitas","periodo"]},
@@ -1579,7 +1581,7 @@ export const InsightEngine=(()=>{
             calcRows:[
               {label:"Valor restante",value:fmt(w.remaining)},
               {label:"Prazo definido",value:`${w.monthsTarget} meses`},
-              {label:"Estimativa no ritmo atual",value:`${w.estMonths} meses`,highlight:true,color:"#F0A857"},
+              {label:"Estimativa no ritmo atual",value:`${w.estMonths} meses`,highlight:true,color:P.warning},
             ],
           },
           evidence:{period:"projeção baseada nos últimos meses",categories:[],dataUsed:["metas","media"]},
@@ -1630,7 +1632,7 @@ export const InsightEngine=(()=>{
           calcRows:[
             {label:"Valor líquido investido",value:fmt(invNet||0)},
             {label:"Patrimônio líquido total",value:fmt(patrimonio||0)},
-            {label:"Participação",value:`${investmentParticipacao}%`,highlight:true,color:"#3B82F6"},
+            {label:"Participação",value:`${investmentParticipacao}%`,highlight:true,color:P.blue},
           ],
         },
         evidence:{period:"posição atual",categories:["Investimento"],dataUsed:["investimentos","saldo"]},
@@ -1702,7 +1704,7 @@ export const InsightEngine=(()=>{
             lineItems:[...closed.map(m=>({label:m.month,value:m.balance,tag:"anterior"})),{label:currentMonthKey,value:curEntry.balance,tag:"atual"}],
             calcRows:[
               {label:"Melhor saldo anterior",value:fmt(bestPrev)},
-              {label:"Saldo deste mês",value:fmt(curEntry.balance),highlight:true,color:"#22C55E"},
+              {label:"Saldo deste mês",value:fmt(curEntry.balance),highlight:true,color:P.success},
             ],
           },
           evidence:{period:`últimos ${closed.length+1} meses`,categories:[],dataUsed:["saldo","periodo"]},

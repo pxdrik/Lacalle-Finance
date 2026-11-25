@@ -9,7 +9,7 @@ import { useState, useRef, useEffect, forwardRef, Component } from "react";
 import { Tag, Check, ChevronDown, ChevronUp, Info, Lightbulb, Gamepad2, UtensilsCrossed, Car, Sparkles, Shirt, Laptop, HeartPulse, GraduationCap, Briefcase, Package, TrendingUp, Repeat, Undo2, Gift, ArrowRight, ArrowUp, ArrowDown, Minus, AlertTriangle } from "lucide-react";
 import { fmt } from "../lib/financialEngine";
 import { sanitizeMoneyInput } from "../lib/money";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA, MUTED, SUCCESS_SURFACE, DANGER_SURFACE, ERROR_BG, accentSurface, accentText, C2, WARNING_SURFACE } from "../lib/theme";
+import { CARD, BD, BD2, TX, TX2, TX3, GOLD, R_CARD, R_BTN, R_CHIP, R_MODAL, SH_SM, SH_LG, cardStyle, useAccent, NUM_FONT, EASE_OUT, SUCCESS, WARNING, ERROR, DUR_DATA, MUTED, SUCCESS_SURFACE, DANGER_SURFACE, ERROR_BG, accentSurface, accentText, C2, WARNING_SURFACE, tint, LINK, ON_ACCENT } from "../lib/theme";
 import { DENSITIES, useDensity } from "../lib/density";
 import LogoSymbol from "./LogoSymbol";
 
@@ -336,7 +336,7 @@ const DENSITY_LABEL={compact:"Compacto",default:"Padrão",comfortable:"Confortá
 export function DensityToggle(){
   const {density,setDensity}=useDensity();
   return (
-    <fieldset style={{display:"inline-flex",border:`1px solid ${BD}`,borderRadius:R_BTN,background:"rgba(255,255,255,0.03)",padding:2,margin:0}}>
+    <fieldset style={{display:"inline-flex",border:`1px solid ${BD}`,borderRadius:R_BTN,background:tint(0.03),padding:2,margin:0}}>
       <legend style={VISUALLY_HIDDEN}>Tamanho dos botões</legend>
       {DENSITIES.map(value=>{
         const active=density===value;
@@ -585,7 +585,7 @@ export function ProgressBar({pct,color,trackColor,height=8,radius=R_CHIP,duratio
     setWidth(target);
   },[target]);
   return(
-    <div style={{background:trackColor||"rgba(255,255,255,0.06)",borderRadius:radius,height,overflow:"hidden",...style}}>
+    <div style={{background:trackColor||tint(0.06),borderRadius:radius,height,overflow:"hidden",...style}}>
       <div style={{width:`${width}%`,height:"100%",background:color,borderRadius:radius,transition:`width ${duration}ms ${EASE_OUT}`}}/>
     </div>
   );
@@ -645,7 +645,7 @@ export function LinkifiedText({text,color}){
       {parts.map((part,i)=>{
         if(part&&URL_TEST_REGEX.test(part)){
           const href=part.startsWith("http")?part:`https://${part}`;
-          return <a key={i} href={href} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:color||"#5EA1FF",textDecoration:"underline",wordBreak:"break-all"}}>{part}</a>;
+          return <a key={i} href={href} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{color:color||LINK,textDecoration:"underline",wordBreak:"break-all"}}>{part}</a>;
         }
         return <span key={i}>{part}</span>;
       })}
@@ -709,7 +709,7 @@ export function DataUsedChecklist({tags}){
       <div style={{fontSize:10,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:9}}>Dados usados nessa conclusão</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
         {tags.map(t=>(
-          <span key={t} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:TX2,background:"rgba(255,255,255,0.04)",border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"5px 11px",fontWeight:600}}>
+          <span key={t} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:TX2,background:tint(0.04),border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"5px 11px",fontWeight:600}}>
             <Check size={10} color={SUCCESS}/>{DATA_TAG_LABELS[t]||t}
           </span>
         ))}
@@ -739,11 +739,11 @@ export function ComparisonBar({aLabel,aValue,bLabel,bValue,color}){
     <div style={{display:"flex",flexDirection:"column",gap:7,margin:"14px 0"}}>
       <div style={{display:"flex",alignItems:"center",gap:9}}>
         <span style={{fontSize:10.5,color:TX3,width:76,flexShrink:0,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{aLabel}</span>
-        <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:R_CHIP,height:8,overflow:"hidden"}}><div style={{width:`${aPct}%`,height:"100%",background:TX3,borderRadius:R_CHIP,transition:`width .6s ${EASE_OUT}`}}/></div>
+        <div style={{flex:1,background:tint(0.06),borderRadius:R_CHIP,height:8,overflow:"hidden"}}><div style={{width:`${aPct}%`,height:"100%",background:TX3,borderRadius:R_CHIP,transition:`width .6s ${EASE_OUT}`}}/></div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:9}}>
         <span style={{fontSize:10.5,color:TX,width:76,flexShrink:0,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bLabel}</span>
-        <div style={{flex:1,background:"rgba(255,255,255,0.06)",borderRadius:R_CHIP,height:8,overflow:"hidden"}}><div style={{width:`${bPct}%`,height:"100%",background:color,borderRadius:R_CHIP,transition:`width .6s ${EASE_OUT}`}}/></div>
+        <div style={{flex:1,background:tint(0.06),borderRadius:R_CHIP,height:8,overflow:"hidden"}}><div style={{width:`${bPct}%`,height:"100%",background:color,borderRadius:R_CHIP,transition:`width .6s ${EASE_OUT}`}}/></div>
       </div>
     </div>
   );
@@ -900,7 +900,7 @@ MoneyInput.displayName="MoneyInput";
 export const Btn=(props)=>{
   const accent=useAccent();
   const {btnPadY}=useDensity();
-  return <button {...props} className={`btn-primary ${props.className||""}`} style={{background:accent,border:"none",color:BG,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,paddingBlock:btnPadY,paddingInline:18,boxShadow:`0 2px 10px ${accent}40`,transition:`filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT}`,...props.style}}/>;
+  return <button {...props} className={`btn-primary ${props.className||""}`} style={{background:accent,border:"none",color:ON_ACCENT,borderRadius:R_BTN,cursor:"pointer",fontWeight:600,fontSize:14,paddingBlock:btnPadY,paddingInline:18,boxShadow:`0 2px 10px ${accent}40`,transition:`filter .15s ${EASE_OUT}, transform .15s ${EASE_OUT}, box-shadow .15s ${EASE_OUT}`,...props.style}}/>;
 };
 export const BtnGhost=(props)=>{
   const {btnPadY}=useDensity();

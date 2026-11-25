@@ -18,9 +18,13 @@ export default defineConfig({
     testTimeout: 20_000,
     browser: {
       enabled: true,
-      provider: playwright(),
       headless: true,
-      instances: [{ browser: "chromium" }],
+      // O app segue o tema do sistema (lib/palette.js). A suíte roda no escuro,
+      // como sempre rodou; tema-claro.browser.test.jsx roda no claro.
+      instances: [
+        { browser: "chromium", name: "escuro", provider: playwright({ contextOptions: { colorScheme: "dark" } }), exclude: ["src/tema-claro.browser.test.jsx"] },
+        { browser: "chromium", name: "claro", provider: playwright({ contextOptions: { colorScheme: "light" } }), include: ["src/tema-claro.browser.test.jsx"] },
+      ],
     },
   },
 });
