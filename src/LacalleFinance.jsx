@@ -112,7 +112,7 @@ import PlanningTab from "./components/PlanningTab";
 import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, DUR_SIGNATURE, DUR_STANDARD, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, TabPanel, DensityToggle, Segmented, IconButton, PageHeader, SectionTitle, Field } from "./components/ui";
 import { DensityProvider } from "./lib/density";
-import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
+import { CATS, INV_TIPOS, parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
 import MonthlyReport from "./components/MonthlyReport";
@@ -128,7 +128,6 @@ import {
   TrendingUp, CreditCard, Calendar, Sparkles, Repeat, Undo2, Tag, Settings, LogOut, Search, X, Plus, Trash2, Upload, Download, AlertTriangle, ArrowUpCircle, ArrowDownCircle, LayoutDashboard, Receipt, PiggyBank, Cloud, CloudOff, Loader2, RefreshCw, CheckCircle2, AlertCircle, Info, Trophy, CalendarDays, Bell, Target, MoreHorizontal, ChevronRight
 } from "lucide-react";
 
-const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
 const COLORS=["#60A5FA","#818CF8","#34D399","#FB7185","#FBBF24","#A78BFA","#FB923C","#38BDF8","#F472B6","#2DD4BF","#C084FC","#4ADE80","#FCD34D","#94A3B8"];
 // MONTH_ORDER era uma lista fixa de datas hardcoded (jan/25 até jun/27) — ou
 // seja, tinha uma "data de validade": a partir de jun/2027 a funcionalidade
@@ -136,7 +135,6 @@ const COLORS=["#60A5FA","#818CF8","#34D399","#FB7185","#FBBF24","#A78BFA","#FB92
 // lista. Agora é uma janela rolante calculada a partir da data real do
 // dispositivo: sempre 12 meses pra trás e 36 meses pra frente a partir de
 // hoje, recalculada a cada carregamento do app — nunca fica velha.
-const INV_TIPOS=["Aporte","Resgate","Rendimento"];
 const INV_TIPO_ICONS={"Aporte":PiggyBank,"Resgate":Undo2,"Rendimento":TrendingUp};
 // "gold" é a identidade fixa do Finance (Brand System V2, 10/09/2026) e o
 // padrão pra conta nova — as outras seis continuam existindo como

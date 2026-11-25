@@ -21,6 +21,11 @@ export const MAX_DESC_LEN = 120;
 export const MAX_NOTES_LEN = 2000;
 export const MAX_PARCELAS = 360;
 
+// Categorias e tipos de investimento padrão. Moram aqui porque a API
+// (supabase/functions/api) aceita só estes nomes, mais as categorias próprias.
+export const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
+export const INV_TIPOS=["Aporte","Resgate","Rendimento"];
+
 // Janela de datas aceitas: 10 anos para trás, 10 para frente. Cobre lançamento
 // retroativo e parcelamento longo, e barra 0001-01-01 / 9999-12-31.
 const yearsFromNow = n => {
