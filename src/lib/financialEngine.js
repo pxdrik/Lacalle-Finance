@@ -742,7 +742,7 @@ export const FinancialEngine=(()=>{
         {label:"Gasto variável",value:fmt(fixedVarSplit.variavel),desc:"Total de despesas variáveis no período.",status:null},
         {label:"Patrimônio líquido",value:fmt(patrimonio),desc:"Saldo disponível somado aos investimentos.",status:patrimonio>0?"Boa":"Atenção"},
         {label:"Saldo disponível",value:fmt(balance),desc:"Quanto sobrou no período selecionado.",status:balance>0?"Boa":"Crítica"},
-        reservaMeses!==null&&{label:"Reserva financeira",value:`${fmt(reservaFinanceira)} (${reservaMeses}x gastos)`,desc:"Total guardado em metas, em meses de gasto médio.",status:reservaMeses>=6?"Excelente":reservaMeses>=3?"Boa":reservaMeses>=1?"Atenção":"Crítica"},
+        reservaMeses!==null&&{label:"Reserva financeira",value:`${fmt(reservaFinanceira)} (${reservaMeses}x gastos)`,desc:"Metas e investimentos, em meses de gasto médio.",status:reservaMeses>=6?"Excelente":reservaMeses>=3?"Boa":reservaMeses>=1?"Atenção":"Crítica"},
       ].filter(Boolean);
     },
   };
@@ -766,7 +766,8 @@ export const FinancialEngine=(()=>{
       const paidItems=items.filter(p=>PlannedStatus.isPaid(p,month)).map(p=>({label:p.desc,value:p.val,tag:"Pago"})).sort((a,b)=>b.value-a.value);
       return{
         key:"orcamento",question:"Estou dentro do orçamento previsto?",
-        answer:plannedStats.pending>=0?"Sim, ainda dentro do previsto":"Você já passou do previsto",
+        // 100% usado sem passar não é "dentro" nem "passou": é o limite.
+        answer:plannedStats.pending<0?"Você já passou do previsto":usedPct>=100?"No limite: o previsto do mês já foi todo usado":"Sim, ainda dentro do previsto",
         status:usedPct>=100?"critico":usedPct>=90?"atencao":"ok",
         detail:`Você já usou ${usedPct}% do previsto para este mês (${fmt(plannedStats.paid)} de ${fmt(plannedStats.total)}).`,
         breakdown:{
@@ -782,28 +783,30 @@ export const FinancialEngine=(()=>{
         evidence:{period:month||"",categories:[],dataUsed:["previstos","assinaturas","contas"]},
       };
     },
-    isReserveHealthy({reservaMeses,reservaFinanceira,avgMonthlyOut,enhancedWishes}){
+    isReserveHealthy({reservaMeses,reservaFinanceira,invNet=0,avgMonthlyOut,enhancedWishes}){
       if(reservaMeses===null)return{
         key:"reserva",question:"Minha reserva está saudável?",
         answer:"Ainda não sei dizer",status:"neutro",
-        detail:"Cadastre metas com valores guardados para eu poder avaliar sua reserva.",
+        detail:"Lance seus gastos para eu poder comparar a reserva com o que você gasta por mês.",
         breakdown:null,evidence:{period:"",categories:[],dataUsed:["metas"]},
       };
       const goalItems=(enhancedWishes||[]).filter(w=>w.saved>0).map(w=>({label:w.name,value:w.saved,tag:"Meta"})).sort((a,b)=>b.value-a.value);
+      if(invNet>0)goalItems.unshift({label:"Investimentos",value:invNet,tag:"Investido"});
       return{
         key:"reserva",question:"Minha reserva está saudável?",
         answer:reservaMeses>=3?"Sim, está num nível saudável":"Ainda vale reforçar essa reserva",
         status:reservaMeses>=6?"ok":reservaMeses>=3?"atencao":"critico",
-        detail:`Sua reserva cobre ${reservaMeses}x seu gasto médio mensal (${fmt(reservaFinanceira)} guardados).`,
+        detail:`Sua reserva cobre ${reservaMeses}x seu gasto médio mensal (${fmt(reservaFinanceira)} entre metas e investimentos).`,
         breakdown:{
           calcRows:[
-            {label:"Total guardado em metas",value:fmt(reservaFinanceira)},
+            {label:"Guardado em metas",value:fmt(reservaFinanceira-invNet)},
+            {label:"Investido",value:fmt(invNet)},
             {label:"Seu gasto médio mensal",value:fmt(avgMonthlyOut||0)},
             {label:"Meses de cobertura",value:`${reservaMeses}x`,highlight:true,color:reservaMeses>=6?"#22C55E":reservaMeses>=3?"#F0A857":"#EF4444"},
           ],
           commitItems:goalItems,
         },
-        evidence:{period:"posição atual",categories:[],dataUsed:["metas","media"]},
+        evidence:{period:"posição atual",categories:[],dataUsed:["metas","investimentos","media"]},
       };
     },
     willCashFlowGoNegative({cashFlowProjections,transactions,plannedExpenses,balance,todayISO,currentMonthKey}){
@@ -1482,14 +1485,14 @@ export const InsightEngine=(()=>{
         title:"Reserva financeira sólida",
         heroNumber:{value:reservaMeses,format:"plain",suffix:"x",sign:"none"},
         comparison:{aLabel:"Ideal mínimo",aValue:6,bLabel:"Sua reserva",bValue:reservaMeses},
-        explanation:`Você tem ${fmt(reservaFinanceira)} guardados, o suficiente para cobrir ${reservaMeses}x seu gasto médio mensal de ${fmt(avgMonthlyOut||0)}.`,
+        explanation:`Você tem ${fmt(reservaFinanceira)} entre metas e investimentos, o suficiente para cobrir ${reservaMeses}x seu gasto médio mensal de ${fmt(avgMonthlyOut||0)}.`,
         reason:"Isso está numa posição bastante confortável frente ao seu padrão de gastos.",
         recommendation:`Você pode arriscar um pouco mais nos investimentos ou acelerar outras metas.`,
         confidence:"alta",
         breakdown:{
           lineItems:goalItems,
           calcRows:[
-            {label:"Total guardado em metas",value:fmt(reservaFinanceira)},
+            {label:"Guardado em metas e investido",value:fmt(reservaFinanceira)},
             {label:"Gasto médio mensal",value:fmt(avgMonthlyOut||0)},
             {label:"Meses de cobertura",value:`${reservaMeses}x`,highlight:true,color:"#22C55E"},
           ],

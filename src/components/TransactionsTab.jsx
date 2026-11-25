@@ -61,8 +61,10 @@ export default function TransactionsTab({
         {hasActiveFilter && <BtnGhost onClick={clearFilters} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, paddingInline: 12, height: 40, paddingBlock: 0 }}><X size={14} />Limpar</BtnGhost>}
       </div>
 
-      {/* ---- Resumo do que está filtrado ---- */}
-      <Totals items={[{ l: "Saldo", v: viewTotals.balance, c: viewTotals.balance >= 0 ? accentText(accent) : ERROR }, { l: "Entradas", v: viewTotals.totalIn, c: SUCCESS }, { l: "Saídas", v: viewTotals.totalOut, c: TX }]} />
+      {/* ---- Resumo do que está filtrado ----
+          "Resultado", não "Saldo": é entradas menos saídas da lista, com filtro e
+          lançamentos futuros; o saldo da conta é o "Saldo atual" do Início. */}
+      <Totals items={[{ l: "Resultado", v: viewTotals.balance, c: viewTotals.balance >= 0 ? accentText(accent) : ERROR }, { l: "Entradas", v: viewTotals.totalIn, c: SUCCESS }, { l: "Saídas", v: viewTotals.totalOut, c: TX }]} />
       {/* Mesmo botão do Início, em versão discreta: só contorno (pedido de 04/10/2026). */}
       <button type="button" onClick={onNewTx} className="btn-quiet-new" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 44, width: "100%", borderRadius: R_BTN, border: `1px solid ${BD2}`, background: "transparent", color: TX, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
         <Plus size={16} color={accentText(accent)} aria-hidden="true" />Novo lançamento

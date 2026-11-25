@@ -121,7 +121,7 @@ import { buildMonthlyReport } from "./lib/report";
 import { createSyncEngine, localCopy, hasPendingLocalCopy, clearLocalCopies } from "./lib/syncEngine";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
 import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
-import { formatDay } from "./lib/dates";
+import { formatDay, formatDayTitle } from "./lib/dates";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
 import {
@@ -670,7 +670,10 @@ function MainApp({user,setUser}){
   },[realized,todayISO]);
   const savingsRate=FinancialEngine.IncomeAnalyzer.savingsRate(balance,totalIn);
   const committedIncome=FinancialEngine.IncomeAnalyzer.committedRatio(totalIn,totalOut);
-  const reservaFinanceira=useMemo(()=>wishes.reduce((s,w)=>s+(w.saved||0),0),[wishes]);
+  // Reserva = o guardado nas metas mais o que está investido (pedido de 24/11/2026):
+  // só com as metas, quem guarda no CDI aparecia com reserva zero.
+  const reservaMetas=useMemo(()=>wishes.reduce((s,w)=>s+(w.saved||0),0),[wishes]);
+  const reservaFinanceira=reservaMetas+invNet;
   const avgMonthlyOut=useMemo(()=>summary.length?summary.reduce((s,m)=>s+m.out,0)/summary.length:0,[summary]);
   const reservaMeses=avgMonthlyOut>0?Math.round((reservaFinanceira/avgMonthlyOut)*10)/10:null;
 
@@ -711,10 +714,10 @@ function MainApp({user,setUser}){
   // ---- Decision Engine: respostas automáticas (agora com breakdown auditável) ----
   const decisions=useMemo(()=>[
     FinancialEngine.DecisionEngine.isWithinBudget({plannedStats,plannedItemsForMonth,month:plannedMonth}),
-    FinancialEngine.DecisionEngine.isReserveHealthy({reservaMeses,reservaFinanceira,avgMonthlyOut,enhancedWishes}),
+    FinancialEngine.DecisionEngine.isReserveHealthy({reservaMeses,reservaFinanceira,invNet,avgMonthlyOut,enhancedWishes}),
     FinancialEngine.DecisionEngine.willCashFlowGoNegative({cashFlowProjections,transactions,plannedExpenses,balance,todayISO,currentMonthKey:currentMonthKeyReal}),
     FinancialEngine.DecisionEngine.willGoalsFinishOnTime({enhancedWishes}),
-  ],[plannedStats,plannedItemsForMonth,plannedMonth,reservaMeses,reservaFinanceira,avgMonthlyOut,enhancedWishes,cashFlowProjections,transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal]);
+  ],[plannedStats,plannedItemsForMonth,plannedMonth,reservaMeses,reservaFinanceira,invNet,avgMonthlyOut,enhancedWishes,cashFlowProjections,transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal]);
 
   const runSimulation=()=>{
     if(simType==="economizar_mais"){
@@ -2370,7 +2373,7 @@ function MainApp({user,setUser}){
       {selectedCalDay&&(
         <Modal onClose={()=>setSelectedCalDay(null)} maxWidth={400} padding={26} contentStyle={{maxHeight:"80vh"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-              <div style={{fontSize:15,fontWeight:700,color:TX}}>{selectedCalDay}</div>
+              <div style={{fontSize:15,fontWeight:700,color:TX}}>{formatDayTitle(selectedCalDay,todayISO)}</div>
               <button onClick={()=>setSelectedCalDay(null)} style={{background:"none",border:"none",color:TX3,cursor:"pointer"}}><X size={18}/></button>
             </div>
             {selectedDayEvents.length===0?(
