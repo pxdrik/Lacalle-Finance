@@ -16,14 +16,10 @@
 // ============================================================================
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import {
-  BG, CARD, C2, TX, TX2, TX3,
-  GOLD,
-  SUCCESS, WARNING, ERROR,
-  ERROR_BG, SUCCESS_FILL,
-  MUTED, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, PALETTES, accentSurface, accentText, contrastRatio,
-} from "./theme.js";
+import { DARK, LIGHT, ON_ACCENT, ERROR_BG, SUCCESS_FILL, PALETTES, accentSurface, accentText, contrastRatio } from "./theme.js";
 
+// Os dois temas (palette.js): o escuro de sempre e o claro, desde 24/11/2026.
+const THEMES = [["escuro", DARK], ["claro", LIGHT]];
 const WHITE = "#FFFFFF";
 
 /** sRGB hex (#RRGGBB) → linear sRGB. */
@@ -47,61 +43,55 @@ function contrast(hexA, hexB) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-// [foreground, background, mínimo, o que o par é] — os valores literais vêm
-// direto de theme.js, importados acima; nada é redigitado aqui.
-const PAIRS = [
-  [TX, BG, 4.5, "texto primário na página"],
-  [TX, CARD, 4.5, "texto primário num card"],
-  [TX, C2, 4.5, "texto primário numa superfície elevada"],
-  [TX2, BG, 4.5, "texto secundário na página"],
-  [TX2, CARD, 4.5, "texto secundário num card"],
-  [TX2, C2, 4.5, "texto secundário numa superfície elevada"],
-
-  // BUG-04: TX3 (texto terciário — labels, estados vazios, cabeçalhos de
-  // seção) precisa dos mesmos 4,5:1 nas três superfícies reais onde é usado
-  // como texto — antes tinha alfa e caía pra ~3,68–4,06:1 nelas.
-  [TX3, BG, 4.5, "texto terciário na página"],
-  [TX3, CARD, 4.5, "texto terciário num card"],
-  [TX3, C2, 4.5, "texto terciário numa superfície elevada"],
-
-  // Botão primário: rótulo BG sobre o accent (Btn, em ui.jsx) — o comentário
-  // de theme.js já assume esse par ao subir GOLD 500->dark. GOLD2 e HOVER
-  // ficam de fora: nenhum dos dois pinta um fundo sólido com BG por cima na
-  // base de código hoje (GOLD2 não é usado; HOVER só aparece com alfa baixo
-  // por trás de texto TX) — testar esses pares seria inventar um uso que não
-  // existe.
-  [BG, GOLD, 4.5, "rótulo do botão primário sobre o accent padrão"],
-
-  // Estados sólidos — pág. 27/33, mesma divergência já documentada e testada
-  // no LaCalle Life (branco não sustenta 4.5:1 sobre o token de ícone).
+// [foreground, background, mínimo, o que o par é] — os valores vêm de
+// palette.js via theme.js; nada é redigitado aqui.
+const pairsOf = p => [
+  [p.tx, p.bg, 4.5, "texto primário na página"],
+  [p.tx, p.card, 4.5, "texto primário num card"],
+  [p.tx, p.c2, 4.5, "texto primário numa superfície elevada"],
+  [p.tx2, p.bg, 4.5, "texto secundário na página"],
+  [p.tx2, p.card, 4.5, "texto secundário num card"],
+  [p.tx2, p.c2, 4.5, "texto secundário numa superfície elevada"],
+  // BUG-04: TX3 (labels, estados vazios, cabeçalhos de seção) precisa dos
+  // mesmos 4,5:1 nas três superfícies onde é usado como texto.
+  [p.tx3, p.bg, 4.5, "texto terciário na página"],
+  [p.tx3, p.card, 4.5, "texto terciário num card"],
+  [p.tx3, p.c2, 4.5, "texto terciário numa superfície elevada"],
+  // Dourado de texto: o "Finance" do logotipo e os textos da marca.
+  [p.gold, p.bg, 4.5, "dourado de texto na página"],
+  [p.gold, p.card, 4.5, "dourado de texto num card"],
+  // Estados sólidos: branco não sustenta 4,5:1 sobre o token de ícone (mesma divergência do Life).
   [WHITE, ERROR_BG, 4.5, "rótulo do botão destrutivo"],
   [WHITE, SUCCESS_FILL, 3, "ícone \"concluído\" sobre o preenchimento (gráfico, não texto)"],
-
-  // Ícone/borda de estado direto sobre o fundo — gráfico, limiar 3:1.
-  [SUCCESS, BG, 3, "ícone/borda de sucesso"],
-  [WARNING, BG, 3, "ícone/borda de aviso"],
-  [ERROR, BG, 3, "ícone/borda de erro"],
+  // Sucesso, aviso e erro aparecem como texto (valores, avisos) nos cards e na página.
+  [p.success, p.card, 4.5, "texto de sucesso num card"],
+  [p.warning, p.card, 4.5, "texto de aviso num card"],
+  [p.error, p.card, 4.5, "texto de erro num card"],
+  [p.success, p.bg, 3, "ícone/borda de sucesso"],
+  [p.warning, p.bg, 3, "ícone/borda de aviso"],
+  [p.error, p.bg, 3, "ícone/borda de erro"],
+  // Investimento, assinatura e link aparecem como texto e ícone.
+  [p.blue, p.card, 3, "ícone de investimento"],
+  [p.violet, p.card, 4.5, "valor de assinaturas"],
+  [p.link, p.card, 4.5, "link"],
+  [p.bd2, p.card, p === LIGHT ? 3 : 1.4, "contorno de campo (no claro, os 3:1 da WCAG 1.4.11, como no Life)"],
+  ...p.categories.map(c => [c, p.card, 3, "ponto/barra de categoria"]),
 ];
 
-describe("theme.js — contraste dos tokens", () => {
-  for (const [fg, bg, minimum, label] of PAIRS) {
-    test(`${fg} sobre ${bg} atinge ${minimum}:1 — ${label}`, () => {
-      assert.ok(
-        contrast(fg, bg) >= minimum,
-        `${label}: ${fg} sobre ${bg} mede ${contrast(fg, bg).toFixed(2)}:1, abaixo de ${minimum}:1`,
-      );
+for (const [name, p] of THEMES) {
+  describe(`theme — contraste dos tokens no ${name}`, () => {
+    for (const [fg, bg, minimum, label] of pairsOf(p)) {
+      test(`${fg} sobre ${bg} atinge ${minimum}:1 — ${label}`, () => {
+        assert.ok(contrast(fg, bg) >= minimum, `${label}: ${fg} sobre ${bg} mede ${contrast(fg, bg).toFixed(2)}:1, abaixo de ${minimum}:1`);
+      });
+    }
+    // A correção de contraste não pode achatar a hierarquia: TX3 continua o mais apagado.
+    test("hierarquia de texto preservada: TX > TX2 > TX3 em contraste com o card", () => {
+      assert.ok(contrast(p.tx, p.card) > contrast(p.tx2, p.card));
+      assert.ok(contrast(p.tx2, p.card) > contrast(p.tx3, p.card));
     });
-  }
-
-  // BUG-04: a correção de contraste não pode achatar a hierarquia visual —
-  // TX3 precisa continuar sendo o mais apagado dos três, mesmo agora opaco
-  // e acima do mínimo de AA.
-  test("hierarquia de texto preservada: TX (primário) > TX2 (secundário) > TX3 (terciário) em luminância", () => {
-    const lum = hex => luminance(hexToLinearSrgb(hex));
-    assert.ok(lum(TX) > lum(TX2), `TX (${lum(TX).toFixed(3)}) deveria ser mais claro que TX2 (${lum(TX2).toFixed(3)})`);
-    assert.ok(lum(TX2) > lum(TX3), `TX2 (${lum(TX2).toFixed(3)}) deveria ser mais claro que TX3 (${lum(TX3).toFixed(3)})`);
   });
-});
+}
 
 /**
  * PALETTES (theme.js) é a lista de accents que a pessoa escolhe no perfil.
@@ -111,30 +101,39 @@ describe("theme.js — contraste dos tokens", () => {
  */
 describe("PALETTES — contraste por accent", () => {
   for (const [key, { base }] of Object.entries(PALETTES)) {
-    test(`accent "${key}" (${base}): rótulo BG sobre o accent atinge 4.5:1`, () => {
-      assert.ok(contrast(BG, base) >= 4.5, `BG sobre ${base} mede ${contrast(BG, base).toFixed(2)}:1`);
+    test(`accent "${key}" (${base}): rótulo Ink sobre o accent atinge 4.5:1`, () => {
+      assert.ok(contrast(ON_ACCENT, base) >= 4.5, `Ink sobre ${base} mede ${contrast(ON_ACCENT, base).toFixed(2)}:1`);
     });
-    test(`accent "${key}": texto do item escolhido sobre o fundo tingido atinge 4.5:1`, () => {
-      const fg = accentText(base), bg = accentSurface(base);
-      assert.ok(contrast(fg, bg) >= 4.5, `${fg} sobre ${bg} mede ${contrast(fg, bg).toFixed(2)}:1`);
-    });
+    for (const [name, p] of THEMES) {
+      test(`accent "${key}" no ${name}: texto do item escolhido sobre o fundo tingido atinge 4.5:1`, () => {
+        const fg = accentText(base, p), bg = accentSurface(base, p);
+        assert.ok(contrast(fg, bg) >= 4.5, `${fg} sobre ${bg} mede ${contrast(fg, bg).toFixed(2)}:1`);
+      });
+      test(`accent "${key}" no ${name}: texto em accent sobre o card atinge 4.5:1`, () => {
+        const fg = accentText(base, p);
+        assert.ok(contrast(fg, p.card) >= 4.5, `${fg} sobre ${p.card} mede ${contrast(fg, p.card).toFixed(2)}:1`);
+      });
+    }
   }
 });
 
-describe("seletores e filtros (Segmented) — superfícies de estado", () => {
-  const SEG = [
-    [SUCCESS, SUCCESS_SURFACE, "Entrada escolhida"],
-    [ERROR, DANGER_SURFACE, "Saída escolhida"],
-    [WARNING, WARNING_SURFACE, "selo de mudança (Descobertas)"],
-    [TX, MUTED, "opção neutra escolhida"],
-    [TX2, CARD, "opção não escolhida"],
-  ];
-  for (const [fg, bg, label] of SEG) {
-    test(`${label}: ${fg} sobre ${bg} atinge 4.5:1`, () => {
-      assert.ok(contrast(fg, bg) >= 4.5, `mede ${contrast(fg, bg).toFixed(2)}:1`);
-    });
-  }
-  test("a fórmula do app (contrastRatio) bate com a do teste", () => {
-    assert.equal(contrastRatio(TX, BG).toFixed(4), contrast(TX, BG).toFixed(4));
+for (const [name, p] of THEMES) {
+  describe(`seletores e filtros (Segmented) no ${name} — superfícies de estado`, () => {
+    const SEG = [
+      [p.success, p.successSurface, "Entrada escolhida"],
+      [p.error, p.dangerSurface, "Saída escolhida"],
+      [p.warning, p.warningSurface, "selo de mudança (Descobertas)"],
+      [p.tx, p.muted, "opção neutra escolhida"],
+      [p.tx2, p.card, "opção não escolhida"],
+    ];
+    for (const [fg, bg, label] of SEG) {
+      test(`${label}: ${fg} sobre ${bg} atinge 4.5:1`, () => {
+        assert.ok(contrast(fg, bg) >= 4.5, `mede ${contrast(fg, bg).toFixed(2)}:1`);
+      });
+    }
   });
+}
+
+test("a fórmula do app (contrastRatio) bate com a do teste", () => {
+  assert.equal(contrastRatio(DARK.tx, DARK.bg).toFixed(4), contrast(DARK.tx, DARK.bg).toFixed(4));
 });

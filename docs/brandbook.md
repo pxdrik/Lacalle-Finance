@@ -90,15 +90,24 @@ hierarquia `TX > TX2 > TX3` continua em luminância, não só em contraste —
 sem isso, a correção de acessibilidade poderia ter achatado a hierarquia
 visual que ela deveria preservar.
 
-### 4. Não existe modo claro
+### 4. Modo claro: segue o sistema — desde 24/11/2026
 
-O Finance roda em dark mode nativo (`#0B0D0F` fixo em `index.css`, sem
-`data-theme` nem media query de preferência). O Life tem os dois, com claro
-como padrão. Isto não está listado como divergência do Brand System em si —
-a pág. 33 descreve a escala escura como algo que qualquer produto LaCalle
-pode usar — mas é uma diferença real entre as duas aplicações que vale
-registrar: o Finance nunca foi validado em claro, porque não pretende
-existir em claro.
+Até 24/11/2026 o Finance era só escuro. Num teste de uso pediram tema claro
+(quem usa de dia, na rua), e o Pedro aprovou. Agora o app segue o
+`prefers-color-scheme` do sistema:
+
+- As cores dos dois temas ficam em `src/lib/palette.js`. O escuro é o de
+  sempre. O claro é o do LaCalle Life no claro (canvas `#E2E7ED`, cartão
+  branco, Ink `#111111`, bordas `#C2C9D2`/`#76808D`, e os tons "-text" de
+  sucesso, aviso e erro), para as duas apps falarem a mesma língua.
+- O dourado de texto e da marca no claro é `#846009`: o 500 oficial
+  (`#A87A0E`) mede 3,2:1 no canvas. O botão principal continua no accent
+  escolhido, com rótulo Ink (`ON_ACCENT`) nos dois temas.
+- O tema é escolhido quando o app abre; trocar o tema do sistema com o app
+  aberto só vale na próxima abertura (os ícones e gráficos SVG recebem cor
+  por atributo, que não aceita `var()`).
+- `tokens.test.js` confere o contraste dos dois temas, e
+  `tema-claro.browser.test.jsx` passa o axe nas telas principais em claro.
 
 ### 5. Duração de contagem animada — feito, 18/09/2026
 
@@ -259,7 +268,7 @@ acima; é a mesma pendência, só repetida aqui por completude da auditoria.
 ### Não se aplica, ou se aplica ao contrário do Life
 
 - **Tema escuro com glow decorativo — rejeitado no Life, aqui é mais sutil e
-  aceitável.** O Finance é dark-only por natureza, não por divergência. Dois
+  aceitável.** O Finance nasceu dark-only (claro só desde 24/11/2026, ver item 4). Dois
   usos de gradiente/glow existem e são **contidos, não ambientais**: o botão
   primário tem `box-shadow: 0 2px 10px accent40` (`ui.jsx:482`, um brilho de
   10px sob o botão, na cor do acento — indica a ação, não decora a página), e

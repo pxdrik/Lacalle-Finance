@@ -13,7 +13,7 @@
 // ============================================================================
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { FinancialEngine, monthKey, addDaysStr } from "./financialEngine.js";
+import { FinancialEngine, monthKey, addDaysStr, fmt } from "./financialEngine.js";
 
 const { CashFlowAnalyzer, BudgetAnalyzer, GoalAnalyzer, HealthScoreEngine } = FinancialEngine;
 
@@ -228,5 +228,24 @@ describe("HealthScoreEngine.compute", () => {
     });
     assert.ok(!scores.some(s => s.label === "Taxa de economia"));
     assert.ok(!scores.some(s => s.label === "Reserva financeira"));
+  });
+});
+
+describe("DecisionEngine (teste de 24/11/2026)", () => {
+  const { DecisionEngine } = FinancialEngine;
+  const budget = (paid, total) => DecisionEngine.isWithinBudget({ plannedStats: { paid, total, pending: total - paid }, plannedItemsForMonth: [], month: "nov/26" }).answer;
+
+  test("100% do previsto usado é \"no limite\", não \"dentro\" nem \"passou\"", () => {
+    assert.match(budget(330, 330), /^No limite/);
+    assert.match(budget(100, 330), /^Sim, ainda dentro/);
+    assert.match(budget(400, 330), /passou do previsto/);
+  });
+
+  test("reserva mostra metas e investimentos separados, e o investido entra na lista", () => {
+    const r = DecisionEngine.isReserveHealthy({ reservaMeses: 3.2, reservaFinanceira: 3200, invNet: 3000, avgMonthlyOut: 1000, enhancedWishes: [{ name: "Viagem", saved: 200 }] });
+    const rows = Object.fromEntries(r.breakdown.calcRows.map(x => [x.label, x.value]));
+    assert.equal(rows["Guardado em metas"], fmt(200));
+    assert.equal(rows["Investido"], fmt(3000));
+    assert.deepEqual(r.breakdown.commitItems.map(i => i.label), ["Investimentos", "Viagem"]);
   });
 });

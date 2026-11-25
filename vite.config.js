@@ -39,7 +39,13 @@ export default defineConfig({
         // O app é em português: o cache do app instalado não precisa baixar as
         // fontes de grego, cirílico e vietnamita (o navegador só as busca se
         // um desses caracteres aparecer na tela, o que continua funcionando).
-        globIgnores: ["**/*-{greek,cyrillic,cyrillic-ext,vietnamese}-*.woff2"],
+        globIgnores: [
+          "**/*-{greek,cyrillic,cyrillic-ext,vietnamese}-*.woff2",
+          // Dependências opcionais do jsPDF (HTML e SVG para PDF), que o
+          // relatório não usa: o Vite gera os pedaços, mas o app nunca os pede.
+          // index.es é o canvg.
+          "**/{html2canvas.esm,purify.es,index.es}-*.js",
+        ],
         navigateFallback: "/index.html",
         cleanupOutdatedCaches: true,
       },

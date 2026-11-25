@@ -1,5 +1,5 @@
 // report.js: os números do relatório mensal (PDF), sem tela. O componente
-// MonthlyReport só desenha o que sai daqui, e os testes conferem as contas.
+// reportPdf.js só desenha o que sai daqui, e os testes conferem as contas.
 import { FinancialEngine, monthKey, PlannedStatus } from "./financialEngine.js";
 
 const { CashFlowAnalyzer, ExpenseAnalyzer, BudgetAnalyzer } = FinancialEngine;

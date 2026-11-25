@@ -4,9 +4,9 @@
 //
 // Valores alinhados ao LaCalle Brand System V1.1 — seções "Dark mode" (pág.
 // 33), "Design tokens" (pág. 49) e "Tokens de cor das submarcas" (pág. 19).
-// O app roda em dark mode nativo, então os tokens aqui são a escala própria
-// de dark do brandbook (Background/Surface/Border/Text), não uma inversão da
-// paleta clara.
+// Desde 24/11/2026 o app segue o tema do sistema: os valores de cada tema
+// estão em palette.js (o escuro de sempre e o claro do LaCalle Life), e os
+// tokens abaixo são os do tema escolhido ao abrir o app.
 //
 // Por que um Context pra "accent": os componentes Btn/BtnGhost (ver ui.jsx)
 // precisam saber a cor de destaque atual, mas ela é um dado do usuário
@@ -17,15 +17,17 @@
 // nível consegue ler com useAccent() sem precisar receber isso por prop.
 // ============================================================================
 import { createContext, useContext } from "react";
+import { P, DARK, LIGHT } from "./palette.js";
 
 // ---- Dark mode — pág. 33 ---------------------------------------------------
-export const BG = "#0B0D0F";   // Background
-export const CARD = "#16191D"; // Surface
-export const C2 = "#1D2126";   // Surface elevated
-export const BD = "#262B31";   // Border
-export const BD2 = "#31363D";  // Border em destaque (hover, foco, divisores fortes)
-export const TX = "#F3F4F6";   // Text primary
-export const TX2 = "#9AA3AE";  // Text secondary
+// (valores do escuro nos comentários; os do claro, em palette.js)
+export const BG = P.bg;     // Background · #0B0D0F
+export const CARD = P.card; // Surface · #16191D
+export const C2 = P.c2;     // Surface elevated · #1D2126
+export const BD = P.bd;     // Border · #262B31
+export const BD2 = P.bd2;   // Border em destaque (hover, foco, divisores fortes) · #31363D
+export const TX = P.tx;     // Text primary · #F3F4F6
+export const TX2 = P.tx2;   // Text secondary · #9AA3AE
 // Text terciário. Era `rgba(154,163,174,0.68)` (TX2 com alfa 0.68) — a
 // diluição derrubava o contraste real para ~3.68–4.06:1 contra CARD/C2/BG,
 // abaixo do mínimo de 4.5:1 pra texto normal (WCAG 1.4.3), mesmo aparecendo
@@ -33,8 +35,8 @@ export const TX2 = "#9AA3AE";  // Text secondary
 // (sem alfa) calibrado pra ficar visivelmente mais apagado que TX2 — mantém
 // a hierarquia TX > TX2 > TX3 — e ainda assim medir acima de 4.5:1 nas três
 // superfícies reais onde aparece (ver tokens.test.js).
-export const TX3 = "#848C96";
-export const HDR = "#0B0D0F";  // Header/sidebar usam o Background, separados por borda de 1px
+export const TX3 = P.tx3;
+export const HDR = P.bg;  // Header/sidebar usam o Background, separados por borda de 1px
 
 // LaCalle Finance accent — Brand System V2 (10/09/2026) fixa a identidade de
 // cor do Finance em Gold, a mesma calibrada pra nunca colidir com WARNING
@@ -42,7 +44,7 @@ export const HDR = "#0B0D0F";  // Header/sidebar usam o Background, separados po
 // TEAL/TEAL2 (na verdade azul, nunca teal — nome já era enganoso antes do
 // V2). GOLD é o accent ativo em tela; GOLD2 é o 500 "de catálogo" (claro),
 // usado onde o tom mais denso funciona melhor (gradientes, texto sobre claro).
-export const GOLD = "#D4A017";  // Finance accent · dark, identidade fixa
+export const GOLD = P.gold;  // Finance accent para texto e marca: #D4A017 no escuro, #846009 no claro (palette.js)
 export const GOLD2 = "#A87A0E"; // Finance accent · 500 (oficial/catálogo, claro)
 export const HOVER = "#8A640C"; // Finance accent · hover/pressed, mais escuro
 
@@ -66,11 +68,12 @@ export const BTN_PAD_Y = 12;
 // ---- Sombra — pág. 24/49: elevação em dark mode vem da superfície, não da
 // sombra. Os valores oficiais (rgba(17,17,17,.04) / .10) são calibrados para
 // fundo claro; abaixo, a mesma proporção adaptada a um fundo quase-preto.
-export const SH_SM = "0 1px 2px rgba(0,0,0,0.32)";
-export const SH_MD = "0 8px 32px rgba(0,0,0,0.40)";
-export const SH_LG = "0 16px 48px rgba(0,0,0,0.48)";
+export const [SH_SM, SH_MD, SH_LG] = P.shadow;
 
-export const SI = { background: "rgba(255,255,255,0.03)", border: `1px solid ${BD2}`, borderRadius: R_INPUT, padding: "12px 15px", color: TX, fontSize: 13.5, width: "100%", boxSizing: "border-box" };
+/** Véu de hover ou de campo: branco sobre o escuro, Ink sobre o claro. */
+export const tint = alpha => `rgba(${P.tint},${alpha})`;
+
+export const SI = { background: tint(0.03), border: `1px solid ${BD2}`, borderRadius: R_INPUT, padding: "12px 15px", color: TX, fontSize: 13.5, width: "100%", boxSizing: "border-box" };
 export const cardStyle = { background: CARD, border: `1px solid ${BD}`, borderRadius: R_CARD, padding: 20, boxShadow: SH_SM };
 
 export const AccentContext = createContext(GOLD);
@@ -101,9 +104,16 @@ export const PRESS_SCALE = 0.95; // encolher no toque, universal — unifica os 
 // ---- Cores semânticas de UI e de dado — pág. 27, ajustadas um passo para
 // dark mode (pág. 33). Data colors (positive/negative/neutral/comparison)
 // seguem o mesmo princípio de subir luminosidade sobre fundo escuro.
-export const SUCCESS = "#34D399";
-export const WARNING = "#FBBF24";
-export const ERROR = "#F87171";
+export const SUCCESS = P.success;
+export const WARNING = P.warning;
+export const ERROR = P.error;
+// Azul de investimento, roxo de assinatura e cor de link: no claro, um tom escuro que passa de 4,5:1.
+export const BLUE = P.blue;
+export const VIOLET = P.violet;
+export const LINK = P.link;
+// Rótulo sobre o accent (botão primário): Ink nos dois temas. No escuro era
+// o próprio BG; no claro o BG é claro e sumiria sobre o accent.
+export const ON_ACCENT = "#0B0D0F";
 export const INFO = TX2;
 // Fundos sólidos que carregam texto/ícone branco por cima precisam de um tom
 // mais escuro do que o token de texto/ícone acima (que já foi clareado um
@@ -111,8 +121,8 @@ export const INFO = TX2;
 // documentada e testada no LaCalle Life, pág. 25/48 do Brand System).
 export const ERROR_BG = "#DC2626";   // botão destrutivo — branco mede ~4,83:1
 export const SUCCESS_FILL = "#059669"; // indicador "concluído" — ícone branco mede ~3,77:1
-export const DATA_POSITIVE = "#34D399";
-export const DATA_NEGATIVE = "#F87171";
+export const DATA_POSITIVE = P.success;
+export const DATA_NEGATIVE = P.error;
 export const DATA_NEUTRAL = TX2;
 export const DATA_COMPARISON = BD2;
 
@@ -120,10 +130,10 @@ export const DATA_COMPARISON = BD2;
 // Seletor e filtro escolhidos não pintam a cor cheia com texto branco por
 // cima (branco sobre verde, vermelho ou Gold claros media de 1,67:1 a
 // 2,77:1). Pintam um fundo escuro do mesmo tom, com o texto na cor cheia.
-export const MUTED = "#22272C";           // neutro escolhido / hover
-export const SUCCESS_SURFACE = "#1A332E"; // verde sobre isto: 7,02:1
-export const DANGER_SURFACE = "#362529";  // vermelho sobre isto: 5,22:1
-export const WARNING_SURFACE = "#36301E"; // amarelo sobre isto
+export const MUTED = P.muted;                    // neutro escolhido / hover
+export const SUCCESS_SURFACE = P.successSurface; // verde sobre isto: 7,02:1 no escuro
+export const DANGER_SURFACE = P.dangerSurface;   // vermelho sobre isto: 5,22:1 no escuro
+export const WARNING_SURFACE = P.warningSurface; // amarelo sobre isto
 
 // ---- Contraste e mistura de cor ------------------------------------------
 // Fórmula WCAG de verdade (luminância relativa), usada aqui para derivar o
@@ -161,7 +171,7 @@ export const PALETTES = {
 };
 
 /** Fundo tingido do accent: 14% sobre o card, mesma conta do accent-surface do Life. */
-export const accentSurface = accent => mixHex(accent, CARD, 0.14);
+export const accentSurface = (accent, p = P) => mixHex(accent, p.card, 0.14);
 
 /**
  * Tom do accent para TEXTO sobre o fundo tingido. Azul, roxo e rosa na cor
@@ -169,11 +179,15 @@ export const accentSurface = accent => mixHex(accent, CARD, 0.14);
  * em direção ao branco até passar de 4,75:1. Mesmo princípio do accent-700
  * do Life no escuro. Accents que já passam ficam como são.
  */
-export function accentText(accent) {
-  const surface = accentSurface(accent);
+export function accentText(accent, p = P) {
+  const surface = accentSurface(accent, p);
+  // no escuro o tom clareia em direção ao branco; no claro, escurece em direção ao Ink
+  const toward = p === LIGHT ? "#000000" : "#FFFFFF";
   for (let t = 0; t <= 1.0001; t += 0.05) {
-    const c = mixHex("#FFFFFF", accent, t);
+    const c = mixHex(toward, accent, t);
     if (contrastRatio(c, surface) >= 4.75) return c;
   }
-  return TX;
+  return p.tx;
 }
+
+export { P, DARK, LIGHT };

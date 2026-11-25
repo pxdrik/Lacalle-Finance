@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { FinancialEngine, fmt } from "../lib/financialEngine";
 import { CategoryIcon, LineItemsList } from "./ui";
-import { CARD, BD, BD2, TX, TX2, TX3, HOVER, R_BTN, R_INPUT, R_CHIP, SH_LG, NUM_FONT, EASE_OUT } from "../lib/theme";
+import { CARD, BD, BD2, TX, TX2, TX3, HOVER, R_BTN, R_INPUT, R_CHIP, SH_LG, NUM_FONT, EASE_OUT, SUCCESS, ERROR, WARNING, tint, accentText } from "../lib/theme";
 
 const MONTH_NAME_SHORT = { jan: "jan", fev: "fev", mar: "mar", abr: "abr", mai: "mai", jun: "jun", jul: "jul", ago: "ago", set: "set", out: "out", nov: "nov", dez: "dez" };
 
@@ -67,7 +67,7 @@ export default function ProjectionDrawer({
   if (!config || !explain) return null;
 
   const headline = mode === "window" ? Math.max(0, explain.netProjection) : explain.netProjection;
-  const headlineColor = explain.netProjection >= 0 ? "#34D399" : "#F87171";
+  const headlineColor = explain.netProjection >= 0 ? SUCCESS : ERROR;
   const horizonLabel = mode === "window"
     ? `Próximos ${config.daysAhead} dias`
     : `Restante de ${currentMonthKey}`;
@@ -154,7 +154,7 @@ export default function ProjectionDrawer({
         <div style={{ padding: "20px 22px 14px", borderBottom: `1px solid ${BD}`, flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{horizonLabel}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: accentText(accent), textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{horizonLabel}</div>
               <div style={{ fontSize: 15.5, fontWeight: 700, color: TX }}>{config.title}</div>
             </div>
             <button onClick={onClose} aria-label="Fechar" className="touch-44" style={{ background: "none", border: "none", color: TX3, cursor: "pointer", padding: 4, flexShrink: 0 }}><X size={18} /></button>
@@ -167,10 +167,10 @@ export default function ProjectionDrawer({
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: TX2 }}>
-              <span>+ Receitas previstas</span><span style={{ fontFamily: NUM_FONT, color: "#34D399" }}>{fmt(explain.incTotal)}</span>
+              <span>+ Receitas previstas</span><span style={{ fontFamily: NUM_FONT, color: SUCCESS }}>{fmt(explain.incTotal)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: TX2 }}>
-              <span>− Gastos previstos</span><span style={{ fontFamily: NUM_FONT, color: "#F87171" }}>{fmt(explain.outTotal)}</span>
+              <span>− Gastos previstos</span><span style={{ fontFamily: NUM_FONT, color: ERROR }}>{fmt(explain.outTotal)}</span>
             </div>
           </div>
           {explain.incomeItems?.length > 0 && (
@@ -179,7 +179,7 @@ export default function ProjectionDrawer({
             </button>
           )}
           {showIncome && explain.incomeItems?.length > 0 && (
-            <div style={{ marginTop: 8 }}><LineItemsList items={explain.incomeItems} accentColor="#34D399" limit={8} /></div>
+            <div style={{ marginTop: 8 }}><LineItemsList items={explain.incomeItems} accentColor={SUCCESS} limit={8} /></div>
           )}
         </div>
 
@@ -213,8 +213,8 @@ export default function ProjectionDrawer({
                             <div style={{ fontSize: 10.5, color: TX3, marginTop: 2, display: "flex", gap: 5, flexWrap: "wrap" }}>
                               <span>{item.originLabel}</span>
                               {formatItemDate(item) && <span>· {formatItemDate(item)}</span>}
-                              {ignored && <span style={{ color: "#FBBF24", fontWeight: 600 }}>· ignorado este mês</span>}
-                              {paid && <span style={{ color: "#34D399", fontWeight: 600 }}>· pago</span>}
+                              {ignored && <span style={{ color: WARNING, fontWeight: 600 }}>· ignorado este mês</span>}
+                              {paid && <span style={{ color: SUCCESS, fontWeight: 600 }}>· pago</span>}
                             </div>
                           </div>
                           <div style={{ fontFamily: NUM_FONT, fontSize: 13, fontWeight: 700, color: TX, flexShrink: 0, whiteSpace: "nowrap" }}>{fmt(item.value)}</div>
@@ -227,7 +227,7 @@ export default function ProjectionDrawer({
                                 <button title={ignored ? "Reativar este mês" : "Ignorar apenas este mês"} onClick={() => handleToggleIgnored(item)}>{ignored ? <Eye size={13} /> : <EyeOff size={13} />}</button>
                               )}
                               {item.sourceType === "planned" && (
-                                <button title={paid ? "Desfazer pagamento" : "Marcar como pago"} onClick={() => handleTogglePaid(item)} style={paid ? { color: "#34D399" } : undefined}><Check size={13} /></button>
+                                <button title={paid ? "Desfazer pagamento" : "Marcar como pago"} onClick={() => handleTogglePaid(item)} style={paid ? { color: SUCCESS } : undefined}><Check size={13} /></button>
                               )}
                               <button title="Editar" onClick={() => (item.sourceType === "planned" ? handleEditPlanned(item) : handleEditTx(item))}><Pencil size={13} /></button>
                               <button title="Excluir" onClick={() => (item.sourceType === "planned" ? handleDeletePlanned(item) : handleDeleteTx(item))}><Trash2 size={13} /></button>
@@ -243,21 +243,21 @@ export default function ProjectionDrawer({
             );
           })}
 
-          <div style={{ marginTop: 18, padding: "14px 16px", background: "rgba(255,255,255,0.03)", border: `1px solid ${BD}`, borderRadius: R_INPUT }}>
+          <div style={{ marginTop: 18, padding: "14px 16px", background: tint(0.03), border: `1px solid ${BD}`, borderRadius: R_INPUT }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: TX3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Como este valor foi calculado</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
               {INCLUDED.map((t) => (
-                <div key={t} style={{ display: "flex", gap: 7, fontSize: 11.5, color: TX2, lineHeight: 1.4 }}><Check size={12} color="#34D399" style={{ flexShrink: 0, marginTop: 2 }} />{t}</div>
+                <div key={t} style={{ display: "flex", gap: 7, fontSize: 11.5, color: TX2, lineHeight: 1.4 }}><Check size={12} color={SUCCESS} style={{ flexShrink: 0, marginTop: 2 }} />{t}</div>
               ))}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {NOT_INCLUDED.map((t) => (
-                <div key={t} style={{ display: "flex", gap: 7, fontSize: 11.5, color: TX3, lineHeight: 1.4 }}><X size={12} color="#F87171" style={{ flexShrink: 0, marginTop: 2 }} />{t}</div>
+                <div key={t} style={{ display: "flex", gap: 7, fontSize: 11.5, color: TX3, lineHeight: 1.4 }}><X size={12} color={ERROR} style={{ flexShrink: 0, marginTop: 2 }} />{t}</div>
               ))}
             </div>
           </div>
 
-          <button onClick={onViewAllPlanned} style={{ marginTop: 14, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: `1px solid ${BD2}`, color: accent, borderRadius: R_BTN, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+          <button onClick={onViewAllPlanned} style={{ marginTop: 14, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "none", border: `1px solid ${BD2}`, color: accentText(accent), borderRadius: R_BTN, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
             Ver todos os previstos<ArrowRight size={13} />
           </button>
         </div>

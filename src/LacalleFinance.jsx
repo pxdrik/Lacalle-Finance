@@ -96,7 +96,7 @@
  *   HOOKS (useMemo abaixo) -> src/hooks/use{Transactions,Goals,Insights,...}.js
  *   COMPONENTES DE UI      -> src/components/{Dashboard,Calendar,Timeline,...}.jsx
  */
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase, openedFromRecoveryLink } from "./lib/supabaseClient";
 import { storage } from "./lib/storage";
 import AuthScreen, { NewPasswordScreen } from "./components/AuthScreen";
@@ -109,19 +109,19 @@ import WishesTab from "./components/WishesTab";
 import TransactionsTab from "./components/TransactionsTab";
 import PlannedTab from "./components/PlannedTab";
 import PlanningTab from "./components/PlanningTab";
-import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, DUR_SIGNATURE, DUR_STANDARD, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR } from "./lib/theme";
+import { BG, CARD, BD, BD2, TX, TX2, TX3, GOLD, HOVER, R_CARD, R_BTN, R_INPUT, R_CHIP, SH_MD, SH_LG, SI, AccentContext, NUM_FONT, EASE_OUT, ERROR_BG, DUR_PAGE, DUR_SIGNATURE, DUR_STANDARD, EASE_BOUNCE, PRESS_SCALE, PALETTES, MUTED, WARNING, accentSurface, accentText, SUCCESS_SURFACE, DANGER_SURFACE, WARNING_SURFACE, SUCCESS, ERROR, P, VIOLET, ON_ACCENT, tint, BLUE } from "./lib/theme";
 import { Card, Modal, CategoryIcon, AnimatedValue, InsightCard, Btn, BtnGhost, MoneyInput, toDecimalStr, DECISION_STATUS_COLOR, ProgressBar, LaCalleReveal, Comparison, EmptyState, TabPanel, DensityToggle, Segmented, IconButton, PageHeader, SectionTitle, Field } from "./components/ui";
 import { DensityProvider } from "./lib/density";
 import { parseNum, roundMoney, validateAmount, validateDate, validateText, validateInt, firstError, DATE_MIN, DATE_MAX, MAX_NOTES_LEN, MAX_PARCELAS } from "./lib/validation";
 import { createSubmitGuard } from "./lib/submitGuard";
 import { shouldFlushOnHide, shouldWarnBeforeUnload } from "./lib/autosaveGuard";
-import MonthlyReport from "./components/MonthlyReport";
 import WalletArt from "./components/WalletArt";
 import { buildMonthlyReport } from "./lib/report";
+import { downloadReportPdf } from "./lib/reportPdf";
 import { createSyncEngine, localCopy, hasPendingLocalCopy, clearLocalCopies } from "./lib/syncEngine";
 import { validateBackup, buildBackup } from "./lib/backupValidation";
 import { parseCsvLine, csvRowToTx, buildTxCsv } from "./lib/csv";
-import { formatDay } from "./lib/dates";
+import { formatDay, formatDayTitle } from "./lib/dates";
 import { removeTxFromInstallments, restoreTxToInstallments } from "./lib/installmentSync";
 import { wishToPlannedPayload, plannedToWishPayload } from "./lib/wishPlannedTransfer";
 import {
@@ -129,7 +129,8 @@ import {
 } from "lucide-react";
 
 const CATS=["Lazer","Alimentação","Transporte","Desejos","Roupas","Tecnologia","Saude / Cuidados Pessoais","Educação","Salario / Entradas","Outros","Investimento","Assinaturas","Rembolsos","Presentes"];
-const COLORS=["#60A5FA","#818CF8","#34D399","#FB7185","#FBBF24","#A78BFA","#FB923C","#38BDF8","#F472B6","#2DD4BF","#C084FC","#4ADE80","#FCD34D","#94A3B8"];
+// Cores das categorias: tons claros no escuro, um degrau mais escuros no claro (palette.js).
+const COLORS=P.categories;
 // MONTH_ORDER era uma lista fixa de datas hardcoded (jan/25 até jun/27) — ou
 // seja, tinha uma "data de validade": a partir de jun/2027 a funcionalidade
 // de "Previsto" não recorrente simplesmente pararia de encontrar mês na
@@ -154,6 +155,10 @@ const genId=()=>{_idCounter=(_idCounter+1)%1000;return Date.now()*1000+_idCounte
 
 const DEFAULT_ACCOUNT="principal";
 const DEFAULT_ACCOUNTS=[{id:DEFAULT_ACCOUNT,name:"Conta principal"}];
+// A forma do último lançamento criado vira a padrão do próximo (teste de 24/11/2026:
+// quem paga no débito trocava o Pix toda vez). Fica no aparelho, como a conta escolhida.
+const FORM_VALUES=["pix","debito","credito","dinheiro","deposito"];
+const lastForm=()=>{try{const v=localStorage.getItem("lf.lastForm");return FORM_VALUES.includes(v)?v:"pix";}catch{return"pix";}};
 const accountOf=r=>r.account||DEFAULT_ACCOUNT;
 const BANK_SUGGESTIONS=["Itaú","Nubank","Mercado Pago","Inter","Bradesco","Banco do Brasil","Santander","C6 Bank","PicPay"];
 
@@ -251,14 +256,23 @@ function MainApp({user,setUser}){
   const [editingTx,setEditingTx]=useState(null);
   const [qaType,setQaType]=useState("Saída");const [qaDesc,setQaDesc]=useState("");const [qaVal,setQaVal]=useState("");
   const [qaCat,setQaCat]=useState("Alimentação");const [qaInvTipo,setQaInvTipo]=useState("Aporte");
-  const [qaDate,setQaDate]=useState(todayFn);const [qaForm,setQaForm]=useState("pix");
-  const [qaFixed,setQaFixed]=useState("Variavel");const [qaExpanded,setQaExpanded]=useState(false);const [qaRepeat,setQaRepeat]=useState("none");
-  const [showClearConfirm,setShowClearConfirm]=useState(false);
+  const [qaDate,setQaDate]=useState(todayFn);const [qaForm,setQaForm]=useState(lastForm);
+  const [qaFixed,setQaFixed]=useState("Variavel");const [qaExpanded,setQaExpanded]=useState(false);const [qaRepeat,setQaRepeat]=useState("none");const [qaRepeatN,setQaRepeatN]=useState("");
+  const [showClearConfirm,setShowClearConfirm]=useState(false);const [clearPhrase,setClearPhrase]=useState("");
   // Relatório mensal: `reportPick` é o mês escolhido na janelinha (null = fechada);
-  // `printingReport` monta o relatório e abre a impressão (MonthlyReport.jsx).
+  // `reportBusy` cobre o carregamento do jsPDF e a geração (lib/reportPdf.js).
   const [reportPick,setReportPick]=useState(null);
-  const [printingReport,setPrintingReport]=useState(null);
-  const closeReport=useCallback(()=>setPrintingReport(null),[]);
+  const [reportBusy,setReportBusy]=useState(false);
+  const generateReport=async()=>{
+    setReportBusy(true);
+    try{
+      await downloadReportPdf(buildMonthlyReport({transactions,plannedExpenses,wishes,month:reportPick,todayISO}),{owner:user.name,todayISO});
+      setReportPick(null);
+    }catch(e){
+      console.error("relatório:",e);
+      showToast("Não deu para gerar o PDF. Confira a conexão e tente de novo.","error");
+    }finally{setReportBusy(false);}
+  };
   const [showWishForm,setShowWishForm]=useState(false);const [editingWish,setEditingWish]=useState(null);
   const [wishForm,setWishForm]=useState({name:"",price:"",saved:"",priority:"Média",monthsTarget:"",notes:""});
   const wishFormSnapshotRef=useRef(null);
@@ -670,7 +684,10 @@ function MainApp({user,setUser}){
   },[realized,todayISO]);
   const savingsRate=FinancialEngine.IncomeAnalyzer.savingsRate(balance,totalIn);
   const committedIncome=FinancialEngine.IncomeAnalyzer.committedRatio(totalIn,totalOut);
-  const reservaFinanceira=useMemo(()=>wishes.reduce((s,w)=>s+(w.saved||0),0),[wishes]);
+  // Reserva = o guardado nas metas mais o que está investido (pedido de 24/11/2026):
+  // só com as metas, quem guarda no CDI aparecia com reserva zero.
+  const reservaMetas=useMemo(()=>wishes.reduce((s,w)=>s+(w.saved||0),0),[wishes]);
+  const reservaFinanceira=reservaMetas+invNet;
   const avgMonthlyOut=useMemo(()=>summary.length?summary.reduce((s,m)=>s+m.out,0)/summary.length:0,[summary]);
   const reservaMeses=avgMonthlyOut>0?Math.round((reservaFinanceira/avgMonthlyOut)*10)/10:null;
 
@@ -711,10 +728,10 @@ function MainApp({user,setUser}){
   // ---- Decision Engine: respostas automáticas (agora com breakdown auditável) ----
   const decisions=useMemo(()=>[
     FinancialEngine.DecisionEngine.isWithinBudget({plannedStats,plannedItemsForMonth,month:plannedMonth}),
-    FinancialEngine.DecisionEngine.isReserveHealthy({reservaMeses,reservaFinanceira,avgMonthlyOut,enhancedWishes}),
+    FinancialEngine.DecisionEngine.isReserveHealthy({reservaMeses,reservaFinanceira,invNet,avgMonthlyOut,enhancedWishes}),
     FinancialEngine.DecisionEngine.willCashFlowGoNegative({cashFlowProjections,transactions,plannedExpenses,balance,todayISO,currentMonthKey:currentMonthKeyReal}),
     FinancialEngine.DecisionEngine.willGoalsFinishOnTime({enhancedWishes}),
-  ],[plannedStats,plannedItemsForMonth,plannedMonth,reservaMeses,reservaFinanceira,avgMonthlyOut,enhancedWishes,cashFlowProjections,transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal]);
+  ],[plannedStats,plannedItemsForMonth,plannedMonth,reservaMeses,reservaFinanceira,invNet,avgMonthlyOut,enhancedWishes,cashFlowProjections,transactions,plannedExpenses,balance,todayISO,currentMonthKeyReal]);
 
   const runSimulation=()=>{
     if(simType==="economizar_mais"){
@@ -735,8 +752,8 @@ function MainApp({user,setUser}){
     let x=(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
     x=x.replace(/\d+/g," ");
     x=x.replace(/[^a-z\s]/g," ");
-    x=x.replace(/\s+/g," ").trim();
-    return x;
+    // Sem espaço: "Game pass" e "GamePass" são o mesmo frequente (teste de 24/11/2026).
+    return x.replace(/\s+/g,"");
   };
   const frequentTx=useMemo(()=>{
     const rawGroups={};
@@ -808,12 +825,12 @@ function MainApp({user,setUser}){
 
   // ---- Mapeamento de apresentação: o Engine devolve `type`, o componente decide ícone/cor ----
   const reminderVisual=type=>({
-    parcela:{Ic:CreditCard,c:"#FBBF24"},
-    assinatura:{Ic:Repeat,c:"#A78BFA"},
-    conta:{Ic:Bell,c:"#F87171"},
-    pagamento:{Ic:Bell,c:"#F87171"},
-    previsto:{Ic:Bell,c:"#FBBF24"},
-    meta:{Ic:Trophy,c:"#34D399"},
+    parcela:{Ic:CreditCard,c:WARNING},
+    assinatura:{Ic:Repeat,c:VIOLET},
+    conta:{Ic:Bell,c:ERROR},
+    pagamento:{Ic:Bell,c:ERROR},
+    previsto:{Ic:Bell,c:WARNING},
+    meta:{Ic:Trophy,c:SUCCESS},
   }[type]||{Ic:Bell,c:TX2});
   const decisionColor=status=>DECISION_STATUS_COLOR[status]||TX3;
 
@@ -890,9 +907,9 @@ function MainApp({user,setUser}){
   const resetQuickAddForm=()=>{
     setQaDesc("");setQaVal("");
     setQaDate(todayFn());
-    setQaForm("pix");
+    setQaForm(lastForm());
     setQaFixed("Variavel");
-    setQaRepeat("none");
+    setQaRepeat("none");setQaRepeatN("");
     setQaExpanded(false);
   };
 
@@ -983,7 +1000,8 @@ function MainApp({user,setUser}){
       if(editingTx!==null){setTransactions(p=>p.map(t=>t.id===editingTx?{...t,...base}:t));setEditingTx(null);}
       else{
         const id=genId();const newTxs=[{id,...base}];
-        if(qaRepeat!=="none"){const cnt=qaRepeat==="3m"?2:qaRepeat==="6m"?5:11;for(let i=1;i<=cnt;i++){newTxs.push({id:id+i,...base,date:addMonthsStr(qaDate,i)});}}
+        for(let i=1;i<repeatMonths();i++)newTxs.push({id:id+i,...base,date:addMonthsStr(qaDate,i)});
+        try{localStorage.setItem("lf.lastForm",qaForm);}catch{/* sem armazenamento local */}
         setTransactions(p=>[...newTxs,...p]);
       }
       resetQuickAddForm();
@@ -1002,11 +1020,17 @@ function MainApp({user,setUser}){
     }
     setTimeout(()=>setIsSubmittingTx(false),600);
   };
+  // Quantos lançamentos no total (1 = não repetir); "custom" é o número digitado.
+  const repeatMonths=()=>qaRepeat==="custom"?parseInt(qaRepeatN,10):{none:1,"3m":3,"6m":6,"12m":12}[qaRepeat];
   const quickAdd=()=>{
+    const custom=qaRepeat==="custom"&&editingTx===null;
     const err=firstError([
       validateText(qaDesc,{label:"descrição"}),
       validateAmount(qaVal,{label:"valor"}),
       validateDate(qaDate,{label:"data"}),
+      custom?validateInt(qaRepeatN,{label:"meses",min:2}):{ok:true},
+      // A última repetição também precisa caber na janela de datas do app.
+      custom&&validateInt(qaRepeatN,{min:2}).ok?validateDate(addMonthsStr(qaDate,parseInt(qaRepeatN,10)-1),{label:"última repetição"}):{ok:true},
     ]);
     if(err){showToast(err,"error");return;}
     // Aviso suave de possível duplicidade: só ao CRIAR (não ao editar), e só
@@ -1368,6 +1392,7 @@ function MainApp({user,setUser}){
   // lixeira. Agora exige digitar uma frase exata: é a barreira mínima esperada
   // de um app financeiro para uma ação irreversível.
   const ACCOUNT_DELETE_PHRASE="APAGAR MINHA CONTA";
+  const CLEAR_PHRASE="APAGAR";
   const closeDeleteAccount=()=>{setDeleteAccountOpen(false);setDeleteAccountPhrase("");};
   const deleteAccount=()=>{
     if(deleteAccountPhrase.trim().toUpperCase()!==ACCOUNT_DELETE_PHRASE)return;
@@ -1616,12 +1641,13 @@ function MainApp({user,setUser}){
           <Field id="qa-date" label="Data">{p=><input {...p} type="date" value={qaDate} min={DATE_MIN} max={DATE_MAX} onChange={e=>setQaDate(e.target.value)} style={SI}/>}</Field>
           <Field id="qa-form" label="Forma">{p=><select {...p} value={qaForm} onChange={e=>setQaForm(e.target.value)} style={SI}>{[["pix","Pix"],["debito","Débito"],["credito","Crédito"],["dinheiro","Dinheiro"],["deposito","Depósito"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>}</Field>
           <Field id="qa-fixed" label="Tipo de gasto">{p=><select {...p} value={qaFixed} onChange={e=>setQaFixed(e.target.value)} style={SI}><option value="Variavel">Variável</option><option value="Fixa">Fixo</option></select>}</Field>
-          {!isEditing&&<Field id="qa-repeat" label="Repetir">{p=><select {...p} value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option></select>}</Field>}
+          {!isEditing&&<Field id="qa-repeat" label="Repetir">{p=><select {...p} value={qaRepeat} onChange={e=>setQaRepeat(e.target.value)} style={SI}><option value="none">Não repetir</option><option value="3m">3 meses</option><option value="6m">6 meses</option><option value="12m">12 meses</option><option value="custom">Outro número</option></select>}</Field>}
+          {!isEditing&&qaRepeat==="custom"&&<Field id="qa-repeat-n" label="Quantos meses">{p=><input {...p} type="text" inputMode="numeric" placeholder="Ex.: 10" value={qaRepeatN} onChange={e=>setQaRepeatN(e.target.value.replace(/\D/g,"").slice(0,3))} style={SI}/>}</Field>}
         </div>
       </details>
       {/* O botão parece inativo quando falta algo, mas não usa `disabled`: o
           clique sempre roda a validação, que diz exatamente o que falta. */}
-      <button type="button" onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",height:48,borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:600,background:!canAdd?MUTED:accent,color:!canAdd?TX2:BG,opacity:isSubmittingTx?0.7:1}}>
+      <button type="button" onClick={quickAdd} disabled={isSubmittingTx} aria-disabled={!canAdd} aria-busy={isSubmittingTx} style={{width:"100%",height:48,borderRadius:R_BTN,border:"none",cursor:isSubmittingTx?"default":"pointer",fontSize:14,fontWeight:600,background:!canAdd?MUTED:accent,color:!canAdd?TX2:ON_ACCENT,opacity:isSubmittingTx?0.7:1}}>
         {isSubmittingTx?"Adicionando...":isEditing?"Salvar alterações":qaCat==="Investimento"?`Adicionar ${qaInvTipo.toLowerCase()}`:`Adicionar ${qaType}`}
       </button>
     </div>
@@ -1799,7 +1825,7 @@ function MainApp({user,setUser}){
         .home-li-btn:hover .home-li-name{text-decoration:underline;text-underline-offset:3px;}
         .home-link{position:relative;background:none;border:none;font-size:12px;color:${TX2};text-decoration:underline;text-underline-offset:4px;cursor:pointer;padding:0;}
         .home-link::after{content:"";position:absolute;left:50%;top:50%;width:100%;min-width:44px;height:44px;transform:translate(-50%,-50%);}
-        .amt-field{display:flex;align-items:baseline;gap:8px;height:60px;padding:0 14px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:rgba(255,255,255,0.03);}
+        .amt-field{display:flex;align-items:baseline;gap:8px;height:60px;padding:0 14px;border-radius:${R_BTN}px;border:1px solid ${BD2};background:${tint(0.03)};}
         .amt-field:focus-within{border-color:${accent}90;box-shadow:0 0 0 3px ${accent}22;}
         .amt-field span{font-family:${NUM_FONT};color:${TX3};font-size:16px;line-height:60px;}
         .amt-field.amt-sm{height:48px;}.amt-field.amt-sm span{line-height:48px;font-size:14px;}.amt-field.amt-sm input{height:46px;font-size:18px;}
@@ -1835,6 +1861,11 @@ function MainApp({user,setUser}){
           .app-header{padding:0 12px 0 16px;padding-top:env(safe-area-inset-top);min-height:56px;}
           .hdr-sig{display:inline-flex;}
           .sync-label{display:none;}
+          /* Topo do celular enxuto (teste de 24/11/2026: eram 8 itens em 390px):
+             Desfazer e Salvar agora moram no Mais; o estado da nuvem só aparece
+             quando precisa de atenção. O bloco fica, vazio, empurrando as ações. */
+          .hdr-undo{display:none;}
+          .hdr-sync:is([data-state="saved"],[data-state="saving"],[data-state="loading"])>*{display:none !important;} /* !important: o botão tem display inline */
           .hdr-avatar{display:flex;}
           .hdr-add-label{display:none;}
           .hdr-add-bank{padding:0 10px;}
@@ -1857,11 +1888,11 @@ function MainApp({user,setUser}){
       <div className="toast-wrap" role="status" aria-live="polite" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:300,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none",width:"100%",padding:"0 16px"}}>
         {toasts.map(t=>{
           const Ic=t.type==="error"?AlertCircle:t.type==="success"?CheckCircle2:Info;
-          const col=t.type==="error"?"#F87171":t.type==="success"?"#34D399":TX2;
+          const col=t.type==="error"?ERROR:t.type==="success"?SUCCESS:TX2;
           return(
-            <div key={t.id} style={{background:"rgba(22,25,29,0.97)",backdropFilter:"blur(12px)",border:`1px solid ${BD2}`,color:TX,padding:"13px 18px",borderRadius:R_INPUT,fontSize:13,fontWeight:600,boxShadow:SH_LG,animation:`toastIn .3s ${EASE_OUT}`,maxWidth:380,display:"flex",alignItems:"center",gap:9}}>
+            <div key={t.id} style={{background:`${CARD}F7`,backdropFilter:"blur(12px)",border:`1px solid ${BD2}`,color:TX,padding:"13px 18px",borderRadius:R_INPUT,fontSize:13,fontWeight:600,boxShadow:SH_LG,animation:`toastIn .3s ${EASE_OUT}`,maxWidth:380,display:"flex",alignItems:"center",gap:9}}>
               <Ic size={16} color={col} style={{flexShrink:0}}/><span style={{flex:1}}>{t.msg}</span>
-              {t.action&&<button type="button" className="touch-44" onClick={()=>{dismissToast(t.id);t.action.onClick();}} style={{pointerEvents:"auto",background:"none",border:"none",color:accent,fontWeight:700,fontSize:13,cursor:"pointer",padding:"2px 4px",marginLeft:4,textDecoration:"underline",textUnderlineOffset:3}}>{t.action.label}</button>}
+              {t.action&&<button type="button" className="touch-44" onClick={()=>{dismissToast(t.id);t.action.onClick();}} style={{pointerEvents:"auto",background:"none",border:"none",color:accentText(accent),fontWeight:700,fontSize:13,cursor:"pointer",padding:"2px 4px",marginLeft:4,textDecoration:"underline",textUnderlineOffset:3}}>{t.action.label}</button>}
             </div>
           );
         })}
@@ -1902,7 +1933,7 @@ function MainApp({user,setUser}){
           </span>
         ):<span className="hdr-sig"><Signature size={18}/></span>}
         <button type="button" className="hdr-add-bank" onClick={()=>{setNewAccountName("");setBankOther(false);setShowAddBank(true);}} aria-label="Novo banco" title="Adicionar uma conta bancária"><Plus size={14} aria-hidden="true"/><span className="hdr-add-label">Novo banco</span></button>
-        <div className="hdr-sync" aria-live="polite">
+        <div className="hdr-sync" data-state={syncStatus} aria-live="polite">
           {syncStatus==="loading"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Carregando</span></>}
           {syncStatus==="saving"&&<><Loader2 size={12} className="spin" color={TX3}/><span className="sync-label">Salvando</span></>}
           {syncStatus==="saved"&&<><Cloud size={12} color={TX3}/><span className="sync-label">Sincronizado</span><IconButton icon={RefreshCw} size={12} label="Salvar agora" onClick={retrySave}/></>}
@@ -1910,7 +1941,7 @@ function MainApp({user,setUser}){
           {syncStatus==="error"&&<><AlertTriangle size={12} color={WARNING}/><span className="sync-label" style={{color:WARNING}}>Erro ao salvar</span><IconButton icon={RefreshCw} size={12} color={WARNING} label="Tentar salvar de novo" onClick={retrySave}/></>}
         </div>
         <div className="hdr-actions">
-          <button type="button" onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} aria-label={historyLen?`Desfazer (${historyLen} passos)`:"Desfazer"} className="touch-44 hdr-btn" style={{color:historyLen?TX2:TX3,cursor:historyLen?"pointer":"not-allowed"}}>
+          <button type="button" onClick={undo} disabled={historyLen===0} title={`Desfazer (${historyLen} passos)`} aria-label={historyLen?`Desfazer (${historyLen} passos)`:"Desfazer"} className="touch-44 hdr-btn hdr-undo" style={{color:historyLen?TX2:TX3,cursor:historyLen?"pointer":"not-allowed"}}>
             <Undo2 size={16}/>{historyLen>0&&<span className="undo-count">{historyLen}</span>}
           </button>
           <IconButton icon={Search} size={16} color={TX2} label="Pesquisar (Ctrl+K)" onClick={()=>setShowSearch(true)}/>
@@ -1938,7 +1969,7 @@ function MainApp({user,setUser}){
       )}
       {pendingImport&&(
         <Modal maxWidth={360} padding={32} contentStyle={{textAlign:"center"}}>
-          <div style={{width:46,height:46,borderRadius:12,background:"#FBBF2418",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Upload size={20} color="#FBBF24"/></div>
+          <div style={{width:46,height:46,borderRadius:12,background:WARNING_SURFACE,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Upload size={20} color={WARNING}/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Importar backup?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:10,lineHeight:1.5}}>Isso vai <strong style={{color:TX}}>substituir</strong> todos os seus dados atuais (transações, previstos, parcelamentos, desejos, categorias) pelos dados desse arquivo.</div>
           <div style={{fontSize:12,color:TX3,marginBottom:24}}>{pendingImport.tx?.length||0} transações · {pendingImport.planned?.length||0} previstos · {pendingImport.inst?.length||0} parcelamentos · {pendingImport.wishes?.length||0} desejos</div>
@@ -1979,32 +2010,34 @@ function MainApp({user,setUser}){
       {reportPick!==null&&(
         <Modal onClose={()=>setReportPick(null)} maxWidth={380} padding={24} label="Relatório do mês">
           <h2 style={{margin:"0 0 6px",fontSize:17,fontWeight:600,color:TX}}>Relatório do mês</h2>
-          <p style={{margin:"0 0 16px",fontSize:13,color:TX2,lineHeight:1.5}}>Resumo, categorias, previstos, metas e todos os lançamentos do mês. Na janela de impressão, escolha <b style={{color:TX}}>Salvar como PDF</b> para guardar o arquivo.</p>
+          <p style={{margin:"0 0 16px",fontSize:13,color:TX2,lineHeight:1.5}}>Resumo, categorias, previstos, metas e todos os lançamentos do mês, num arquivo PDF.</p>
           <label htmlFor="report-month" style={{display:"block",fontSize:12,color:TX2,fontWeight:500,marginBottom:6}}>Mês</label>
           <select id="report-month" value={reportPick} onChange={e=>setReportPick(e.target.value)} style={{...SI,marginBottom:20}}>
             {[...new Set([currentMonthKeyReal,...months])].sort((a,b)=>monthIndex(b)-monthIndex(a)).map(m=><option key={m} value={m}>{m}</option>)}
           </select>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setReportPick(null)} style={{flex:1,fontSize:14}}>Cancelar</BtnGhost>
-            <Btn onClick={()=>{setPrintingReport(buildMonthlyReport({transactions,plannedExpenses,wishes,month:reportPick,todayISO}));setReportPick(null);}} style={{flex:2,fontSize:14}}>Gerar PDF</Btn>
+            <Btn onClick={generateReport} disabled={reportBusy} aria-busy={reportBusy} style={{flex:2,fontSize:14,opacity:reportBusy?0.7:1}}>{reportBusy?"Gerando...":"Baixar PDF"}</Btn>
           </div>
         </Modal>
       )}
-      {printingReport&&<MonthlyReport report={printingReport} owner={user.name} todayISO={todayISO} onDone={closeReport}/>}
       {showClearConfirm&&(
-        <Modal maxWidth={340} padding={32} contentStyle={{textAlign:"center"}}>
-          <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#F87171"/></div>
-          <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar tudo?</div>
-          <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>{accounts.length>1?`Todas as transações de ${accounts.find(a=>a.id===activeAccount)?.name||"esta conta"} serão removidas.`:"Todas as transações serão removidas permanentemente."}</div>
+        <Modal onClose={()=>setShowClearConfirm(false)} maxWidth={360} padding={32} contentStyle={{textAlign:"center"}} label="Apagar todas as transações">
+          <div style={{width:46,height:46,borderRadius:12,background:DANGER_SURFACE,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color={ERROR}/></div>
+          <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar todas as transações?</div>
+          <div style={{fontSize:13,color:TX2,marginBottom:16,lineHeight:1.5}}>{`${transactions.length===1?"A transação":`As ${transactions.length} transações`}${accounts.length>1?` de ${accounts.find(a=>a.id===activeAccount)?.name||"esta conta"}`:""} ${transactions.length===1?"será removida":"serão removidas"}. Metas, previstos e parcelamentos ficam.`}</div>
+          {/* Segunda etapa: digitar a palavra, como no apagar conta (teste de 24/11/2026). */}
+          <div style={{fontSize:12,color:TX2,marginBottom:6,textAlign:"left"}}>Para confirmar, digite <strong style={{color:TX}}>{CLEAR_PHRASE}</strong>:</div>
+          <input aria-label={`Digite ${CLEAR_PHRASE} para confirmar`} value={clearPhrase} onChange={e=>setClearPhrase(e.target.value)} autoFocus maxLength={20} placeholder={CLEAR_PHRASE} style={{...SI,marginBottom:20,letterSpacing:"0.04em"}}/>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setShowClearConfirm(false)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
-            <button onClick={()=>{pushHistory();setAllTx(p=>p.filter(t=>!inActiveAccount(t)));setShowClearConfirm(false);showToast("Tudo apagado.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo</button>
+            <button disabled={clearPhrase.trim().toUpperCase()!==CLEAR_PHRASE} onClick={()=>{pushHistory();setAllTx(p=>p.filter(t=>!inActiveAccount(t)));setShowClearConfirm(false);showToast("Transações apagadas.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:clearPhrase.trim().toUpperCase()===CLEAR_PHRASE?"pointer":"not-allowed",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white",opacity:clearPhrase.trim().toUpperCase()===CLEAR_PHRASE?1:0.5}}>Apagar tudo</button>
           </div>
         </Modal>
       )}
       {pendingDuplicateTx&&(
         <Modal onClose={()=>setPendingDuplicateTx(null)} maxWidth={340} padding={30} contentStyle={{textAlign:"center"}}>
-          <div style={{width:46,height:46,borderRadius:12,background:"#FBBF2418",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color="#FBBF24"/></div>
+          <div style={{width:46,height:46,borderRadius:12,background:WARNING_SURFACE,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color={WARNING}/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Parece duplicado</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você já tem um lançamento de "{pendingDuplicateTx.desc}" de {fmt(pendingDuplicateTx.val)} nesse mesmo dia. Quer lançar mesmo assim?</div>
           <div style={{display:"flex",gap:10}}>
@@ -2015,7 +2048,7 @@ function MainApp({user,setUser}){
       )}
       {confirmDiscard&&(
         <Modal onClose={()=>setConfirmDiscard(null)} maxWidth={340} padding={30} contentStyle={{textAlign:"center"}}>
-          <div style={{width:46,height:46,borderRadius:12,background:"#FBBF2418",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color="#FBBF24"/></div>
+          <div style={{width:46,height:46,borderRadius:12,background:WARNING_SURFACE,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color={WARNING}/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Descartar alterações?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você tem alterações não salvas neste formulário. Se sair agora, elas serão perdidas.</div>
           <div style={{display:"flex",gap:10}}>
@@ -2034,12 +2067,12 @@ function MainApp({user,setUser}){
         const phraseOk=deleteAccountPhrase.trim().toUpperCase()===ACCOUNT_DELETE_PHRASE;
         return(
         <Modal onClose={deleteAccountBusy?()=>{}:closeDeleteAccount} maxWidth={400} padding={30} label="Apagar sua conta">
-          <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color="#F87171"/></div>
+          <div style={{width:46,height:46,borderRadius:12,background:DANGER_SURFACE,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><AlertTriangle size={20} color={ERROR}/></div>
           <div style={{fontSize:17,fontWeight:700,color:TX,marginBottom:10,textAlign:"center",letterSpacing:"-0.01em"}}>Apagar sua conta para sempre?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:14,lineHeight:1.6}}>
-            Isso apaga <strong style={{color:TX}}>todos</strong> os seus lançamentos, metas, previstos e parcelamentos, além da sua conta de login. Esta ação <strong style={{color:"#F87171"}}>não passa pela lixeira e não pode ser desfeita</strong>.
+            Isso apaga <strong style={{color:TX}}>todos</strong> os seus lançamentos, metas, previstos e parcelamentos, além da sua conta de login. Esta ação <strong style={{color:ERROR}}>não passa pela lixeira e não pode ser desfeita</strong>.
           </div>
-          <div style={{fontSize:12.5,color:TX2,marginBottom:16,lineHeight:1.6,background:"#F8717110",border:`1px solid #F8717130`,borderRadius:R_INPUT,padding:"10px 12px"}}>
+          <div style={{fontSize:12.5,color:TX2,marginBottom:16,lineHeight:1.6,background:DANGER_SURFACE,border:`1px solid ${ERROR}30`,borderRadius:R_INPUT,padding:"10px 12px"}}>
             Se você só quer uma cópia antes, feche isto e use <strong style={{color:TX}}>Exportar dados</strong>.
           </div>
           <div style={{fontSize:12,color:TX2,marginBottom:6}}>Para confirmar, digite <strong style={{color:TX}}>{ACCOUNT_DELETE_PHRASE}</strong>:</div>
@@ -2066,10 +2099,10 @@ function MainApp({user,setUser}){
       })()}
       {confirmDelete&&(
         <Modal onClose={()=>setConfirmDelete(null)} maxWidth={340} padding={30} contentStyle={{textAlign:"center"}}>
-          <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#F87171"/></div>
+          <div style={{width:46,height:46,borderRadius:12,background:DANGER_SURFACE,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color={ERROR}/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={confirmDelete.label}>Excluir "{confirmDelete.label}"?</div>
           {confirmDelete.impact&&(
-            <div style={{fontSize:12.5,color:TX,fontWeight:600,lineHeight:1.5,background:"rgba(255,255,255,0.04)",border:`1px solid ${BD2}`,borderRadius:R_INPUT,padding:"10px 12px",marginBottom:14,textAlign:"left"}}>{confirmDelete.impact}</div>
+            <div style={{fontSize:12.5,color:TX,fontWeight:600,lineHeight:1.5,background:tint(0.04),border:`1px solid ${BD2}`,borderRadius:R_INPUT,padding:"10px 12px",marginBottom:14,textAlign:"left"}}>{confirmDelete.impact}</div>
           )}
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>Você pode usar o botão "desfazer" no topo logo em seguida, caso mude de ideia.</div>
           <div style={{display:"flex",gap:10}}>
@@ -2085,7 +2118,7 @@ function MainApp({user,setUser}){
       )}
       {transferPlanned&&(
         <Modal onClose={()=>setTransferPlanned(null)} maxWidth={340} padding={30} contentStyle={{textAlign:"center"}}>
-          <div style={{width:46,height:46,borderRadius:12,background:accent+"18",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Sparkles size={20} color={accent}/></div>
+          <div style={{width:46,height:46,borderRadius:12,background:accent+"18",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Sparkles size={20} color={accentText(accent)}/></div>
           <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={transferPlanned.desc}>Mover "{transferPlanned.desc}" para Metas?</div>
           <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>As informações compatíveis serão preservadas. Categoria, forma de pagamento e mês previsto ficam guardados nas notas do desejo.</div>
           <div style={{display:"flex",gap:10}}>
@@ -2097,13 +2130,13 @@ function MainApp({user,setUser}){
       {transferWish&&(
         <Modal onClose={()=>setTransferWish(null)} maxWidth={420} padding={28}>
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-            <div style={{width:40,height:40,borderRadius:12,background:accent+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Calendar size={18} color={accent}/></div>
+            <div style={{width:40,height:40,borderRadius:12,background:accent+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Calendar size={18} color={accentText(accent)}/></div>
             <div style={{fontSize:15.5,fontWeight:700,color:TX,letterSpacing:"-0.01em",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={transferWish.item.name}>Mover "{transferWish.item.name}" para Previstos</div>
           </div>
           <div style={{fontSize:12.5,color:TX2,marginBottom:18,lineHeight:1.5}}>As informações compatíveis serão preservadas. Complete os dados que só existem em Previstos:</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
             {fullCats.filter(c=>c!=="Investimento"&&c!=="Salario / Entradas").map(c=>{const cc=catColor(c);return(
-              <button key={c} onClick={()=>setTransferWish(p=>({...p,form:{...p.form,cat:c}}))} style={{padding:"7px 12px",borderRadius:R_CHIP,border:"none",fontSize:12,cursor:"pointer",background:transferWish.form.cat===c?cc+"26":"rgba(255,255,255,0.03)",color:transferWish.form.cat===c?cc:TX2,display:"flex",alignItems:"center",gap:5}}><CategoryIcon cat={c} size={13}/>{c}</button>
+              <button key={c} onClick={()=>setTransferWish(p=>({...p,form:{...p.form,cat:c}}))} style={{padding:"7px 12px",borderRadius:R_CHIP,border:"none",fontSize:12,cursor:"pointer",background:transferWish.form.cat===c?cc+"26":tint(0.03),color:transferWish.form.cat===c?cc:TX2,display:"flex",alignItems:"center",gap:5}}><CategoryIcon cat={c} size={13}/>{c}</button>
             );})}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16}}>
@@ -2129,29 +2162,29 @@ function MainApp({user,setUser}){
         return(
           <Modal onClose={()=>setExplainKey(null)} maxWidth={440} padding={28}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div style={{fontSize:16,fontWeight:700,color:TX,display:"flex",alignItems:"center",gap:8}}><Info size={16} color={accent}/>{ex.title}</div>
+              <div style={{fontSize:16,fontWeight:700,color:TX,display:"flex",alignItems:"center",gap:8}}><Info size={16} color={accentText(accent)}/>{ex.title}</div>
               <button onClick={()=>setExplainKey(null)} style={{background:"none",border:"none",color:TX3,cursor:"pointer"}}><X size={18}/></button>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
               <div>
-                <div style={{fontSize:11,fontWeight:700,color:accent,textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:6}}>Como é calculado</div>
+                <div style={{fontSize:11,fontWeight:700,color:accentText(accent),textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:6}}>Como é calculado</div>
                 <div style={{fontSize:13,color:TX2,lineHeight:1.5}}>{ex.calc}</div>
               </div>
               {ex.factors?.length>0&&(
                 <div>
-                  <div style={{fontSize:11,fontWeight:700,color:accent,textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:6}}>Fatores que influenciam</div>
+                  <div style={{fontSize:11,fontWeight:700,color:accentText(accent),textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:6}}>Fatores que influenciam</div>
                   <ul style={{margin:0,paddingLeft:18,display:"flex",flexDirection:"column",gap:4}}>
                     {ex.factors.map((f,i)=><li key={i} style={{fontSize:13,color:TX2}}>{f}</li>)}
                   </ul>
                 </div>
               )}
               <div>
-                <div style={{fontSize:11,fontWeight:700,color:accent,textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:6}}>O que isso significa</div>
+                <div style={{fontSize:11,fontWeight:700,color:accentText(accent),textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:6}}>O que isso significa</div>
                 <div style={{fontSize:13,color:TX2,lineHeight:1.5}}>{ex.meaning}</div>
               </div>
               {ex.improve?.length>0&&(
                 <div>
-                  <div style={{fontSize:11,fontWeight:700,color:"#34D399",textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:6}}>Como melhorar</div>
+                  <div style={{fontSize:11,fontWeight:700,color:SUCCESS,textTransform:"uppercase",letterSpacing:"0.04em",marginBottom:6}}>Como melhorar</div>
                   <ul style={{margin:0,paddingLeft:18,display:"flex",flexDirection:"column",gap:4}}>
                     {ex.improve.map((f,i)=><li key={i} style={{fontSize:13,color:TX2}}>{f}</li>)}
                   </ul>
@@ -2202,7 +2235,7 @@ function MainApp({user,setUser}){
                     <button key={t.id} onClick={()=>goToTx(t)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:12,textAlign:"left"}}>
                       <CategoryIcon cat={t.cat} size={13} color={catColor(t.cat)}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</span>
-                      <span className="num" style={{fontSize:12,color:t.type==="Entrada"?"#34D399":"#F87171",fontWeight:600}}>{fmt(t.val)}</span>
+                      <span className="num" style={{fontSize:12,color:t.type==="Entrada"?SUCCESS:ERROR,fontWeight:600}}>{fmt(t.val)}</span>
                     </button>
                   ))}
                   {searchResults.txTotal>searchResults.txRes.length&&(
@@ -2226,7 +2259,7 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:10.5,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",padding:"0 8px 6px"}}>Metas</div>
                   {searchResults.wishRes.map(w=>(
                     <button key={w.id} onClick={()=>goToWish(w)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:12,textAlign:"left"}}>
-                      <Sparkles size={13} color={accent}/>
+                      <Sparkles size={13} color={accentText(accent)}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{w.name}</span>
                       <span className="num" style={{fontSize:12,color:TX2}}>{fmt(w.price)}</span>
                     </button>
@@ -2238,7 +2271,7 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:10.5,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",padding:"0 8px 6px"}}>Previstos</div>
                   {searchResults.plannedRes.map(p=>(
                     <button key={p.id} onClick={()=>goToPlanned(p)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:12,textAlign:"left"}}>
-                      <Calendar size={13} color={accent}/>
+                      <Calendar size={13} color={accentText(accent)}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.desc}</span>
                       <span className="num" style={{fontSize:12,color:TX2}}>{fmt(p.val)}</span>
                     </button>
@@ -2250,7 +2283,7 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:10.5,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",padding:"0 8px 6px"}}>Recorrências</div>
                   {searchResults.recurringRes.map(p=>(
                     <button key={p.id} onClick={()=>goToPlanned(p)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:12,textAlign:"left"}}>
-                      <Repeat size={13} color="#A78BFA"/>
+                      <Repeat size={13} color={VIOLET}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.desc}</span>
                       <span className="num" style={{fontSize:12,color:TX2}}>{fmt(p.val)}/mês</span>
                     </button>
@@ -2262,7 +2295,7 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:10.5,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",padding:"0 8px 6px"}}>Investimentos</div>
                   {searchResults.invRes.map(t=>(
                     <button key={t.id} onClick={()=>goToTx(t)} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:12,textAlign:"left"}}>
-                      <TrendingUp size={13} color="#3B82F6"/>
+                      <TrendingUp size={13} color={BLUE}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.desc}</span>
                       <span className="num" style={{fontSize:12,color:TX2}}>{fmt(t.val)}</span>
                     </button>
@@ -2274,7 +2307,7 @@ function MainApp({user,setUser}){
                   <div style={{fontSize:10.5,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:"0.05em",padding:"0 8px 6px"}}>Parcelamentos</div>
                   {searchResults.instRes.map(i=>(
                     <button key={i.id} onClick={goToInst} className="chip-btn" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 8px",border:"none",background:"transparent",cursor:"pointer",borderRadius:12,textAlign:"left"}}>
-                      <CreditCard size={13} color="#FBBF24"/>
+                      <CreditCard size={13} color={WARNING}/>
                       <span style={{flex:1,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.desc}</span>
                       <span className="num" style={{fontSize:12,color:TX2}}>{fmt(i.totalVal)}</span>
                     </button>
@@ -2304,12 +2337,12 @@ function MainApp({user,setUser}){
             <div style={{fontSize:12,color:TX2,marginBottom:24}}>{user.email}</div>
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Nome</div>
-            <input value={newName} onChange={e=>setNewName(e.target.value)} style={{...SI,marginBottom:14}}/>
-            {profileMsg&&<div style={{fontSize:12,color:"#34D399",marginBottom:10}}>{profileMsg}</div>}
+            <input aria-label="Nome" value={newName} onChange={e=>setNewName(e.target.value)} style={{...SI,marginBottom:14}}/>
+            {profileMsg&&<div style={{fontSize:12,color:SUCCESS,marginBottom:10}}>{profileMsg}</div>}
             <Btn onClick={saveProfile} style={{width:"100%",paddingInline:12,fontSize:13,marginBottom:26}}>Salvar nome</Btn>
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Nome da sua conta (aparece no topo do app)</div>
-            <input value={walletName} onChange={e=>setWalletName(e.target.value)} style={{...SI,marginBottom:20}}/>
+            <input aria-label="Nome da sua conta" value={walletName} onChange={e=>setWalletName(e.target.value)} style={{...SI,marginBottom:20}}/>
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:4}}>Contas bancárias</div>
             <div style={{fontSize:12,color:TX3,marginBottom:10,lineHeight:1.5}}>Com mais de uma, você troca de conta no topo do app. Cada conta tem seus lançamentos, previstos e parcelamentos; as metas são as mesmas.</div>
@@ -2324,7 +2357,7 @@ function MainApp({user,setUser}){
             </div>
             <div style={{display:"flex",gap:8,marginBottom:22}}>
               <input placeholder="Nova conta (ex.: Mercado Pago)" value={newAccountName} onChange={e=>setNewAccountName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAccount()} style={{...SI,flex:1}}/>
-              <button onClick={addAccount} aria-label="Adicionar conta" style={{background:"rgba(255,255,255,0.05)",border:`1px solid ${BD2}`,color:accent,borderRadius:R_INPUT,padding:"0 18px",cursor:"pointer"}}><Plus size={16}/></button>
+              <button onClick={addAccount} aria-label="Adicionar conta" style={{background:tint(0.05),border:`1px solid ${BD2}`,color:accentText(accent),borderRadius:R_INPUT,padding:"0 18px",cursor:"pointer"}}><Plus size={16}/></button>
             </div>
 
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Cor de destaque</div>
@@ -2341,36 +2374,40 @@ function MainApp({user,setUser}){
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
               {customCats.length===0&&<div style={{fontSize:12,color:TX3}}>Nenhuma ainda — criadas automaticamente ao importar um CSV.</div>}
               {customCats.map(c=>(
-                <span key={c} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"5px 10px",fontSize:12,color:TX2}}>
+                <span key={c} style={{display:"flex",alignItems:"center",gap:5,background:tint(0.03),border:`1px solid ${BD}`,borderRadius:R_CHIP,padding:"5px 10px",fontSize:12,color:TX2}}>
                   <Tag size={11}/>{c}
-                  <button onClick={()=>removeCustomCat(c)} title={`Remover categoria ${c}`} aria-label={`Remover categoria ${c}`} className="touch-44" style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",padding:0,display:"flex"}}><X size={12}/></button>
+                  <button onClick={()=>removeCustomCat(c)} title={`Remover categoria ${c}`} aria-label={`Remover categoria ${c}`} className="touch-44" style={{background:"none",border:"none",color:ERROR,cursor:"pointer",padding:0,display:"flex"}}><X size={12}/></button>
                 </span>
               ))}
             </div>
             <div style={{display:"flex",gap:8,marginBottom:26}}>
               <input placeholder="Nova categoria..." value={newCatInput} onChange={e=>setNewCatInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCustomCat()} style={{...SI,flex:1}}/>
-              <button onClick={addCustomCat} style={{background:"rgba(255,255,255,0.05)",border:`1px solid ${BD2}`,color:accent,borderRadius:R_INPUT,padding:"0 18px",cursor:"pointer"}}><Plus size={16}/></button>
+              <button onClick={addCustomCat} aria-label="Adicionar categoria" style={{background:tint(0.05),border:`1px solid ${BD2}`,color:accentText(accent),borderRadius:R_INPUT,padding:"0 18px",cursor:"pointer"}}><Plus size={16}/></button>
             </div>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Undo2 size={12}/>Lixeira</div>
             <div style={{fontSize:12,color:TX3,marginBottom:12,lineHeight:1.5}}>Metas e previstos excluídos ficam guardados aqui por {TRASH_RETENTION_DAYS} dias e podem ser restaurados.</div>
-            <button onClick={()=>{setShowProfile(false);setShowTrash(true);}} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD2}`,color:TX2,padding:"11px",borderRadius:R_INPUT,cursor:"pointer",fontSize:12,fontWeight:700,marginBottom:26}}><Trash2 size={14}/>Abrir lixeira {trash.length>0?`(${trash.length})`:""}</button>
+            <button onClick={()=>{setShowProfile(false);setShowTrash(true);}} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:tint(0.03),border:`1px solid ${BD2}`,color:TX2,padding:"11px",borderRadius:R_INPUT,cursor:"pointer",fontSize:12,fontWeight:700,marginBottom:26}}><Trash2 size={14}/>Abrir lixeira {trash.length>0?`(${trash.length})`:""}</button>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:TX2,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Cloud size={12}/>Backup completo</div>
             <div style={{fontSize:12,color:TX3,marginBottom:12,lineHeight:1.5}}>Transações, previstos, parcelamentos, desejos e categorias — tudo num único arquivo.</div>
             <div style={{display:"flex",gap:8,marginBottom:26}}>
-              <button onClick={exportAllBackup} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD2}`,color:accent,padding:"11px",borderRadius:R_INPUT,cursor:"pointer",fontSize:12,fontWeight:700}}><Download size={14}/>Exportar tudo</button>
-              <label style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"rgba(255,255,255,0.03)",border:`1px solid ${BD2}`,color:TX2,padding:"11px",borderRadius:R_INPUT,cursor:"pointer",fontSize:12,fontWeight:700}}>
+              <button onClick={exportAllBackup} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:tint(0.03),border:`1px solid ${BD2}`,color:accentText(accent),padding:"11px",borderRadius:R_INPUT,cursor:"pointer",fontSize:12,fontWeight:700}}><Download size={14}/>Exportar tudo</button>
+              <label style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:tint(0.03),border:`1px solid ${BD2}`,color:TX2,padding:"11px",borderRadius:R_INPUT,cursor:"pointer",fontSize:12,fontWeight:700}}>
                 <Upload size={14}/>Importar tudo
                 <input type="file" accept=".json" style={{display:"none"}} onChange={importAllBackup}/>
               </label>
             </div>
-            <button onClick={()=>{setDeleteAccountPhrase("");setDeleteAccountOpen(true);}} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#F8717114",color:"#F87171",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar conta e dados</button>
+            {/* Zona de perigo: o "Apagar todas as transações" saiu do topo da aba
+                Transações, a um toque dos ícones de exportar (teste de 24/11/2026). */}
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:ERROR,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><AlertTriangle size={12}/>Zona de perigo</div>
+            <button onClick={()=>{setClearPhrase("");setShowProfile(false);setShowClearConfirm(true);}} disabled={transactions.length===0} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:`1px solid ${ERROR}40`,cursor:transactions.length?"pointer":"not-allowed",fontSize:13,fontWeight:700,background:"transparent",color:ERROR,opacity:transactions.length?1:0.5,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar todas as transações{accounts.length>1?` de ${accounts.find(a=>a.id===activeAccount)?.name||"esta conta"}`:""}</button>
+            <button onClick={()=>{setDeleteAccountPhrase("");setDeleteAccountOpen(true);}} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:DANGER_SURFACE,color:ERROR,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar conta e dados</button>
             <BtnGhost onClick={()=>setShowProfile(false)} style={{width:"100%",paddingInline:12}}>Fechar</BtnGhost>
         </Modal>
       )}
       {selectedCalDay&&(
         <Modal onClose={()=>setSelectedCalDay(null)} maxWidth={400} padding={26} contentStyle={{maxHeight:"80vh"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-              <div style={{fontSize:15,fontWeight:700,color:TX}}>{selectedCalDay}</div>
+              <div style={{fontSize:15,fontWeight:700,color:TX}}>{formatDayTitle(selectedCalDay,todayISO)}</div>
               <button onClick={()=>setSelectedCalDay(null)} style={{background:"none",border:"none",color:TX3,cursor:"pointer"}}><X size={18}/></button>
             </div>
             {selectedDayEvents.length===0?(
@@ -2394,7 +2431,7 @@ function MainApp({user,setUser}){
       {showTrash&&(
         <Modal onClose={()=>setShowTrash(false)} maxWidth={460} padding={26}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-              <div style={{fontSize:16,fontWeight:700,color:TX,display:"flex",alignItems:"center",gap:8}}><Trash2 size={16} color={accent}/>Lixeira</div>
+              <div style={{fontSize:16,fontWeight:700,color:TX,display:"flex",alignItems:"center",gap:8}}><Trash2 size={16} color={accentText(accent)}/>Lixeira</div>
               <button onClick={()=>setShowTrash(false)} style={{background:"none",border:"none",color:TX3,cursor:"pointer"}}><X size={18}/></button>
             </div>
             <div style={{fontSize:12.5,color:TX2,marginBottom:18,lineHeight:1.5}}>Itens excluídos ficam aqui por {TRASH_RETENTION_DAYS} dias antes de serem apagados de vez.</div>
@@ -2418,7 +2455,7 @@ function MainApp({user,setUser}){
                         <div style={{fontSize:13,color:TX,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</div>
                         <div style={{fontSize:11,color:TX3}}>{typeName} · {fmt(value)} · some em {daysLeft} dia{daysLeft===1?"":"s"}</div>
                       </div>
-                      <button onClick={()=>restoreFromTrash(entry.trashId)} title="Restaurar" className="touch-44" style={{background:"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"6px 10px",color:accent,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}><Undo2 size={13}/>Restaurar</button>
+                      <button onClick={()=>restoreFromTrash(entry.trashId)} title="Restaurar" className="touch-44" style={{background:tint(0.05),border:"none",borderRadius:8,padding:"6px 10px",color:accentText(accent),cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600}}><Undo2 size={13}/>Restaurar</button>
                       <button onClick={()=>purgeTrashItem(entry.trashId)} title="Excluir definitivamente" aria-label="Excluir definitivamente" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4}}><X size={14}/></button>
                     </div>
                   );
@@ -2451,6 +2488,12 @@ function MainApp({user,setUser}){
               <Ic size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">{t.label}</span><span className="more-h">{t.hint}</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
             </button>
           );})}
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);undo();}} disabled={historyLen===0} style={{opacity:historyLen?1:0.5,cursor:historyLen?"pointer":"not-allowed"}}>
+            <Undo2 size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Desfazer</span><span className="more-h">{historyLen?`${historyLen} ${historyLen===1?"passo":"passos"} para voltar`:"Nada para desfazer"}</span></span>
+          </button>
+          <button type="button" className="more-row" onClick={()=>{setShowMore(false);retrySave();}}>
+            <RefreshCw size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Salvar agora</span><span className="more-h">{{saved:"Tudo sincronizado",saving:"Salvando…",loading:"Carregando…",offline:"Salvo neste aparelho, falta a nuvem",error:"Erro ao salvar: tentar de novo"}[syncStatus]||""}</span></span>
+          </button>
           <button type="button" className="more-row" onClick={()=>{setShowMore(false);setShowProfile(true);}}>
             <Settings size={20} aria-hidden="true" color={TX2}/><span style={{flex:1}}><span className="more-t">Perfil</span><span className="more-h">Nome, cor, densidade, backup e conta</span></span><ChevronRight size={16} color={TX3} aria-hidden="true"/>
           </button>
@@ -2586,7 +2629,7 @@ function MainApp({user,setUser}){
               <div className="home-col">
                 <section>
                   <SectionTitle>Patrimônio e metas</SectionTitle>
-                  {patrimonySeries.length>=2&&<Card style={{boxShadow:"none",marginBottom:10}}><TrendChart data={patrimonySeries} color={accent}/></Card>}
+                  {patrimonySeries.length>=2&&<Card style={{boxShadow:"none",marginBottom:10}}><TrendChart data={patrimonySeries} color={accentText(accent)}/></Card>}
                   <Card style={{boxShadow:"none",padding:"6px 16px"}}>
                     <ul className="home-list">
                       {row("pat","Patrimônio",null,resumoDoMes?fmt(resumoDoMes.stats.patrimonio):"—")}
@@ -2717,7 +2760,7 @@ function MainApp({user,setUser}){
             filterType={filterType} search={search} filterMonth={filterMonth} months={months} filterCat={filterCat}
             fullCats={fullCats} viewTotals={viewTotals} filtered={filtered} groupedByDate={groupedByDate} editingTx={editingTx}
             setFilterType={setFilterType} setSearch={setSearch} setFilterMonth={setFilterMonth} setFilterCat={setFilterCat}
-            onImportCSV={importCSV} onExportCSV={exportCSV} onClearAll={()=>setShowClearConfirm(true)} onReport={()=>setReportPick(filterMonth||currentMonthKeyReal)}
+            onImportCSV={importCSV} onExportCSV={exportCSV} onReport={()=>setReportPick(filterMonth||currentMonthKeyReal)}
             onStartEditTx={startEditTx} onRequestDelete={performDelete}
           />
         </TabPanel>

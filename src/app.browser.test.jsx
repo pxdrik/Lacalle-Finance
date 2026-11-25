@@ -506,25 +506,32 @@ describe("sem rede", () => {
 describe("relatório do mês em PDF", () => {
   beforeEach(async () => { h.storage = createFakeStorage({ tx: [tx(1, "Mercado", 80), { ...tx(2, "Cinema", 40), date: "2026-09-12" }] }); await setViewport(DESKTOP_WIDTH, 900); });
 
-  test("escolher o mês abre a impressão só com os lançamentos dele; fechar a impressão some com o relatório", async () => {
+  test("escolher o mês baixa um PDF só com os lançamentos dele, sem janela de impressão", async () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    const blobs = [];
+    const create = URL.createObjectURL.bind(URL);
+    const url = vi.spyOn(URL, "createObjectURL").mockImplementation(b => { blobs.push(b); return create(b); });
+    // o jsPDF baixa com dispatchEvent num link solto: guarda o nome e não baixa de verdade
+    const downloads = [];
+    const realDispatch = EventTarget.prototype.dispatchEvent;
+    const click = vi.spyOn(EventTarget.prototype, "dispatchEvent").mockImplementation(function (e) {
+      if (this instanceof HTMLAnchorElement && this.download) { downloads.push(this.download); return true; }
+      return realDispatch.call(this, e);
+    });
     await openApp();
     fireEvent.click(navBtn("Transações"));
     fireEvent.click(await screen.findByRole("button", { name: "Relatório do mês em PDF" }));
     const picker = within(await screen.findByRole("dialog", { name: "Relatório do mês" }));
     fireEvent.change(picker.getByLabelText("Mês"), { target: { value: "set/26" } });
-    fireEvent.click(picker.getByRole("button", { name: "Gerar PDF" }));
-    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
-    // fora da tela (só aparece na impressão), então buscado pelo elemento
-    const el = document.querySelector(".print-report");
-    expect(el.getAttribute("aria-label")).toBe("Relatório de setembro de 2026");
-    const report = within(el);
-    expect(report.getByText("Cinema")).toBeTruthy();
-    expect(el.parentElement).toBe(document.body); // fora do #root, que a impressão esconde
-    expect(report.queryByText("Mercado")).toBeNull();
-    window.dispatchEvent(new Event("afterprint"));
-    await waitFor(() => expect(document.querySelector(".print-report")).toBeNull());
-    print.mockRestore();
+    fireEvent.click(picker.getByRole("button", { name: "Baixar PDF" }));
+    await waitFor(() => expect(blobs.filter(b => b.type === "application/pdf")).toHaveLength(1), { timeout: 8000 });
+    const pdf = await blobs.find(b => b.type === "application/pdf").text();
+    expect(pdf).toContain("(Cinema)");
+    expect(pdf).not.toContain("Mercado");
+    expect(downloads).toEqual(["relatorio-setembro-de-2026.pdf"]);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Relatório do mês" })).toBeNull());
+    expect(print).not.toHaveBeenCalled();
+    [print, url, click].forEach(m => m.mockRestore());
   });
 });
 
@@ -745,5 +752,101 @@ describe("acessibilidade medida pelo axe", () => {
     await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
     await animationsDone();
     expect(await axeViolations()).toEqual([]);
+  });
+});
+
+describe("teste de uso de 24/11/2026", () => {
+  beforeEach(async () => { localStorage.clear(); await setViewport(DESKTOP_WIDTH, 900); });
+
+  test("a forma do último lançamento vira a padrão, e repetir aceita número livre", async () => {
+    h.storage = createFakeStorage();
+    await openApp();
+    let sheet = await openNewTxSheet();
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Academia" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "99,90" } });
+    fireEvent.change(sheet.getByLabelText("Forma"), { target: { value: "debito" } });
+    fireEvent.change(sheet.getByLabelText("Repetir"), { target: { value: "custom" } });
+    fireEvent.change(sheet.getByLabelText("Quantos meses"), { target: { value: "10" } });
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    await sheetClosed();
+    await waitFor(() => expect(h.storage.peek()?.tx?.length).toBe(10), SAVE_WAIT);
+    expect(new Set(h.storage.peek().tx.map(t => t.form))).toEqual(new Set(["debito"]));
+    sheet = await openNewTxSheet();
+    expect(sheet.getByLabelText("Forma").value).toBe("debito");
+  });
+
+  test("repetir com número inválido avisa e não lança", async () => {
+    h.storage = createFakeStorage();
+    await openApp();
+    const sheet = await openNewTxSheet();
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Curso" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "50" } });
+    fireEvent.change(sheet.getByLabelText("Repetir"), { target: { value: "custom" } });
+    fireEvent.change(sheet.getByLabelText("Quantos meses"), { target: { value: "1" } });
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    await screen.findByText(/meses precisa estar entre 2 e/);
+    expect(h.storage.peek()?.tx?.length ?? 0).toBe(0);
+  });
+
+  test("apagar todas as transações mora no Perfil e pede a palavra", async () => {
+    h.storage = createFakeStorage({ tx: [tx(1, "Mercado"), tx(2, "Uber")] });
+    await openApp();
+    fireEvent.click(navBtn("Transações"));
+    await screen.findByText("Mercado");
+    expect(screen.queryByRole("button", { name: /Apagar todas/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Minha conta" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Apagar todas as transações/ }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Apagar todas as transações" }));
+    expect(dialog.getByText(/As 2 transações serão removidas/)).toBeTruthy();
+    const confirm = dialog.getByRole("button", { name: "Apagar tudo" });
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(dialog.getByLabelText("Digite APAGAR para confirmar"), { target: { value: "apagar" } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(h.storage.peek()?.tx?.length).toBe(0), SAVE_WAIT);
+  });
+
+  test("celular: o topo fica com logo, +, busca e avatar; desfazer e salvar estão no Mais", async () => {
+    h.storage = createFakeStorage({ tx: [tx(1, "Mercado")] });
+    await setViewport(390, 800);
+    render(<StrictMode><Root /></StrictMode>);
+    const nav = await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
+    const header = document.querySelector(".app-header");
+    // espera o estado "Sincronizado" com o botão no DOM: no "Salvando" ele nem existe
+    await waitFor(() => { const b = header.querySelector('[aria-label="Salvar agora"]'); expect(b).toBeTruthy(); expect(getComputedStyle(b).display).toBe("none"); }, SAVE_WAIT);
+    const visible = [...header.querySelectorAll("button, select")].filter(b => b.getClientRects().length > 0);
+    expect(visible.map(b => b.getAttribute("aria-label"))).toEqual(["Novo banco", "Pesquisar (Ctrl+K)", "Minha conta"]);
+    expect(overflowX(header)).toBeLessThanOrEqual(0);
+    fireEvent.click(within(nav).getByRole("button", { name: "Mais" }));
+    const more = within(await screen.findByRole("dialog", { name: "Mais" }));
+    expect(more.getByRole("button", { name: /Desfazer/ }).disabled).toBe(true);
+    expect(more.getByRole("button", { name: /Salvar agora/ })).toBeTruthy();
+  });
+
+  test("celular: sem rede, o aviso e o reenviar continuam no topo", async () => {
+    h.storage = createFakeStorage();
+    await setViewport(390, 800);
+    render(<StrictMode><Root /></StrictMode>);
+    const nav = await screen.findByRole("navigation", { name: "Seções no celular" }, { timeout: 8000 });
+    h.storage.offline = true;
+    fireEvent.click(within(nav).getByRole("button", { name: "Transações" }));
+    fireEvent.click(await within(document.querySelector(".main-content")).findByRole("button", { name: "Novo lançamento" }));
+    const sheet = within(await screen.findByRole("dialog", { name: "Novo lançamento" }));
+    fireEvent.change(sheet.getByLabelText("Descrição"), { target: { value: "Padaria" } });
+    fireEvent.change(sheet.getByLabelText("Valor"), { target: { value: "12,50" } });
+    fireEvent.click(sheet.getByRole("button", { name: /Adicionar Saída/ }));
+    // dentro do topo: o Início tem outro botão com o mesmo nome
+    const retry = await within(document.querySelector(".app-header")).findByRole("button", { name: "Tentar enviar para a nuvem" }, SAVE_WAIT);
+    expect(retry.getClientRects().length).toBeGreaterThan(0);
+  });
+
+  test("\"Game pass\" e \"GamePass\" são um frequente só", async () => {
+    const fixa = (id, desc) => ({ ...tx(id, desc, 76.9), fixed: "Fixa" });
+    // cada grafia sozinha já vira atalho (2 fixos): sem juntar, seriam dois
+    h.storage = createFakeStorage({ tx: [fixa(1, "Game pass"), fixa(2, "Game pass"), fixa(3, "GamePass"), fixa(4, "GamePass")] });
+    await openApp();
+    const sheet = await openNewTxSheet();
+    const picks = within(sheet.getByRole("group", { name: "Frequentes" })).getAllByRole("button");
+    expect(picks.map(b => b.textContent).filter(t => /game ?pass/i.test(t))).toHaveLength(1);
   });
 });

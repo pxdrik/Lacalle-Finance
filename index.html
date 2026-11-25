@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0B0D0F" />
+    <!-- Cor da barra do navegador no celular: o fundo de cada tema (lib/palette.js). -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B0D0F" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#E2E7ED" />
     <meta name="description" content="Controle financeiro pessoal: saldos, projeções, previstos e metas." />
     <!-- App privado: fora dos buscadores. Mesmo pedido do cabeçalho X-Robots-Tag (vercel.json). -->
     <meta name="robots" content="noindex, nofollow" />
