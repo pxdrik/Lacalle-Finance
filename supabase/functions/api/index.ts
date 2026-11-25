@@ -16,7 +16,7 @@
 // Sem CORS de propósito: é servidor falando com servidor; navegador não chama.
 // ============================================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { ApiError, options, listTransactions, summary, createTransaction, deleteTransaction } from "../../../src/lib/financeApi.js";
+import { ApiError, options, listTransactions, summary, createTransaction, updateTransaction, deleteTransaction } from "../../../src/lib/financeApi.js";
 
 const API_KEY = Deno.env.get("FINANCE_API_KEY") || "";
 const USER_ID = Deno.env.get("FINANCE_API_USER_ID") || "";
@@ -80,11 +80,16 @@ Deno.serve(async (req) => {
         const body = await req.json().catch(() => { throw new ApiError(400, "Corpo não é JSON válido."); });
         return json(201, { transaction: await write((doc) => createTransaction(doc, body)) });
       }
+      case "PATCH /transactions/:id": {
+        const body = await req.json().catch(() => { throw new ApiError(400, "Corpo não é JSON válido."); });
+        const id = decodeURIComponent(path.split("/")[2]);
+        return json(200, { transaction: await write((doc) => updateTransaction(doc, id, body)) });
+      }
       case "DELETE /transactions/:id": {
         const id = decodeURIComponent(path.split("/")[2]);
         return json(200, { deleted: await write((doc) => deleteTransaction(doc, id)) });
       }
-      default: return json(404, { error: "Rota não existe. Rotas: GET /options, GET /summary, GET /transactions, POST /transactions, DELETE /transactions/:id." });
+      default: return json(404, { error: "Rota não existe. Rotas: GET /options, GET /summary, GET /transactions, POST /transactions, PATCH /transactions/:id, DELETE /transactions/:id." });
     }
   } catch (e) {
     if (e instanceof ApiError) return json(e.status, { error: e.message });

@@ -119,46 +119,96 @@ function parseVal(v) {
 
 const genId = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
 
+// Os campos que o agente pode mandar, no POST e no PATCH.
+export const TX_FIELDS = ["type", "val", "desc", "cat", "date", "form", "fixed", "account", "invTipo"];
+const COUPLED = ["cat", "type", "invTipo"]; // o tipo depende da categoria e do invTipo
+
+/**
+ * Valida os campos presentes em `input` (as chaves; valor undefined conta
+ * como presente e falha) e devolve só esses, já no formato do app. A
+ * categoria, quando vem, decide tipo e invTipo juntos.
+ */
+function parseFields(raw, input) {
+  const has = k => k in input;
+  const out = {};
+  if (has("cat")) {
+    const { categories } = options(raw);
+    out.cat = categories.find(c => fold(c) === fold(input.cat));
+    if (!out.cat) throw new ApiError(400, `Categoria "${input.cat ?? ""}" não existe. Categorias: ${categories.join(", ")}.`);
+    if (out.cat === "Investimento") {
+      out.invTipo = INV_TIPOS.find(t => fold(t) === fold(input.invTipo));
+      if (!out.invTipo) throw new ApiError(400, `Investimento precisa de invTipo: ${INV_TIPOS.join(", ")}.`);
+      out.type = out.invTipo === "Aporte" ? "Saída" : "Entrada";
+    } else {
+      out.invTipo = null;
+      out.type = fold(input.type) === "entrada" ? "Entrada" : fold(input.type) === "saida" ? "Saída" : null;
+      if (!out.type) throw new ApiError(400, 'Tipo é "Entrada" ou "Saída".');
+    }
+  }
+  if (has("desc")) {
+    const desc = validateText(input.desc);
+    if (!desc.ok) throw new ApiError(400, desc.error);
+    out.desc = desc.value;
+  }
+  if (has("date")) {
+    const date = validateDate(input.date);
+    if (!date.ok) throw new ApiError(400, date.error);
+    out.date = date.value;
+  }
+  if (has("form")) {
+    out.form = FORMS.find(f => fold(f) === fold(input.form));
+    if (!out.form) throw new ApiError(400, `Forma é uma destas: ${FORMS.join(", ")}.`);
+  }
+  if (has("fixed")) {
+    // Mesmos valores do campo "Tipo de gasto" do app (o backup recusa outros).
+    const f = fold(input.fixed);
+    out.fixed = f.startsWith("fix") ? "Fixa" : f.startsWith("variav") ? "Variavel" : null;
+    if (!out.fixed) throw new ApiError(400, 'fixed é "Fixa" ou "Variavel".');
+  }
+  if (has("account")) {
+    const accounts = accountsOf(normalizeDoc(raw));
+    const acc = findAccount(accounts, input.account);
+    if (!acc) throw new ApiError(400, `Conta "${input.account}" não existe. Contas: ${accounts.map(a => a.name).join(", ")}.`);
+    out.account = acc.id;
+  }
+  if (has("val")) out.val = parseVal(input.val);
+  return out;
+}
+
+const txList = raw => {
+  const base = raw && typeof raw === "object" ? raw : {};
+  return { base, list: Array.isArray(base.tx) ? base.tx : [] };
+};
+
 /** Devolve {doc, tx}: o documento com o lançamento novo, e o lançamento. */
 export function createTransaction(raw, body, now = Date.now(), today = todaySP()) {
   if (!body || typeof body !== "object") throw new ApiError(400, "Corpo JSON obrigatório.");
-  const doc = normalizeDoc(raw);
-  const opts = options(raw);
+  const defaults = { date: today, form: "pix", fixed: "Variavel", account: DEFAULT_ACCOUNT };
+  const f = parseFields(raw, Object.fromEntries(TX_FIELDS.map(k => [k, body[k] ?? defaults[k]])));
+  const tx = { id: genId(), date: f.date, type: f.type, fixed: f.fixed, cat: f.cat, desc: f.desc, val: f.val, form: f.form, invTipo: f.invTipo, account: f.account, source: "api", updatedAt: now };
+  const { base, list } = txList(raw);
+  return { doc: { ...base, tx: [...list, tx] }, tx: strip(tx) };
+}
 
-  const cat = opts.categories.find(c => fold(c) === fold(body.cat));
-  if (!cat) throw new ApiError(400, `Categoria "${body.cat ?? ""}" não existe. Categorias: ${opts.categories.join(", ")}.`);
+/**
+ * Devolve {doc, tx}: o documento com o lançamento alterado, e o lançamento.
+ * Muda só os campos enviados, com as validações do POST; o id fica, então a
+ * lixeira e o que aponta para o lançamento continuam valendo.
+ */
+export function updateTransaction(raw, id, body, now = Date.now()) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new ApiError(400, "Corpo JSON obrigatório.");
+  const { base, list } = txList(raw);
+  const item = list.find(t => t && String(t.id) === String(id));
+  if (!item) throw new ApiError(404, `Lançamento ${id} não encontrado.`);
+  const sent = TX_FIELDS.filter(k => body[k] !== undefined && body[k] !== null);
+  if (!sent.length) throw new ApiError(400, `Nada para mudar. Campos: ${TX_FIELDS.join(", ")}.`);
 
-  let type = body.type, invTipo = null;
-  if (cat === "Investimento") {
-    invTipo = INV_TIPOS.find(t => fold(t) === fold(body.invTipo));
-    if (!invTipo) throw new ApiError(400, `Investimento precisa de invTipo: ${INV_TIPOS.join(", ")}.`);
-    type = invTipo === "Aporte" ? "Saída" : "Entrada";
-  } else if (fold(type) === "entrada") type = "Entrada";
-  else if (fold(type) === "saida") type = "Saída";
-  else throw new ApiError(400, 'Tipo é "Entrada" ou "Saída".');
-
-  const desc = validateText(body.desc);
-  if (!desc.ok) throw new ApiError(400, desc.error);
-  const date = validateDate(body.date ?? today);
-  if (!date.ok) throw new ApiError(400, date.error);
-
-  const form = body.form === undefined ? "pix" : FORMS.find(f => fold(f) === fold(body.form));
-  if (!form) throw new ApiError(400, `Forma é uma destas: ${FORMS.join(", ")}.`);
-
-  // Mesmos valores do campo "Tipo de gasto" do app (o backup recusa outros).
-  const fixed = body.fixed === undefined ? "Variavel" : fold(body.fixed).startsWith("fix") ? "Fixa" : fold(body.fixed).startsWith("variav") ? "Variavel" : null;
-  if (!fixed) throw new ApiError(400, 'fixed é "Fixa" ou "Variavel".');
-
-  let account = DEFAULT_ACCOUNT;
-  if (body.account !== undefined) {
-    const acc = findAccount(accountsOf(doc), body.account);
-    if (!acc) throw new ApiError(400, `Conta "${body.account}" não existe. Contas: ${accountsOf(doc).map(a => a.name).join(", ")}.`);
-    account = acc.id;
-  }
-
-  const tx = { id: genId(), date: date.value, type, fixed, cat, desc: desc.value, val: parseVal(body.val), form, invTipo, account, source: "api", updatedAt: now };
-  const base = raw && typeof raw === "object" ? raw : {};
-  return { doc: { ...base, tx: [...(Array.isArray(base.tx) ? base.tx : []), tx] }, tx: strip(tx) };
+  const input = Object.fromEntries(sent.map(k => [k, body[k]]));
+  // Tipo, categoria e invTipo são validados juntos: o que não veio sai do lançamento.
+  if (sent.some(k => COUPLED.includes(k))) for (const k of COUPLED) if (!(k in input)) input[k] = item[k] ?? undefined;
+  // A junção mantém o mais recente: o carimbo novo tem de passar o do aparelho, mesmo adiantado.
+  const updated = { ...item, ...parseFields(raw, input), updatedAt: Math.max(now, (typeof item.updatedAt === "number" ? item.updatedAt : 0) + 1) };
+  return { doc: { ...base, tx: list.map(t => (t === item ? updated : t)) }, tx: strip(updated) };
 }
 
 /** Devolve {doc, tx}: o documento sem o lançamento (com lápide e o item na lixeira), e o lançamento. */

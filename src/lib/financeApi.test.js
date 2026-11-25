@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createTransaction, deleteTransaction, listTransactions, summary, options, ApiError } from "./financeApi.js";
+import { createTransaction, updateTransaction, deleteTransaction, listTransactions, summary, options, ApiError } from "./financeApi.js";
 import { normalizeDoc, stampChanges, mergeDocs } from "./sync.js";
 import { buildBackup, validateBackup } from "./backupValidation.js";
 
@@ -112,4 +112,51 @@ test("saldo atual igual ao do app: por conta, sem rendimento e sem data futura",
   assert.equal(s.invested, 300);
   assert.deepEqual(s.accounts.map(a => [a.id, a.currentBalance]), [["principal", 2600], ["mp", -250.5]]);
   assert.throws(() => summary(doc, { account: "Banco X" }), ApiError);
+});
+
+test("editar pela API muda só o que veio e vence o app que ainda tem a versão velha", () => {
+  const cloudBefore = normalizeDoc(appDoc());
+  const { doc, tx } = updateTransaction(appDoc(), "2", { val: "260,10", cat: "lazer" }, T0 + 10);
+  assert.deepEqual([tx.id, tx.val, tx.cat, tx.type, tx.desc, tx.account, tx.date], [2, 260.1, "Lazer", "Saída", "Mercado", "mp", "2026-10-05"]);
+  assert.ok(!("updatedAt" in tx));
+  assert.equal(doc.tx.length, 5);
+  assert.equal(doc.algoQueAApiNaoConhece, true);
+  assert.ok(validateBackup(buildBackup(normalizeDoc(doc))).ok);
+  // O app, que não viu a edição, mexe em outro lançamento e salva: a edição fica.
+  const cur = { ...cloudBefore, tx: cloudBefore.tx.map(t => (t.id === 1 ? { ...t, val: 3100 } : t)) };
+  const merged = mergeDocs(stampChanges(cloudBefore, cur, T0 + 20), normalizeDoc(doc));
+  assert.equal(merged.tx.find(t => t.id === 2).val, 260.1);
+  assert.equal(merged.tx.find(t => t.id === 1).val, 3100);
+  // Aparelho com relógio adiantado: o carimbo da edição ainda passa o dele.
+  const ahead = { ...appDoc(), tx: appDoc().tx.map(t => (t.id === 2 ? { ...t, updatedAt: T0 + 999 } : t)) };
+  assert.ok(updateTransaction(ahead, 2, { desc: "Feira" }, T0 + 10).doc.tx.find(t => t.id === 2).updatedAt > T0 + 999);
+});
+
+test("editar: 404, nada para mudar e as validações do POST", () => {
+  assert.throws(() => updateTransaction(appDoc(), 777, { val: 1 }), e => e instanceof ApiError && e.status === 404);
+  assert.throws(() => updateTransaction(appDoc(), 2, {}), e => e.status === 400);
+  assert.throws(() => updateTransaction(appDoc(), 2, { valor: 10 }), e => e.status === 400);
+  const bad = body => assert.throws(() => updateTransaction(appDoc(), 2, body), e => e instanceof ApiError && e.status === 400);
+  bad({ cat: "Inventada" });
+  bad({ type: "Talvez" });
+  bad({ val: 0 });
+  bad({ desc: "" });
+  bad({ date: "2026-02-30" });
+  bad({ account: "Banco X" });
+  bad({ form: "boleto" });
+  bad({ fixed: "sim" });
+  bad({ cat: "Investimento" }); // sem invTipo
+});
+
+test("editar: tipo, categoria e invTipo andam juntos", () => {
+  const edit = (id, body) => updateTransaction(appDoc(), id, body, T0 + 10).tx;
+  assert.deepEqual([edit(2, { type: "entrada" }).type, edit(2, { type: "entrada" }).cat], ["Entrada", "Alimentação"]);
+  // virar investimento calcula o tipo; resgate é entrada
+  const inv = edit(2, { cat: "Investimento", invTipo: "resgate" });
+  assert.deepEqual([inv.type, inv.invTipo], ["Entrada", "Resgate"]);
+  // o aporte do CDB (id 4) vira resgate só trocando o invTipo
+  assert.equal(edit(4, { invTipo: "Resgate" }).type, "Entrada");
+  // sair de Investimento apaga o invTipo e mantém o tipo que o lançamento tinha
+  const out = edit(4, { cat: "Outros" });
+  assert.deepEqual([out.type, out.invTipo], ["Saída", null]);
 });

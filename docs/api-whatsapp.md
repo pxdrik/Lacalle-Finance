@@ -43,7 +43,7 @@ Escolha sempre uma categoria desta lista. Se nenhuma servir, use "Outros". Se n�
 | `fixed` | não | `"Fixa"` (gasto fixo, como aluguel) ou `"Variavel"`. Padrão: `"Variavel"` |
 | `invTipo` | só em Investimento | com `cat: "Investimento"`, informe `"Aporte"`, `"Resgate"` ou `"Rendimento"`; o `type` é calculado sozinho |
 
-Resposta `201`: `{"transaction": {"id": 1761234567890123, ...}}`. Guarde o `id` para poder apagar se o Pedro disser que errou. Confirme ao Pedro o que foi lançado (valor, descrição, categoria, data e conta).
+Resposta `201`: `{"transaction": {"id": 1761234567890123, ...}}`. Guarde o `id` para poder corrigir (`PATCH`) ou apagar se o Pedro disser que errou. Confirme ao Pedro o que foi lançado (valor, descrição, categoria, data e conta).
 
 Envie cada lançamento uma vez só: se a resposta não chegar, consulte `GET /transactions` antes de tentar de novo, para não duplicar.
 
@@ -80,6 +80,18 @@ Resposta: `{"transactions": [{"id", "date", "type", "cat", "desc", "val", "form"
 - `income`, `expense` e `balance` são só do mês e só do que já aconteceu (data até hoje). `balance` aqui é entradas menos saídas do mês, não o saldo da conta.
 - `upcoming` são lançamentos com data futura dentro do mês.
 - Investimento não conta como gasto nem entrada. `invested` é aportes menos resgates do mês. Rendimento (`invTipo: "Rendimento"`) não entra em saldo nenhum: o dinheiro fica no investimento.
+
+## Corrigir um lançamento
+
+`PATCH /transactions/<id>`
+
+```json
+{"val": "52,90", "cat": "Lazer"}
+```
+
+Mande só os campos que mudam; os outros ficam como estão. Os campos e as regras são os mesmos do `POST` (tabela acima), todos opcionais. Com `cat: "Investimento"`, informe também o `invTipo`. Mandar `null` num campo é o mesmo que não mandar.
+
+Resposta `200`: `{"transaction": {...}}` com o lançamento já corrigido. O `id` não muda. Use isto para corrigir um erro, em vez de apagar e lançar de novo. Antes de corrigir, confirme com o Pedro qual lançamento é e o que muda.
 
 ## Apagar um lançamento
 
