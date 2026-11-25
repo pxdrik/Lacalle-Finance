@@ -257,7 +257,7 @@ function MainApp({user,setUser}){
   const [qaCat,setQaCat]=useState("Alimentação");const [qaInvTipo,setQaInvTipo]=useState("Aporte");
   const [qaDate,setQaDate]=useState(todayFn);const [qaForm,setQaForm]=useState(lastForm);
   const [qaFixed,setQaFixed]=useState("Variavel");const [qaExpanded,setQaExpanded]=useState(false);const [qaRepeat,setQaRepeat]=useState("none");const [qaRepeatN,setQaRepeatN]=useState("");
-  const [showClearConfirm,setShowClearConfirm]=useState(false);
+  const [showClearConfirm,setShowClearConfirm]=useState(false);const [clearPhrase,setClearPhrase]=useState("");
   // Relatório mensal: `reportPick` é o mês escolhido na janelinha (null = fechada);
   // `printingReport` monta o relatório e abre a impressão (MonthlyReport.jsx).
   const [reportPick,setReportPick]=useState(null);
@@ -1382,6 +1382,7 @@ function MainApp({user,setUser}){
   // lixeira. Agora exige digitar uma frase exata: é a barreira mínima esperada
   // de um app financeiro para uma ação irreversível.
   const ACCOUNT_DELETE_PHRASE="APAGAR MINHA CONTA";
+  const CLEAR_PHRASE="APAGAR";
   const closeDeleteAccount=()=>{setDeleteAccountOpen(false);setDeleteAccountPhrase("");};
   const deleteAccount=()=>{
     if(deleteAccountPhrase.trim().toUpperCase()!==ACCOUNT_DELETE_PHRASE)return;
@@ -2007,13 +2008,16 @@ function MainApp({user,setUser}){
       )}
       {printingReport&&<MonthlyReport report={printingReport} owner={user.name} todayISO={todayISO} onDone={closeReport}/>}
       {showClearConfirm&&(
-        <Modal maxWidth={340} padding={32} contentStyle={{textAlign:"center"}}>
+        <Modal onClose={()=>setShowClearConfirm(false)} maxWidth={360} padding={32} contentStyle={{textAlign:"center"}} label="Apagar todas as transações">
           <div style={{width:46,height:46,borderRadius:12,background:"#F8717118",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Trash2 size={20} color="#F87171"/></div>
-          <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar tudo?</div>
-          <div style={{fontSize:13,color:TX2,marginBottom:24,lineHeight:1.5}}>{accounts.length>1?`Todas as transações de ${accounts.find(a=>a.id===activeAccount)?.name||"esta conta"} serão removidas.`:"Todas as transações serão removidas permanentemente."}</div>
+          <div style={{fontSize:16,fontWeight:700,color:TX,marginBottom:10,letterSpacing:"-0.01em"}}>Apagar todas as transações?</div>
+          <div style={{fontSize:13,color:TX2,marginBottom:16,lineHeight:1.5}}>{`${transactions.length===1?"A transação":`As ${transactions.length} transações`}${accounts.length>1?` de ${accounts.find(a=>a.id===activeAccount)?.name||"esta conta"}`:""} ${transactions.length===1?"será removida":"serão removidas"}. Metas, previstos e parcelamentos ficam.`}</div>
+          {/* Segunda etapa: digitar a palavra, como no apagar conta (teste de 24/11/2026). */}
+          <div style={{fontSize:12,color:TX2,marginBottom:6,textAlign:"left"}}>Para confirmar, digite <strong style={{color:TX}}>{CLEAR_PHRASE}</strong>:</div>
+          <input aria-label={`Digite ${CLEAR_PHRASE} para confirmar`} value={clearPhrase} onChange={e=>setClearPhrase(e.target.value)} autoFocus maxLength={20} placeholder={CLEAR_PHRASE} style={{...SI,marginBottom:20,letterSpacing:"0.04em"}}/>
           <div style={{display:"flex",gap:10}}>
             <BtnGhost onClick={()=>setShowClearConfirm(false)} style={{flex:1,paddingInline:12}}>Cancelar</BtnGhost>
-            <button onClick={()=>{pushHistory();setAllTx(p=>p.filter(t=>!inActiveAccount(t)));setShowClearConfirm(false);showToast("Tudo apagado.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white"}}>Apagar tudo</button>
+            <button disabled={clearPhrase.trim().toUpperCase()!==CLEAR_PHRASE} onClick={()=>{pushHistory();setAllTx(p=>p.filter(t=>!inActiveAccount(t)));setShowClearConfirm(false);showToast("Transações apagadas.","info");}} style={{flex:1,padding:"12px",borderRadius:R_BTN,border:"none",cursor:clearPhrase.trim().toUpperCase()===CLEAR_PHRASE?"pointer":"not-allowed",fontSize:13,fontWeight:700,background:ERROR_BG,color:"white",opacity:clearPhrase.trim().toUpperCase()===CLEAR_PHRASE?1:0.5}}>Apagar tudo</button>
           </div>
         </Modal>
       )}
@@ -2378,6 +2382,10 @@ function MainApp({user,setUser}){
                 <input type="file" accept=".json" style={{display:"none"}} onChange={importAllBackup}/>
               </label>
             </div>
+            {/* Zona de perigo: o "Apagar todas as transações" saiu do topo da aba
+                Transações, a um toque dos ícones de exportar (teste de 24/11/2026). */}
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase",color:"#F87171",marginBottom:10,display:"flex",alignItems:"center",gap:6}}><AlertTriangle size={12}/>Zona de perigo</div>
+            <button onClick={()=>{setClearPhrase("");setShowProfile(false);setShowClearConfirm(true);}} disabled={transactions.length===0} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:`1px solid #F8717140`,cursor:transactions.length?"pointer":"not-allowed",fontSize:13,fontWeight:700,background:"transparent",color:"#F87171",opacity:transactions.length?1:0.5,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar todas as transações{accounts.length>1?` de ${accounts.find(a=>a.id===activeAccount)?.name||"esta conta"}`:""}</button>
             <button onClick={()=>{setDeleteAccountPhrase("");setDeleteAccountOpen(true);}} style={{width:"100%",padding:"11px",borderRadius:R_BTN,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:"#F8717114",color:"#F87171",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Trash2 size={14}/>Apagar conta e dados</button>
             <BtnGhost onClick={()=>setShowProfile(false)} style={{width:"100%",paddingInline:12}}>Fechar</BtnGhost>
         </Modal>
@@ -2732,7 +2740,7 @@ function MainApp({user,setUser}){
             filterType={filterType} search={search} filterMonth={filterMonth} months={months} filterCat={filterCat}
             fullCats={fullCats} viewTotals={viewTotals} filtered={filtered} groupedByDate={groupedByDate} editingTx={editingTx}
             setFilterType={setFilterType} setSearch={setSearch} setFilterMonth={setFilterMonth} setFilterCat={setFilterCat}
-            onImportCSV={importCSV} onExportCSV={exportCSV} onClearAll={()=>setShowClearConfirm(true)} onReport={()=>setReportPick(filterMonth||currentMonthKeyReal)}
+            onImportCSV={importCSV} onExportCSV={exportCSV} onReport={()=>setReportPick(filterMonth||currentMonthKeyReal)}
             onStartEditTx={startEditTx} onRequestDelete={performDelete}
           />
         </TabPanel>

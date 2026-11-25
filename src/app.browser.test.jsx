@@ -781,6 +781,24 @@ describe("teste de uso de 24/11/2026", () => {
     expect(h.storage.peek()?.tx?.length ?? 0).toBe(0);
   });
 
+  test("apagar todas as transações mora no Perfil e pede a palavra", async () => {
+    h.storage = createFakeStorage({ tx: [tx(1, "Mercado"), tx(2, "Uber")] });
+    await openApp();
+    fireEvent.click(navBtn("Transações"));
+    await screen.findByText("Mercado");
+    expect(screen.queryByRole("button", { name: /Apagar todas/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Minha conta" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Apagar todas as transações/ }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Apagar todas as transações" }));
+    expect(dialog.getByText(/As 2 transações serão removidas/)).toBeTruthy();
+    const confirm = dialog.getByRole("button", { name: "Apagar tudo" });
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(dialog.getByLabelText("Digite APAGAR para confirmar"), { target: { value: "apagar" } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(h.storage.peek()?.tx?.length).toBe(0), SAVE_WAIT);
+  });
+
   test("\"Game pass\" e \"GamePass\" são um frequente só", async () => {
     const fixa = (id, desc) => ({ ...tx(id, desc, 76.9), fixed: "Fixa" });
     // cada grafia sozinha já vira atalho (2 fixos): sem juntar, seriam dois

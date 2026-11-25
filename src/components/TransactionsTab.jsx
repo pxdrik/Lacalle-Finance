@@ -12,7 +12,7 @@ export default function TransactionsTab({
   accent, catColor,
   filterType, search, filterMonth, months, filterCat, fullCats, viewTotals, filtered, groupedByDate, editingTx,
   setFilterType, setSearch, setFilterMonth, setFilterCat,
-  onImportCSV, onExportCSV, onClearAll, onStartEditTx, onRequestDelete, onNewTx, onReport,
+  onImportCSV, onExportCSV, onStartEditTx, onRequestDelete, onNewTx, onReport,
 }) {
   // Desenha os lançamentos em blocos de 40 conforme a rolagem (ver useIncrementalReveal).
   const { visible: revealed, sentinelRef } = useIncrementalReveal(filtered.length, { resetKey: `${filterMonth}|${filterCat}|${filterType}|${search}` });
@@ -39,7 +39,6 @@ export default function TransactionsTab({
           </label>
           <IconButton icon={FileText} size={16} color={TX2} label="Relatório do mês em PDF" onClick={onReport} />
           <IconButton icon={Download} size={16} color={TX2} label="Exportar CSV" onClick={onExportCSV} />
-          <IconButton icon={Trash2} size={16} color={ERROR} label="Apagar todas as transações" onClick={onClearAll} />
         </>}
       />
 
